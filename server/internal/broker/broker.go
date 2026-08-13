@@ -24,6 +24,7 @@ import (
 	"lumio-os/server/internal/ipc"
 	"lumio-os/server/internal/network"
 	"lumio-os/server/internal/privfiles"
+	"lumio-os/server/internal/strictjson"
 	"lumio-os/server/internal/updates"
 )
 
@@ -210,7 +211,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req ActionRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20)).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, 2<<20, &req); err != nil {
 		s.writeErr(w, http.StatusBadRequest, &apiError{Code: "validation_failed", Message: "Body must be a JSON object."})
 		return
 	}

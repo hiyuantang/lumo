@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"lumio-os/server/internal/auth"
+	"lumio-os/server/internal/strictjson"
 )
 
 const (
@@ -25,6 +26,7 @@ const (
 	absoluteExpiry = 30 * 24 * time.Hour
 	ReauthWindow   = 5 * time.Minute
 	agentSockGroup = "lumio-gw"
+	maxBodyBytes   = 1 << 20
 )
 
 var ErrUnauthorized = errors.New("unauthorized")
@@ -122,7 +124,7 @@ func (d *Daemon) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad request")
 		return
 	}
@@ -178,15 +180,18 @@ func (d *Daemon) handleLogout(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Token string `json:"token"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad request")
 		return
 	}
 	d.mu.Lock()
 	sess, ok := d.sessions[req.Token]
-	if ok {
-		delete(d.sessions, req.Token)
+	if !ok {
+		d.mu.Unlock()
+		writeError(w, http.StatusNotFound, "not found")
+		return
 	}
+	delete(d.sessions, req.Token)
 	remaining := 0
 	for _, s := range d.sessions {
 		if s.User.UID == sess.User.UID {
@@ -194,7 +199,7 @@ func (d *Daemon) handleLogout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.mu.Unlock()
-	if ok && remaining == 0 {
+	if remaining == 0 {
 		d.stopAgentIfIdle(sess.User.UID)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -204,7 +209,7 @@ func (d *Daemon) handleValidate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Token string `json:"token"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad request")
 		return
 	}
@@ -227,7 +232,7 @@ func (d *Daemon) handleReauth(w http.ResponseWriter, r *http.Request) {
 		Token    string `json:"token"`
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad request")
 		return
 	}
@@ -254,7 +259,7 @@ func (d *Daemon) handleSessionCheck(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Token string `json:"token"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad request")
 		return
 	}

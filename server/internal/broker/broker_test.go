@@ -260,6 +260,28 @@ func TestActionAllow(t *testing.T) {
 	}
 }
 
+func TestActionRejectsUnknownFieldsAndTrailingJSON(t *testing.T) {
+	authz := StaticAuthorizer{Rules: func(uint32, string, map[string]string) Result { return Allow }}
+	_, client, sys := testBroker(t, authz, nil)
+	for _, payload := range []string{
+		`{"requestId":"strict-1","action":"services.restart","arguments":{"unit":"cron.service"},"unexpected":true}`,
+		`{"requestId":"strict-2","action":"services.restart","arguments":{"unit":"cron.service","command":"shutdown"}}`,
+		`{"requestId":"strict-3","action":"services.restart","arguments":{"unit":"cron.service"}} {}`,
+	} {
+		status, _, body := callAction(t, client, payload)
+		if status != http.StatusBadRequest {
+			t.Fatalf("payload=%s status=%d body=%v", payload, status, body)
+		}
+		errorBody, _ := body["error"].(map[string]any)
+		if errorBody["code"] != "validation_failed" {
+			t.Fatalf("payload=%s body=%v", payload, body)
+		}
+	}
+	if len(sys.calls) != 0 {
+		t.Fatalf("malformed actions executed: %v", sys.calls)
+	}
+}
+
 func TestActionDeny(t *testing.T) {
 	authz := StaticAuthorizer{Rules: func(uint32, string, map[string]string) Result { return Deny }}
 	s, client, sys := testBroker(t, authz, nil)

@@ -435,6 +435,32 @@ func TestFilesWriteHandler(t *testing.T) {
 	}
 }
 
+func TestMutationBodiesRejectUnknownFieldsAndTrailingJSON(t *testing.T) {
+	ts := testServer(fakeServices{}, fakeJournal{})
+	defer ts.Close()
+	path := t.TempDir() + "/strict.txt"
+	content := base64.StdEncoding.EncodeToString([]byte("value"))
+	for _, body := range []string{
+		`{"path":"` + path + `","content":"` + content + `","requestId":"strict-1","unexpected":true}`,
+		`{"path":"` + path + `","content":"` + content + `","requestId":"strict-2"} {}`,
+	} {
+		req, _ := http.NewRequest("PUT", ts.URL+"/api/v1/files/write", strings.NewReader(body))
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var env testEnvelope
+		_ = json.NewDecoder(res.Body).Decode(&env)
+		res.Body.Close()
+		if res.StatusCode != http.StatusBadRequest || env.Error == nil || env.Error.Code != CodeValidationFailed {
+			t.Fatalf("body=%s status=%d env=%+v", body, res.StatusCode, env)
+		}
+	}
+	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("malformed request wrote the file: %v", err)
+	}
+}
+
 func jsonField(data, field string) string {
 	var m map[string]any
 	if err := json.Unmarshal([]byte(data), &m); err != nil {

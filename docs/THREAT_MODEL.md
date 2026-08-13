@@ -125,8 +125,9 @@ applicable.
 Additional baseline threats:
 
 14. **Credential brute force** (B1). Mitigation: PAM enforces its own
-    delays; the gateway adds per-account and per-source rate limiting
-    on login. Owner: gateway and sessiond.
+    delays; the gateway adds separate per-account and per-source rate
+    limits with bounded, expiring failure state. Owner: gateway and
+    sessiond.
 15. **XSS / asset injection** (B1). Mitigation: no server-supplied
     application JavaScript ever; strict Content Security Policy ships
     with Phase 7 packaging. Owner: gateway and frontend.

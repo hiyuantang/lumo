@@ -12,9 +12,13 @@ import (
 
 	"lumio-os/server/internal/httpapi"
 	"lumio-os/server/internal/ipc"
+	"lumio-os/server/internal/strictjson"
 )
 
-const contentSecurityPolicy = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; worker-src 'none'; manifest-src 'self'"
+const (
+	contentSecurityPolicy = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; worker-src 'none'; manifest-src 'self'"
+	maxAuthBodyBytes      = 1 << 20
+)
 
 type User struct {
 	Name string `json:"name"`
@@ -38,9 +42,10 @@ type Config struct {
 }
 
 type Gateway struct {
-	cfg      Config
-	sessiond *http.Client
-	limiter  *loginLimiter
+	cfg            Config
+	sessiond       *http.Client
+	accountLimiter *loginLimiter
+	sourceLimiter  *loginLimiter
 
 	clientsMu sync.Mutex
 	clients   map[string]*http.Client
@@ -48,10 +53,11 @@ type Gateway struct {
 
 func New(cfg Config) *Gateway {
 	return &Gateway{
-		cfg:      cfg,
-		sessiond: ipc.HTTPClient(cfg.SessiondSocket),
-		limiter:  newLoginLimiter(),
-		clients:  map[string]*http.Client{},
+		cfg:            cfg,
+		sessiond:       ipc.HTTPClient(cfg.SessiondSocket),
+		accountLimiter: newLoginLimiter(accountLimiterThreshold),
+		sourceLimiter:  newLoginLimiter(sourceLimiterThreshold),
+		clients:        map[string]*http.Client{},
 	}
 }
 
@@ -113,12 +119,17 @@ func (g *Gateway) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxAuthBodyBytes, &req); err != nil {
 		httpapi.WriteError(w, httpapi.NewError(httpapi.CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}
-	key := req.Username + "|" + clientIP(r)
-	if retryAfter := g.limiter.blocked(key); retryAfter > 0 {
+	accountKey := loginAccountKey(req.Username)
+	sourceKey := clientIP(r)
+	retryAfter := g.accountLimiter.blocked(accountKey)
+	if sourceRetryAfter := g.sourceLimiter.blocked(sourceKey); sourceRetryAfter > retryAfter {
+		retryAfter = sourceRetryAfter
+	}
+	if retryAfter > 0 {
 		err := httpapi.NewError(httpapi.CodeBusy, "Too many failed attempts; retry later.")
 		err.Details = map[string]any{"retryAfterMs": retryAfter.Milliseconds()}
 		httpapi.WriteError(w, err)
@@ -136,7 +147,8 @@ func (g *Gateway) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if status == http.StatusUnauthorized {
-		g.limiter.record(key)
+		g.accountLimiter.record(accountKey)
+		g.sourceLimiter.record(sourceKey)
 		httpapi.WriteError(w, httpapi.NewError(httpapi.CodeUnauthorized, "Invalid username or password."))
 		return
 	}
@@ -144,14 +156,30 @@ func (g *Gateway) handleLogin(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, httpapi.NewError(httpapi.CodeUnavailable, "Login is unavailable."))
 		return
 	}
-	g.limiter.reset(key)
+	g.accountLimiter.reset(accountKey)
 	g.setSessionCookies(w, r, resp.Token, resp.CSRF)
 	httpapi.WriteData(w, map[string]any{"user": resp.User, "csrf": resp.CSRF})
 }
 
 func (g *Gateway) handleLogout(w http.ResponseWriter, r *http.Request) {
-	if cookie, err := r.Cookie("lumio_session"); err == nil && cookie.Value != "" {
-		_, _ = g.sessiondCall("/logout", map[string]any{"token": cookie.Value}, nil)
+	sess, apiErr := g.requireSession(r)
+	if apiErr != nil {
+		httpapi.WriteError(w, apiErr)
+		return
+	}
+	if apiErr := g.checkCSRF(r, sess); apiErr != nil {
+		httpapi.WriteError(w, apiErr)
+		return
+	}
+	var req struct{}
+	if err := strictjson.Decode(w, r, maxAuthBodyBytes, &req); err != nil {
+		httpapi.WriteError(w, httpapi.NewError(httpapi.CodeValidationFailed, "Body must be a JSON object."))
+		return
+	}
+	status, err := g.sessiondCall("/logout", map[string]any{"token": sess.Token}, nil)
+	if err != nil || status != http.StatusOK {
+		httpapi.WriteError(w, httpapi.NewError(httpapi.CodeUnavailable, "Logout is unavailable."))
+		return
 	}
 	g.clearSessionCookies(w, r)
 	httpapi.WriteData(w, map[string]any{"ok": true})
@@ -179,7 +207,7 @@ func (g *Gateway) handleReauth(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxAuthBodyBytes, &req); err != nil {
 		httpapi.WriteError(w, httpapi.NewError(httpapi.CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}
@@ -360,4 +388,12 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+func loginAccountKey(username string) string {
+	key := strings.ToLower(strings.TrimSpace(username))
+	if len(key) > 64 {
+		key = key[:64]
+	}
+	return key
 }

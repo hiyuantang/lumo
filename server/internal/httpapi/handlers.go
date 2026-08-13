@@ -17,6 +17,7 @@ import (
 	"lumio-os/server/internal/network"
 	"lumio-os/server/internal/privfiles"
 	"lumio-os/server/internal/services"
+	"lumio-os/server/internal/strictjson"
 	"lumio-os/server/internal/system"
 )
 
@@ -60,7 +61,7 @@ func (s *Server) handleSystemPower(w http.ResponseWriter, r *http.Request) {
 		RequestID string `json:"requestId"`
 		Action    string `json:"action"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}
@@ -108,7 +109,7 @@ func (s *Server) handleNetworkApply(w http.ResponseWriter, r *http.Request) {
 		ExpectedRevision string         `json:"expectedRevision"`
 		ConfirmTimeout   int            `json:"confirmTimeoutSec"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}
@@ -153,7 +154,7 @@ func (s *Server) handleNetworkConfirm(w http.ResponseWriter, r *http.Request) {
 		RequestID string `json:"requestId"`
 		Token     string `json:"token"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}
@@ -282,7 +283,7 @@ func (s *Server) handleFilesWrite(w http.ResponseWriter, r *http.Request) {
 		ExpectedRevision string `json:"expectedRevision"`
 		RequestID        string `json:"requestId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxWriteBodyBytes, &req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}
@@ -314,7 +315,7 @@ func (s *Server) handleFilesDelete(w http.ResponseWriter, r *http.Request) {
 		Path      string `json:"path"`
 		RequestID string `json:"requestId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}
@@ -345,7 +346,7 @@ func (s *Server) handleFilesWritePrivileged(w http.ResponseWriter, r *http.Reque
 		RestartUnit      string `json:"restartUnit"`
 		RequestID        string `json:"requestId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxPrivilegedWriteBodyBytes, &req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}
@@ -402,7 +403,7 @@ func (s *Server) handleServicesAction(w http.ResponseWriter, r *http.Request) {
 			ActiveState string `json:"activeState"`
 		} `json:"expected"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}
@@ -480,7 +481,7 @@ func (s *Server) handleUpdatesApply(w http.ResponseWriter, r *http.Request) {
 		RequestID string `json:"requestId"`
 		PlanID    string `json:"planId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}
@@ -506,7 +507,7 @@ func decodeUpdateRequest(w http.ResponseWriter, r *http.Request) (string, bool) 
 	var req struct {
 		RequestID string `json:"requestId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
 		return "", false
 	}

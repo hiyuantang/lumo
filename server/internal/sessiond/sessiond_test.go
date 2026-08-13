@@ -104,6 +104,28 @@ func TestLoginValidateReauthLogout(t *testing.T) {
 	}
 }
 
+func TestRejectsMalformedRequestsAndUnknownLogoutTokens(t *testing.T) {
+	_, client, username := testDaemon(t)
+
+	resp, err := client.Post("http://sessiond/login", "application/json", bytes.NewBufferString(`{"username":"`+username+`","password":"x","unexpected":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("login with unknown field = %d", resp.StatusCode)
+	}
+
+	status, _ := post(t, client, "/logout", map[string]any{"token": "missing"})
+	if status != http.StatusNotFound {
+		t.Fatalf("unknown logout token = %d", status)
+	}
+	status, _ = post(t, client, "/login", map[string]any{"username": username, "password": "x"})
+	if status != http.StatusOK {
+		t.Fatalf("daemon did not recover after unknown logout: %d", status)
+	}
+}
+
 func TestLoginUnavailableWithoutPAM(t *testing.T) {
 	dir, err := os.MkdirTemp("/tmp", "ltsd")
 	if err != nil {

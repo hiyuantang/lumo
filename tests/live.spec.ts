@@ -487,16 +487,19 @@ test('live mode: an existing session skips the login screen', async ({ page }) =
 
 test('live mode: logging out calls the server and returns to the login screen', async ({ page }) => {
   await stubRest(page);
-  let logoutCalls = 0;
+  const logoutCalls: { body: unknown; csrf: string | undefined }[] = [];
   await page.route('**/api/v1/auth/logout', async (route) => {
-    logoutCalls += 1;
+    logoutCalls.push({
+      body: route.request().postDataJSON(),
+      csrf: route.request().headers()['x-lumio-csrf'],
+    });
     await fulfillData(route, {});
   });
   await login(page);
   await page.getByTestId('menu-bar').locator('[data-menu-button="user"]').click();
   await page.getByTestId('logout-button').click();
   await expect(page.getByTestId('login-screen')).toBeVisible();
-  expect(logoutCalls).toBe(1);
+  expect(logoutCalls).toEqual([{ body: {}, csrf: 'test-csrf' }]);
 });
 
 test('live mode: an expired session returns to the login screen', async ({ page }) => {

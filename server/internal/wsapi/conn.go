@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"lumio-os/server/internal/httpapi"
+	"lumio-os/server/internal/strictjson"
 )
 
 type inFrame struct {
@@ -157,7 +158,7 @@ func (c *conn) readLoop() {
 			return
 		}
 		var f inFrame
-		if err := json.Unmarshal(data, &f); err != nil {
+		if err := strictjson.Unmarshal(data, &f); err != nil {
 			c.enqueue(errorFrame(0, httpapi.NewError(httpapi.CodeValidationFailed, "Malformed frame.")))
 			continue
 		}

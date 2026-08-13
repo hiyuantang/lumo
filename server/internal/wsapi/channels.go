@@ -11,6 +11,7 @@ import (
 	"lumio-os/server/internal/httpapi"
 	"lumio-os/server/internal/journal"
 	"lumio-os/server/internal/services"
+	"lumio-os/server/internal/strictjson"
 	"lumio-os/server/internal/terminal"
 )
 
@@ -21,7 +22,7 @@ func (c *conn) startChannel(ctx context.Context, ch *channel, params json.RawMes
 			IntervalMs int `json:"intervalMs"`
 		}
 		if len(params) > 0 {
-			if err := json.Unmarshal(params, &p); err != nil {
+			if err := strictjson.Unmarshal(params, &p); err != nil {
 				return errValidation("invalid params: " + err.Error())
 			}
 		}
@@ -39,6 +40,12 @@ func (c *conn) startChannel(ctx context.Context, ch *channel, params json.RawMes
 		if !c.hub.deps.Services.Available() {
 			return services.ErrUnavailable
 		}
+		if len(params) > 0 {
+			var p struct{}
+			if err := strictjson.Unmarshal(params, &p); err != nil {
+				return errValidation("invalid params: " + err.Error())
+			}
+		}
 		c.enqueue(subscribedFrame(ch.id, nil))
 		go c.runServices(ctx, ch)
 		return nil
@@ -53,7 +60,7 @@ func (c *conn) startChannel(ctx context.Context, ch *channel, params json.RawMes
 			After    string `json:"after"`
 		}
 		if len(params) > 0 {
-			if err := json.Unmarshal(params, &p); err != nil {
+			if err := strictjson.Unmarshal(params, &p); err != nil {
 				return errValidation("invalid params: " + err.Error())
 			}
 		}
@@ -72,7 +79,7 @@ func (c *conn) startChannel(ctx context.Context, ch *channel, params json.RawMes
 			Session string `json:"session"`
 		}
 		if len(params) > 0 {
-			if err := json.Unmarshal(params, &p); err != nil {
+			if err := strictjson.Unmarshal(params, &p); err != nil {
 				return errValidation("invalid params: " + err.Error())
 			}
 		}
@@ -105,7 +112,7 @@ func (c *conn) startChannel(ctx context.Context, ch *channel, params json.RawMes
 			RequestID string `json:"requestId"`
 		}
 		if len(params) > 0 {
-			if err := json.Unmarshal(params, &p); err != nil {
+			if err := strictjson.Unmarshal(params, &p); err != nil {
 				return errValidation("invalid params: " + err.Error())
 			}
 		}
@@ -206,7 +213,7 @@ func (c *conn) handleTerminalInput(ch *channel, sess *terminal.Session, raw json
 		Cols uint16 `json:"cols"`
 		Rows uint16 `json:"rows"`
 	}
-	if err := json.Unmarshal(raw, &in); err != nil {
+	if err := strictjson.Unmarshal(raw, &in); err != nil {
 		c.enqueue(errorFrame(ch.id, httpapi.NewError(httpapi.CodeValidationFailed, "Malformed input frame.")))
 		return
 	}

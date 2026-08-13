@@ -159,6 +159,31 @@ func TestUnavailableCapability(t *testing.T) {
 	}
 }
 
+func TestFramesRejectUnknownFieldsAndTrailingJSON(t *testing.T) {
+	ws, cleanup := dial(t, newTestHub(), nil)
+	defer cleanup()
+	readFrame(t, ws)
+
+	for _, payload := range []string{
+		`{"type":"pong","unexpected":true}`,
+		`{"type":"pong"} {}`,
+	} {
+		if err := ws.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+			t.Fatal(err)
+		}
+		f := readFrame(t, ws)
+		if f.Type != "error" || f.Error == nil || f.Error.Code != "validation_failed" {
+			t.Fatalf("payload=%s frame=%+v", payload, f)
+		}
+	}
+
+	subscribe(t, ws, 6, "system.metrics", `{"intervalMs":500,"unexpected":true}`)
+	f := readFrame(t, ws)
+	if f.Type != "error" || f.Channel != 6 || f.Error == nil || f.Error.Code != "validation_failed" {
+		t.Fatalf("params frame=%+v", f)
+	}
+}
+
 func TestJournalStream(t *testing.T) {
 	ws, cleanup := dial(t, newTestHub(), nil)
 	defer cleanup()

@@ -20,9 +20,14 @@ from it, and only from it. Related documents:
    Larger transfers use paged capabilities (`journal.query`,
    `files.read` with ranges). Endpoint-specific override:
    `PUT /api/v1/files/write` accepts bodies up to 12 MiB, which holds
-   8 MiB of decoded file content after base64 inflation.
+   8 MiB of decoded file content after base64 inflation;
+   `POST /api/v1/files/write-privileged` accepts 2 MiB for its 1 MiB
+   decoded-content limit.
 5. The server never pushes application code over this protocol; the
    browser renders everything from its shipped bundle.
+6. Request bodies and WebSocket frames contain exactly one JSON value.
+   Unknown request fields and trailing values are rejected at every hop;
+   response clients continue to ignore unknown additive fields.
 
 ## URL layout and versioning
 
