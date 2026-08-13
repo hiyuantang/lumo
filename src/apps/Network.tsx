@@ -15,6 +15,7 @@ import '../styles/apps.css';
 import '../styles/network.css';
 
 const PENDING_KEY = 'lumio.network.pending.v1';
+const CONFIRM_TIMEOUT_SEC = 90;
 
 function loadPending(): PendingNetworkChange | null {
   try {
@@ -129,7 +130,7 @@ export function Network() {
     setBusy('apply');
     setError(null);
     source
-      .applyNetworkConfig(config, snapshot.revision)
+      .applyNetworkConfig(config, snapshot.revision, CONFIRM_TIMEOUT_SEC)
       .then((next) => {
         sessionStorage.setItem(PENDING_KEY, JSON.stringify(next));
         setPending(next);
@@ -265,7 +266,7 @@ export function Network() {
         <div className="quicklook-overlay" onPointerDown={() => setConfirming(false)}>
           <div className="file-confirm network-confirm" role="alertdialog" aria-modal="true" aria-label="Test network change" data-testid="network-confirm-dialog" onPointerDown={(event) => event.stopPropagation()}>
             <p>Test this network change?</p>
-            <span>Lumio restores the previous Netplan configuration unless you reconnect and keep the change within 90 seconds.</span>
+            <span>Lumio restores the previous Netplan configuration unless you reconnect and keep the change within {CONFIRM_TIMEOUT_SEC} seconds.</span>
             <div className="file-confirm-actions">
               <button type="button" className="btn" onClick={() => setConfirming(false)}>Cancel</button>
               <button type="button" className="btn btn-primary" data-testid="network-confirm-apply" onClick={applyCandidate}>Apply and test</button>

@@ -60,7 +60,7 @@ func (s *Server) handleSystemPower(w http.ResponseWriter, r *http.Request) {
 		RequestID string `json:"requestId"`
 		Action    string `json:"action"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}
@@ -108,7 +108,7 @@ func (s *Server) handleNetworkApply(w http.ResponseWriter, r *http.Request) {
 		ExpectedRevision string         `json:"expectedRevision"`
 		ConfirmTimeout   int            `json:"confirmTimeoutSec"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}
@@ -153,7 +153,7 @@ func (s *Server) handleNetworkConfirm(w http.ResponseWriter, r *http.Request) {
 		RequestID string `json:"requestId"`
 		Token     string `json:"token"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
 		return
 	}

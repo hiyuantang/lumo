@@ -13,18 +13,24 @@ import (
 
 type fakeBackend struct {
 	mu       sync.Mutex
+	base     string
 	merged   string
+	applied  string
 	path     dbus.ObjectPath
 	deltas   []string
 	tried    []uint32
-	applied  int
+	applyCnt int
 	canceled int
 }
 
 func (f *fakeBackend) create(context.Context) (dbus.ObjectPath, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.path, f.merged, nil
+	merged := f.merged
+	if merged == "" {
+		merged = f.base
+	}
+	return f.path, merged, nil
 }
 
 func (f *fakeBackend) set(_ context.Context, _ dbus.ObjectPath, delta, originHint string) error {
@@ -38,13 +44,16 @@ func (f *fakeBackend) try(_ context.Context, _ dbus.ObjectPath, timeoutSec uint3
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.tried = append(f.tried, timeoutSec)
+	if f.applied != "" {
+		f.merged = f.applied
+	}
 	return nil
 }
 
 func (f *fakeBackend) apply(context.Context, dbus.ObjectPath) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.applied++
+	f.applyCnt++
 	return nil
 }
 
@@ -52,6 +61,9 @@ func (f *fakeBackend) cancel(context.Context, dbus.ObjectPath) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.canceled++
+	if f.applied != "" {
+		f.merged = f.base
+	}
 	return nil
 }
 
@@ -101,10 +113,13 @@ func TestValidateConfigRejectsUntypedOrInjectionShapedValues(t *testing.T) {
 	}
 }
 
+const testBaseYAML = "network:\n  version: 2\n"
+const testAppliedYAML = "network:\n  version: 2\n  ethernets: {}\n"
+
 func TestControllerApplyAndConfirm(t *testing.T) {
-	backend := &fakeBackend{merged: "network:\n  version: 2\n", path: "/io/netplan/Netplan/config/TEST"}
+	backend := &fakeBackend{base: testBaseYAML, applied: testAppliedYAML, path: "/io/netplan/Netplan/config/TEST"}
 	controller := newController(backend)
-	revision := Revision(backend.merged)
+	revision := Revision(backend.base)
 	pending, err := controller.Apply(context.Background(), validConfig(), revision, 30)
 	if err != nil {
 		t.Fatal(err)
@@ -121,24 +136,24 @@ func TestControllerApplyAndConfirm(t *testing.T) {
 	if _, err := controller.Confirm(context.Background(), pending.Token); err != nil {
 		t.Fatal(err)
 	}
-	if backend.applied != 1 || backend.canceled != 0 {
-		t.Fatalf("applied=%d canceled=%d", backend.applied, backend.canceled)
+	if backend.applyCnt != 1 || backend.canceled != 1 {
+		t.Fatalf("applyCnt=%d canceled=%d", backend.applyCnt, backend.canceled)
 	}
 }
 
 func TestControllerRejectsStaleBusyAndWrongToken(t *testing.T) {
-	backend := &fakeBackend{merged: "network:\n  version: 2\n", path: "/io/netplan/Netplan/config/TEST"}
+	backend := &fakeBackend{base: testBaseYAML, applied: testAppliedYAML, path: "/io/netplan/Netplan/config/TEST"}
 	controller := newController(backend)
 	_, err := controller.Apply(context.Background(), validConfig(), Revision("different"), 30)
 	var stale *StaleError
 	if !errors.As(err, &stale) {
 		t.Fatalf("error = %v", err)
 	}
-	pending, err := controller.Apply(context.Background(), validConfig(), Revision(backend.merged), 30)
+	pending, err := controller.Apply(context.Background(), validConfig(), Revision(backend.base), 30)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := controller.Apply(context.Background(), validConfig(), Revision(backend.merged), 30); !errors.Is(err, ErrBusy) {
+	if _, err := controller.Apply(context.Background(), validConfig(), Revision(backend.base), 30); !errors.Is(err, ErrBusy) {
 		t.Fatalf("busy error = %v", err)
 	}
 	if _, err := controller.Confirm(context.Background(), strings.Repeat("0", 64)); !errors.Is(err, ErrToken) {
@@ -150,9 +165,9 @@ func TestControllerRejectsStaleBusyAndWrongToken(t *testing.T) {
 }
 
 func TestControllerExpiryCancelsAndVerifiesRollback(t *testing.T) {
-	backend := &fakeBackend{merged: "network:\n  version: 2\n", path: "/io/netplan/Netplan/config/TEST"}
+	backend := &fakeBackend{base: testBaseYAML, applied: testAppliedYAML, path: "/io/netplan/Netplan/config/TEST"}
 	controller := newController(backend)
-	pending, err := controller.Apply(context.Background(), validConfig(), Revision(backend.merged), 30)
+	pending, err := controller.Apply(context.Background(), validConfig(), Revision(backend.base), 30)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,5 +177,24 @@ func TestControllerExpiryCancelsAndVerifiesRollback(t *testing.T) {
 	}
 	if _, err := controller.Confirm(context.Background(), pending.Token); !errors.Is(err, ErrExpired) {
 		t.Fatalf("confirm error = %v", err)
+	}
+}
+
+func TestControllerConfirmAfterRevertReturnsExpired(t *testing.T) {
+	backend := &fakeBackend{base: testBaseYAML, applied: testAppliedYAML, path: "/io/netplan/Netplan/config/TEST"}
+	controller := newController(backend)
+	pending, err := controller.Apply(context.Background(), validConfig(), Revision(backend.base), 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = backend.cancel(context.Background(), backend.path)
+	if _, err := controller.Confirm(context.Background(), pending.Token); !errors.Is(err, ErrExpired) {
+		t.Fatalf("confirm error = %v", err)
+	}
+	if backend.applyCnt != 0 {
+		t.Fatalf("reverted configuration was applied: %d", backend.applyCnt)
+	}
+	if _, err := controller.Apply(context.Background(), validConfig(), Revision(backend.base), 30); err != nil {
+		t.Fatalf("controller must recover after a reverted confirmation: %v", err)
 	}
 }

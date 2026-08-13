@@ -509,11 +509,14 @@ func TestAuditStoredResultErrors(t *testing.T) {
 	req.Arguments.Unit = "cron.service"
 	audit.Begin(req, 1000, "alice", "allow")
 	audit.End(1, req, 1000, "alice", "allow", "failed", "boom", nil, time.Second)
-	status, body, ok := audit.StoredResult("b6")
+	status, body, ok := audit.StoredResult("b6", 1000)
 	if !ok || status != 500 || !strings.Contains(body, "boom") {
 		t.Errorf("failed replay: %d %s %v", status, body, ok)
 	}
-	if _, _, ok := audit.StoredResult("unknown"); ok {
+	if _, _, ok := audit.StoredResult("unknown", 1000); ok {
 		t.Error("unknown requestId should not replay")
+	}
+	if _, _, ok := audit.StoredResult("b6", 2000); ok {
+		t.Error("replay must require the requesting uid to own the request")
 	}
 }

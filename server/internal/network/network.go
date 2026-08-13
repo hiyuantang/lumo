@@ -318,6 +318,18 @@ func (c *Controller) Confirm(ctx context.Context, token string) (Pending, error)
 	if !time.Now().Before(c.pending.ExpiresAt) {
 		return Pending{}, ErrExpired
 	}
+	checkPath, merged, err := c.backend.create(ctx)
+	if err != nil {
+		return Pending{}, err
+	}
+	cancelCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = c.backend.cancel(cancelCtx, checkPath)
+	if Revision(merged) == c.pending.PreviousRevision {
+		c.pending.timer.Stop()
+		c.pending = nil
+		return Pending{}, ErrExpired
+	}
 	if err := c.backend.apply(ctx, c.pending.path); err != nil {
 		return Pending{}, err
 	}

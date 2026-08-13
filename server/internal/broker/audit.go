@@ -83,8 +83,8 @@ func (a *Audit) Deny(req ActionRequest, uid uint32, userName, polkitResult strin
 	a.insert("deny", req, uid, userName, polkitResult, "denied", apiErr.Message, "", 0)
 }
 
-func (a *Audit) StoredResult(requestID string) (int, string, bool) {
-	rows, err := a.db.Query(`SELECT kind, outcome, error, result_json FROM audit WHERE request_id = ? ORDER BY id`, requestID)
+func (a *Audit) StoredResult(requestID string, uid uint32) (int, string, bool) {
+	rows, err := a.db.Query(`SELECT kind, outcome, error, result_json FROM audit WHERE request_id = ? AND uid = ? ORDER BY id`, requestID, uid)
 	if err != nil {
 		return 0, "", false
 	}

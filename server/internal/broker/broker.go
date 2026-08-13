@@ -243,7 +243,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if status, body, ok := s.audit.StoredResult(req.RequestID); ok {
+	if status, body, ok := s.audit.StoredResult(req.RequestID, uid); ok {
 		w.Header().Set("X-Lumio-Idempotent-Replay", "true")
 		s.writeRaw(w, status, body)
 		return
