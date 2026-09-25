@@ -4,6 +4,7 @@ import { getDataSource, type LoadSample } from '../api/source';
 import { APPS } from '../apps/registry';
 import { IconBell, IconChip, IconNetwork, IconUser } from './icons';
 import { MENUBAR_H, useNow, useShell } from './ShellContext';
+import { canSnap, COMPACT_WIDTH } from './windowGeometry';
 import '../styles/menubar.css';
 
 type MenuId = 'file' | 'view' | 'user';
@@ -43,6 +44,7 @@ export function MenuBar() {
   }, [source]);
 
   const focusedTitle = state.focused ? APPS[state.focused].title : null;
+  const focusedWindow = state.focused ? state.windows[state.focused] : null;
 
   const menus: Record<MenuId, { label: string; items: MenuItemDef[] }> = {
     file: {
@@ -80,6 +82,31 @@ export function MenuBar() {
           id: 'shortcuts',
           label: 'Keyboard Shortcuts',
           run: () => actions.setShortcutsOpen(true),
+        },
+        {
+          id: 'maximize-window',
+          label: 'Maximize Window',
+          separatorAbove: true,
+          disabled: !focusedWindow || focusedWindow.maximized || state.viewport.w <= COMPACT_WIDTH,
+          run: () => focusedWindow && actions.toggleMaximize(focusedWindow.appId),
+        },
+        {
+          id: 'restore-window',
+          label: 'Restore Window',
+          disabled: !focusedWindow || (!focusedWindow.maximized && !focusedWindow.snapped) || state.viewport.w <= COMPACT_WIDTH,
+          run: () => focusedWindow && actions.updateRect(focusedWindow.appId, focusedWindow.restore ?? focusedWindow),
+        },
+        {
+          id: 'tile-left',
+          label: 'Tile Window Left',
+          disabled: !focusedWindow || !canSnap('left', state.viewport, APPS[focusedWindow.appId].minSize),
+          run: () => focusedWindow && actions.snapWindow(focusedWindow.appId, 'left'),
+        },
+        {
+          id: 'tile-right',
+          label: 'Tile Window Right',
+          disabled: !focusedWindow || !canSnap('right', state.viewport, APPS[focusedWindow.appId].minSize),
+          run: () => focusedWindow && actions.snapWindow(focusedWindow.appId, 'right'),
         },
       ],
     },
@@ -137,6 +164,9 @@ export function MenuBar() {
       const next = siblingMenu(menuId, e.key === 'ArrowRight' ? 1 : -1);
       if (openMenu) setOpenMenu(next);
       focusTopButton(next);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setOpenMenu(null);
     }
   }
 

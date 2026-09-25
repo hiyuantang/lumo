@@ -1,6 +1,102 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 .files {
   min-height: 0;
+  background: transparent;
+}
+
+.files-workspace {
+  container-type: inline-size;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.files-sidebar {
+  flex: 0 0 220px;
+  padding: 16px 12px;
+  background: var(--surface-sidebar);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.files-sidebar h2 {
+  margin: 8px 8px 9px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-muted);
+}
+
+.files-sidebar h2:not(:first-child) {
+  margin-top: 24px;
+}
+
+.files-location {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 37px;
+  padding: 7px 9px;
+  margin-bottom: 4px;
+  text-align: left;
+  font-size: 13px;
+  border-radius: var(--radius-s);
+}
+
+.files-location svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.files-location span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-location:hover,
+.files-location.selected {
+  background: var(--accent-soft);
+}
+
+.files-location.selected {
+  font-weight: 550;
+}
+
+.files-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-raised);
+}
+
+.files-main > .app-toolbar {
+  min-height: 68px;
+  padding: 12px 20px;
+}
+
+.files-status {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 20px;
+  min-height: 32px;
+  padding: 6px 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.files-status span + span {
+  border-left: 1px solid var(--border-strong);
+  padding-left: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .files-breadcrumbs {
@@ -10,6 +106,11 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
+}
+
+.files-breadcrumbs > svg {
+  color: var(--accent);
+  flex-shrink: 0;
 }
 
 .files-crumb-group {
@@ -40,35 +141,43 @@
   grid-template-columns: minmax(0, 1fr) 90px 110px;
   gap: var(--space-3);
   align-items: center;
-  padding: 5px var(--space-3);
+  padding: 8px 20px;
 }
 
 .files-head {
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
   font-size: 11px;
-  font-weight: 650;
-  color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.files-head span:not(:first-child) {
+  text-align: right;
 }
 
 .files-list {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-1) 0;
+  padding: 0;
 }
 
 .file-row {
   cursor: default;
-  border-radius: var(--radius-s);
-  margin: 0 var(--space-1);
+  min-height: 38px;
+  border-radius: 0;
+}
+
+.file-row:nth-child(even) {
+  background: var(--surface);
 }
 
 .file-row:hover {
   background: var(--surface);
 }
 
-.file-row.selected {
+.file-row.selected,
+.file-row.selected:nth-child(even) {
   background: var(--accent-soft);
 }
 
@@ -81,6 +190,62 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--text);
+}
+
+.file-name svg {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.file-row[data-kind='dir'] .file-name svg {
+  color: var(--accent);
+}
+
+.file-name > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@container (max-width: 780px) {
+  .files-sidebar {
+    flex-basis: 170px;
+  }
+
+  .files-main > .app-toolbar {
+    padding: 10px 12px;
+  }
+
+  .files-breadcrumbs {
+    flex-basis: 100%;
+  }
+}
+
+@container (max-width: 620px) {
+  .files-sidebar {
+    display: none;
+  }
+
+  .files-head,
+  .file-row {
+    padding-left: 14px;
+    padding-right: 14px;
+    grid-template-columns: minmax(0, 1fr) 72px 100px;
+    gap: 8px;
+  }
+}
+
+@container (max-width: 380px) {
+  .files-head,
+  .file-row {
+    grid-template-columns: minmax(0, 1fr) 72px;
+  }
+
+  .files-head span:last-child,
+  .file-modified {
+    display: none;
+  }
 }
 
 .file-size,

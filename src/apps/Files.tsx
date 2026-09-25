@@ -5,7 +5,7 @@ import { describeError, getDataSource, type FsEntry, type PrivilegedFileWrite } 
 import { ApiError } from '../api/transport';
 import { formatSize } from '../mock/filesystem';
 import { useShell } from '../shell/ShellContext';
-import { IconChevronRight, IconEye, IconFile, IconFolder } from '../shell/icons';
+import { IconChevronRight, IconEye, IconFile, IconFolder, IconHome, IconUpload } from '../shell/icons';
 import '../styles/apps.css';
 import '../styles/files.css';
 
@@ -46,6 +46,7 @@ export function Files() {
   const { actions } = useShell();
   const [path, setPath] = useState<string[]>(() => source.homePath());
   const [entries, setEntries] = useState<FsEntry[]>([]);
+  const [homeFolders, setHomeFolders] = useState<FsEntry[]>([]);
   const [listError, setListError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [selectedName, setSelectedName] = useState<string | null>(null);
@@ -71,6 +72,9 @@ export function Files() {
         const list = await source.listDir(path);
         if (!alive) return;
         setEntries(list);
+        if (path.join('/') === home.join('/')) {
+          setHomeFolders(list.filter((entry) => entry.kind === 'dir'));
+        }
         setListError(null);
       } catch (err) {
         if (!alive) return;
@@ -332,86 +336,129 @@ export function Files() {
 
   return (
     <div className="app files" data-testid="app-files">
-      <div className="app-toolbar">
-        <nav className="files-breadcrumbs" aria-label="Path">
-          <button type="button" className="files-crumb" onClick={() => navigateTo(source.homePath())}>
-            Home
-          </button>
-          {path.slice(1).map((segment, i) => (
-            <span key={segment} className="files-crumb-group">
-              <IconChevronRight size={11} />
-              <button
-                type="button"
-                className="files-crumb"
-                onClick={() => navigateTo(path.slice(0, i + 2))}
-              >
-                {segment}
-              </button>
-            </span>
-          ))}
-        </nav>
-        <button
-          type="button"
-          className="btn"
-          data-testid="upload-button"
-          disabled={uploading}
-          onClick={() => uploadInputRef.current?.click()}
-        >
-          {uploading ? 'Uploading…' : 'Upload'}
-        </button>
-        <input ref={uploadInputRef} type="file" hidden data-testid="upload-input" onChange={(e) => void upload(e)} />
-        <button
-          type="button"
-          className="btn files-quicklook-btn"
-          data-testid="quick-look-button"
-          disabled={!selected}
-          onClick={() => selected && openQuickLook(selected)}
-        >
-          <IconEye size={13} />
-          Quick Look
-        </button>
-        <button type="button" className="btn" data-testid="system-file-button" onClick={openSystemEditor}>
-          Edit protected file
-        </button>
-      </div>
-
-      <div className="files-head" role="row" aria-hidden="true">
-        <span>Name</span>
-        <span>Size</span>
-        <span>Modified</span>
-      </div>
-      <div className="files-list" role="listbox" aria-label="Files" aria-activedescendant={selectedName ? `file-${selectedName}` : undefined}>
-        {entries.map((entry) => (
-          <div
-            key={entry.name}
-            id={`file-${entry.name}`}
-            role="option"
-            aria-selected={selectedName === entry.name}
-            tabIndex={0}
-            data-file-row={entry.name}
-            data-testid={`file-row-${entry.name}`}
-            className={`file-row${selectedName === entry.name ? ' selected' : ''}`}
-            onClick={() => setSelectedName(entry.name)}
-            onDoubleClick={() => activate(entry)}
-            onKeyDown={(e) => onRowKey(e, entry)}
+      <div className="files-workspace">
+        <aside className="files-sidebar" aria-label="File locations" data-testid="files-sidebar">
+          <h2>Locations</h2>
+          <button
+            type="button"
+            className={`files-location${path.join('/') === source.homePath().join('/') ? ' selected' : ''}`}
+            data-testid="files-location-home"
+            aria-current={path.join('/') === source.homePath().join('/') ? 'location' : undefined}
+            onClick={() => navigateTo(source.homePath())}
           >
-            <span className="file-name">
-              {entry.kind === 'dir' ? <IconFolder size={15} /> : <IconFile size={15} />}
-              {entry.name}
-            </span>
-            <span className="file-size mono">{entry.kind === 'dir' ? '—' : formatSize(entry.size)}</span>
-            <span className="file-modified">{entry.modified}</span>
-          </div>
-        ))}
-        {listError && (
-          <p className="files-empty">
-            {listError}{' '}
-            <button type="button" className="btn" data-testid="files-retry" onClick={() => setPath((p) => [...p])}>
-              Retry
+            <IconHome size={19} />
+            <span>Home</span>
+          </button>
+          {homeFolders.length > 0 && <h2>Folders</h2>}
+          {homeFolders.map((folder) => {
+            const folderPath = [...source.homePath(), folder.name];
+            const active = path.join('/') === folderPath.join('/');
+            return (
+              <button
+                key={folder.name}
+                type="button"
+                className={`files-location${active ? ' selected' : ''}`}
+                data-testid={`files-location-${folder.name}`}
+                aria-current={active ? 'location' : undefined}
+                onClick={() => navigateTo(folderPath)}
+              >
+                <IconFolder size={19} />
+                <span>{folder.name}</span>
+              </button>
+            );
+          })}
+        </aside>
+        <div className="files-main">
+          <div className="app-toolbar">
+            <nav className="files-breadcrumbs" aria-label="Path">
+              <IconHome size={18} />
+              <button type="button" className="files-crumb" onClick={() => navigateTo(source.homePath())}>
+                Home
+              </button>
+              {path.slice(1).map((segment, i) => (
+                <span key={segment} className="files-crumb-group">
+                  <IconChevronRight size={11} />
+                  <button
+                    type="button"
+                    className="files-crumb"
+                    onClick={() => navigateTo(path.slice(0, i + 2))}
+                  >
+                    {segment}
+                  </button>
+                </span>
+              ))}
+            </nav>
+            <button
+              type="button"
+              className="btn btn-primary"
+              data-testid="upload-button"
+              disabled={uploading}
+              onClick={() => uploadInputRef.current?.click()}
+            >
+              <IconUpload size={15} />
+              {uploading ? 'Uploading…' : 'Upload'}
             </button>
-          </p>
-        )}
-        {!listError && entries.length === 0 && <p className="files-empty">This folder is empty.</p>}
+            <input ref={uploadInputRef} type="file" hidden data-testid="upload-input" onChange={(e) => void upload(e)} />
+            <button
+              type="button"
+              className="btn files-quicklook-btn"
+              data-testid="quick-look-button"
+              disabled={!selected}
+              onClick={() => selected && openQuickLook(selected)}
+            >
+              <IconEye size={13} />
+              Quick Look
+            </button>
+            <button type="button" className="btn" data-testid="system-file-button" onClick={openSystemEditor}>
+              <IconFile size={14} />
+              Edit protected file
+            </button>
+          </div>
+
+          <div className="files-head" role="row" aria-hidden="true">
+            <span>Name</span>
+            <span>Size</span>
+            <span>Modified</span>
+          </div>
+          <div className="files-list" role="listbox" aria-label="Files" aria-activedescendant={selectedName ? `file-${selectedName}` : undefined}>
+            {entries.map((entry) => (
+              <div
+                key={entry.name}
+                id={`file-${entry.name}`}
+                role="option"
+                aria-selected={selectedName === entry.name}
+                tabIndex={0}
+                data-file-row={entry.name}
+                data-testid={`file-row-${entry.name}`}
+                data-kind={entry.kind}
+                className={`file-row${selectedName === entry.name ? ' selected' : ''}`}
+                onClick={() => setSelectedName(entry.name)}
+                onDoubleClick={() => activate(entry)}
+                onKeyDown={(e) => onRowKey(e, entry)}
+              >
+                <span className="file-name">
+                  {entry.kind === 'dir' ? <IconFolder size={15} /> : <IconFile size={15} />}
+                  <span>{entry.name}</span>
+                </span>
+                <span className="file-size mono">{entry.kind === 'dir' ? '—' : formatSize(entry.size)}</span>
+                <span className="file-modified">{entry.modified}</span>
+              </div>
+            ))}
+            {listError && (
+              <p className="files-empty">
+                {listError}{' '}
+                <button type="button" className="btn" data-testid="files-retry" onClick={() => setPath((p) => [...p])}>
+                  Retry
+                </button>
+              </p>
+            )}
+            {!listError && entries.length === 0 && <p className="files-empty">This folder is empty.</p>}
+          </div>
+          <footer className="files-status" data-testid="files-status">
+            <span>{listError ? 'Folder unavailable' : `${entries.length} ${entries.length === 1 ? 'item' : 'items'}`}</span>
+            <span>{path.join('/') === source.homePath().join('/') ? 'Home' : path[path.length - 1]}</span>
+          </footer>
+        </div>
       </div>
 
       {quickLook && (

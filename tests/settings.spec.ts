@@ -10,6 +10,10 @@ test('settings confirms and schedules a restart', async ({ page }) => {
   await page.getByTestId('dock-app-settings').click();
   const settings = page.getByTestId('app-settings');
   await expect(settings).toBeVisible();
+  await settings.getByTestId('settings-section-about').click();
+  await expect(settings.getByRole('region', { name: 'Legal', exact: true })).toContainText('AGPL-3.0-only');
+  await expect(settings.getByTestId('legal-source')).toHaveAttribute('href', 'https://github.com/hiyuantang/lumio-os');
+  await settings.getByTestId('settings-section-system').click();
   await settings.getByTestId('settings-reboot').click();
   await expect(page.getByTestId('settings-power-confirm')).toContainText('Active sessions will be disconnected');
   await page.getByTestId('settings-confirm-action').click();

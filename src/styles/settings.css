@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 .settings {
   flex-direction: row;
+  background: transparent;
 }
 
 .settings-sidebar {
@@ -8,7 +9,8 @@
   flex: none;
   padding: var(--space-3) var(--space-2);
   border-right: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-sidebar);
+  backdrop-filter: blur(28px);
 }
 
 .settings-nav-item {
@@ -31,11 +33,23 @@
   min-width: 0;
   overflow-y: auto;
   padding: var(--space-5);
+  background: var(--surface-raised);
 }
 
 .settings-heading h2 {
   margin: 0;
   font-size: 20px;
+}
+
+.settings-section-title {
+  margin: 0 0 var(--space-2);
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+
+.settings-row a {
+  color: var(--accent);
+  text-underline-offset: 3px;
 }
 
 .settings-heading p,

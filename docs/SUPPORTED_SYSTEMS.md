@@ -22,7 +22,7 @@
 
 ## Explicitly out of scope
 
-- Arbitrary native GUI streaming in the first release.
+- Native graphical application and full-desktop streaming.
 - A built-in root AI agent.
 - Kubernetes.
 - Other distributions may work but are unsupported.

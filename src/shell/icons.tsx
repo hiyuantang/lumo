@@ -68,7 +68,7 @@ export function IconGear(p: IconProps) {
     p,
     <>
       <circle cx="12" cy="12" r="3.2" />
-      <path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8" />
+      <path d="M9.8 3h4.4l.6 2.5 1.5.9 2.5-.7L21 9.5l-1.9 1.8v1.4l1.9 1.8-2.2 3.8-2.5-.7-1.5.9-.6 2.5H9.8l-.6-2.5-1.5-.9-2.5.7L3 14.5l1.9-1.8v-1.4L3 9.5l2.2-3.8 2.5.7 1.5-.9L9.8 3Z" />
     </>,
   );
 }
@@ -143,6 +143,16 @@ export function IconEye(p: IconProps) {
     <>
       <path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z" />
       <circle cx="12" cy="12" r="2.8" />
+    </>,
+  );
+}
+
+export function IconUpload(p: IconProps) {
+  return base(
+    p,
+    <>
+      <path d="M12 15V3.5m-4 4 4-4 4 4" />
+      <path d="M4.5 14v5.5h15V14" />
     </>,
   );
 }

@@ -33,7 +33,7 @@ export const APPS: Record<AppId, AppMeta> = {
     id: 'files',
     title: 'Files',
     icon: IconFolder,
-    defaultSize: { w: 680, h: 480 },
+    defaultSize: { w: 1080, h: 630 },
     minSize: { w: 440, h: 340 },
   },
   terminal: {

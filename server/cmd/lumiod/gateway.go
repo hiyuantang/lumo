@@ -22,8 +22,17 @@ func runGateway(args []string) {
 	addr := fs.String("addr", "127.0.0.1:8080", "listen address")
 	web := fs.String("web", "", "serve the frontend from this directory instead of the embedded assets")
 	runDir := fs.String("run-dir", "/run/lumio", "runtime directory")
+	certFile := fs.String("tls-cert", "", "PEM certificate chain")
+	keyFile := fs.String("tls-key", "", "PEM private key")
+	insecure := fs.Bool("insecure-http", false, "TEST ONLY: allow unencrypted non-loopback HTTP")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+	if err := gateway.ValidateTransport(*addr, *certFile, *keyFile, *insecure); err != nil {
+		log.Fatal(err)
+	}
+	if *insecure {
+		log.Print("WARNING: -insecure-http is for isolated test containers only")
 	}
 
 	var staticHandler http.Handler
@@ -44,6 +53,16 @@ func runGateway(args []string) {
 		Addr:              *addr,
 		Handler:           gw.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       90 * time.Second,
+	}
+	var certificate *gateway.Certificate
+	if *certFile != "" {
+		var err error
+		certificate, err = gateway.NewCertificate(*certFile, *keyFile)
+		if err != nil {
+			log.Fatalf("TLS certificate: %v", err)
+		}
+		srv.TLSConfig = certificate.Config()
 	}
 
 	go func() {
@@ -54,9 +73,26 @@ func runGateway(args []string) {
 		defer cancel()
 		_ = srv.Shutdown(ctx)
 	}()
+	if certificate != nil {
+		go func() {
+			reload := make(chan os.Signal, 1)
+			signal.Notify(reload, syscall.SIGHUP)
+			for range reload {
+				if err := certificate.Reload(); err != nil {
+					log.Printf("TLS reload failed; keeping the previous certificate: %v", err)
+				}
+			}
+		}()
+	}
 
 	log.Printf("lumiod-gateway %s listening on %s", version, *addr)
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	var err error
+	if certificate != nil {
+		err = srv.ListenAndServeTLS("", "")
+	} else {
+		err = srv.ListenAndServe()
+	}
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("listen: %v", err)
 	}
 }

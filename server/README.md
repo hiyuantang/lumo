@@ -10,6 +10,7 @@ lumiod gateway    HTTP/WS + auth + CSRF, unprivileged user (lumio-gw)
 lumiod sessiond   root: PAM login, session store, spawns per-user agents
 lumiod agent      the logged-in user: metrics, services, journal, files, PTY
 lumiod broker     root: typed privileged actions (polkit + audit)
+lumiod version    JSON build information, including PAM and embedded UI support
 ```
 
 Processes talk over Unix sockets under `/run/lumio` (see
@@ -53,6 +54,13 @@ and PTYs work.
 
 ## Run on Ubuntu (production shape)
 
+Use `sudo bash scripts/install.sh` from the repository root for account
+creation, a random port, HTTPS, polkit configuration and startup services.
+See [VPS installation](../docs/INSTALL.md) for its verification status and
+setup options. Running `lumiod` without a subcommand prints usage and exits.
+
+For a manually managed stack restricted to an SSH tunnel:
+
 ```sh
 lumiod broker &     # root
 lumiod sessiond &   # root
@@ -61,8 +69,11 @@ lumiod gateway &    # user lumio-gw, -addr 127.0.0.1:8080
 
 PAM service file `/etc/pam.d/lumiod` (see `docker/pam.d-lumiod`),
 polkit action file `/usr/share/polkit-1/actions/os.lumio.policy`
-(see `docker/os.lumio.policy`). Reach the gateway through an SSH tunnel;
-there is no TLS until Phase 7.
+(see `docker/os.lumio.policy`). Reach this loopback gateway through an SSH
+tunnel. A public listener requires `-tls-cert /path/to/fullchain.pem` and
+`-tls-key /path/to/key.pem`; `SIGHUP` reloads the pair and retains the working
+certificate if loading fails. The installer applies `deploy/os.lumio.rules`
+and restricts PAM login to the `lumio-users` group.
 
 ## Build with the embedded frontend
 
@@ -126,8 +137,9 @@ rather than 404, per PROTOCOL.md's capability table.
 
 ### Container binding
 
-`docker/lumiod-gateway.service` binds 0.0.0.0:8080 only so the Docker port
-forward used by the integration test can reach the gateway. The default
+`docker/lumiod-gateway.service` explicitly uses `-insecure-http` and binds
+0.0.0.0:8080 so the Docker port forward used by the isolated integration
+test can reach the gateway. Production units never use that flag. The default
 remains `127.0.0.1:8080` everywhere else. The container runs the full
 Phase 5 process set (gateway as `lumio-gw`, sessiond and broker as root)
 with a test user `alice` and a testbed-only polkit rules file
@@ -210,9 +222,9 @@ log will persist it.
 ## Layout
 
 ```
-cmd/lumiod/      subcommand dispatch: gateway | sessiond | agent | broker | (default: single-process)
+cmd/lumiod/      subcommand dispatch: gateway | sessiond | agent | broker | version
 cmd/wscheck/     WS assertion client used by the integration test
-internal/config/ flag parsing (single-process mode)
+internal/config/ unused legacy flag parsing
 internal/auth/   PAM behind the `pam` build tag + nopam fallback
 internal/ipc/    unix-socket HTTP helpers, SO_PEERCRED, /proc start times
 internal/gateway/ cookies, CSRF, login rate limiting, REST proxy, WS splice

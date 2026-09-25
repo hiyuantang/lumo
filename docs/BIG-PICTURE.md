@@ -16,7 +16,11 @@ The best description of the product is:
 
 > **A locally rendered, macOS-inspired web desktop for administering a real headless Ubuntu server.**
 
-It should feel like an operating system, but it should not pretend that the browser is actually running GNOME or macOS.
+Its main workflow is browsing VPS files, editing Markdown and text, using
+a terminal and managing Linux system capabilities. The browser renders
+the desktop and its tools locally; the server supplies files, terminal
+text and system data. Low bandwidth use is a product priority. Native
+application and full-desktop streaming are outside scope.
 
 ---
 
@@ -78,6 +82,7 @@ For example, use an open font such as Inter or Geist rather than copying Apple�
 |---|---|---|
 | **Home** | A restrained system overview | Health, uptime, CPU, memory, storage, updates and alerts |
 | **Files** | Finder-like list and column views | Real filesystem under the logged-in user’s permissions |
+| **Markdown editor** | A focused source editor with local preview | Markdown and text files on the VPS; planned beyond the existing basic text editor |
 | **Terminal** | A native-feeling terminal with tabs and splits | A real PTY running as the logged-in Linux user |
 | **Services** | A live application/process manager | systemd units, dependencies, startup and restart operations |
 | **Logs** | Console-style searchable event stream | journald with live filters and saved searches |
@@ -387,7 +392,7 @@ Decide:
 - Ubuntu 24.04 as compatibility target;
 - amd64 and arm64;
 - one server per session;
-- no arbitrary native GUI streaming in the first release;
+- no native graphical application or full-desktop streaming;
 - no built-in root AI agent;
 - no multi-server control plane yet.
 
@@ -656,20 +661,21 @@ Keep plugins isolated. A plugin should declare the capabilities it needs and sho
 
 ---
 
-## Phase 9 — Optional native application windows
+## Application scope
 
-Only after the web-native system is mature, add selective GUI streaming.
+Build web interfaces for selected Linux capabilities: Files, Terminal,
+Markdown editing and system-management tools. The next editor increment
+adds local Markdown preview and protection for unsaved work to the existing
+text editor; its behavior and acceptance checks are in
+[PRODUCT.md](PRODUCT.md#markdown-editing-workflow).
 
-A user could launch something such as a graphical database tool in an isolated session:
+Command-line applications are accessible through Terminal. Applications
+with their own web interface can be used separately; integrating them is
+a separate feature with its own trust boundaries. Other software can run
+on the VPS without Lumio providing a custom graphical interface.
 
-```text
-Browser desktop
-   └── Native App window
-          └── Isolated Xpra session
-                 └── One Linux GUI application
-```
-
-This should be an escape hatch, not the foundation. The browser shell, Files, Terminal, Services, Logs and Settings should remain locally rendered.
+Native graphical applications, full remote desktops and custom web ports
+of arbitrary desktop applications are outside scope.
 
 ---
 
@@ -678,7 +684,7 @@ This should be an escape hatch, not the foundation. The browser shell, Files, Te
 The first meaningful release should let a user:
 
 1. install one Ubuntu package;
-2. connect securely;
+2. connect over HTTPS using the VPS IP and port or a configured hostname;
 3. log in as a real Linux user;
 4. see a macOS-inspired desktop;
 5. inspect host health;
@@ -692,13 +698,15 @@ The first meaningful release should let a user:
 13. see an audit trail;
 14. observe changes made through SSH;
 15. uninstall the product without damaging the server.
+16. edit and preview Markdown locally and safely save it to the VPS.
 
 It does **not** need initial support for:
 
 - multiple hosts in one browser session;
 - a plugin marketplace;
 - every Cockpit feature;
-- arbitrary graphical desktop applications;
+- native graphical application or full-desktop streaming;
+- custom web versions of arbitrary desktop applications;
 - Kubernetes;
 - complete storage provisioning;
 - an autonomous AI administrator;
@@ -810,4 +818,7 @@ The right strategy is:
 
 > **Cockpit as a benchmark and behavioral oracle; Ubuntu’s stable system interfaces as the actual foundation; your own macOS-inspired shell and interaction model as the product.**
 
-Start with the desktop shell, Services, Logs, Terminal, Files and Updates. Delay storage mutation, networking, containers, multi-host management and graphical application streaming until the authentication, permission and rollback model has proven trustworthy.
+Start with the desktop shell, Files, Markdown editing, Terminal, Services,
+Logs and Updates. Add broader system-management workflows as their
+authentication, permission and recovery behavior is verified. Native
+graphical application and full-desktop streaming remain outside scope.

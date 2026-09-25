@@ -2,6 +2,7 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { APP_ORDER, APPS, type AppId } from '../apps/registry';
 import { useShell } from './ShellContext';
+import { IconZoom } from './icons';
 import '../styles/dock.css';
 
 export function Dock() {
@@ -10,8 +11,7 @@ export function Dock() {
   function onAppClick(appId: AppId) {
     const win = state.windows[appId];
     if (!win) actions.openApp(appId);
-    else if (win.minimized || state.focused !== appId) actions.focusApp(appId);
-    else actions.minimizeApp(appId);
+    else actions.focusApp(appId);
   }
 
   function onKeyDown(e: ReactKeyboardEvent) {
@@ -37,15 +37,18 @@ export function Dock() {
             <button
               key={appId}
               type="button"
-              className={`dock-app${active ? ' active' : ''}`}
+              className={`dock-app${active ? ' active' : ''}${minimized ? ' minimized' : ''}`}
               data-testid={`dock-app-${appId}`}
+              data-app={appId}
               aria-label={`${meta.title}${running ? (minimized ? ', minimized' : ', running') : ''}`}
-              title={meta.title}
+              title={minimized ? `Restore ${meta.title}` : meta.title}
               onClick={() => onAppClick(appId)}
             >
               <span className="dock-icon">
-                <Icon size={22} />
+                <Icon size={31} />
               </span>
+              {minimized && <span className="dock-minimized-badge" data-testid={`dock-minimized-${appId}`} aria-hidden="true"><IconZoom size={13} /></span>}
+              <span className="dock-label" aria-hidden="true">{minimized ? `Restore ${meta.title}` : meta.title}</span>
               <span className={`dock-dot${running ? ' on' : ''}${minimized ? ' minimized' : ''}`} aria-hidden="true" />
             </button>
           );

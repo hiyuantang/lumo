@@ -8,6 +8,7 @@ import {
 } from '../api/source';
 import { useReauth } from '../shell/ReauthSheet';
 import { useShell } from '../shell/ShellContext';
+import { AboutLegal } from './AboutLegal';
 import '../styles/apps.css';
 import '../styles/settings.css';
 
@@ -28,6 +29,7 @@ export function Settings() {
   const source = getDataSource();
   const { actions } = useShell();
   const requireReauth = useReauth();
+  const [section, setSection] = useState<'system' | 'about'>('system');
   const [confirm, setConfirm] = useState<PowerAction | null>(null);
   const [busy, setBusy] = useState<PowerAction | null>(null);
   const canPower = source.capabilities.canPowerControl;
@@ -50,50 +52,71 @@ export function Settings() {
   return (
     <div className="app settings" data-testid="app-settings">
       <nav className="settings-sidebar" aria-label="Settings sections">
-        <button type="button" className="settings-nav-item selected" aria-current="page">
+        <button
+          type="button"
+          className={`settings-nav-item${section === 'system' ? ' selected' : ''}`}
+          aria-current={section === 'system' ? 'page' : undefined}
+          data-testid="settings-section-system"
+          onClick={() => setSection('system')}
+        >
           System
+        </button>
+        <button
+          type="button"
+          className={`settings-nav-item${section === 'about' ? ' selected' : ''}`}
+          aria-current={section === 'about' ? 'page' : undefined}
+          data-testid="settings-section-about"
+          onClick={() => setSection('about')}
+        >
+          About
         </button>
       </nav>
       <main className="settings-content">
-        <header className="settings-heading">
-          <h2>System</h2>
-          <p>Restart or shut down this server.</p>
-        </header>
-        <section className="settings-group" aria-label="Power">
-          <div className="settings-row">
-            <div>
-              <h3>Restart</h3>
-              <p>Stop active sessions, then start the server again.</p>
-            </div>
-            <button
-              type="button"
-              className="btn"
-              data-testid="settings-reboot"
-              disabled={!canPower || busy !== null}
-              onClick={() => setConfirm('reboot')}
-            >
-              {busy === 'reboot' ? <span className="spinner" aria-hidden="true" /> : null}
-              {busy === 'reboot' ? 'Scheduling…' : 'Restart…'}
-            </button>
-          </div>
-          <div className="settings-row">
-            <div>
-              <h3>Shut down</h3>
-              <p>Power off the server and disconnect every session.</p>
-            </div>
-            <button
-              type="button"
-              className="btn btn-danger"
-              data-testid="settings-poweroff"
-              disabled={!canPower || busy !== null}
-              onClick={() => setConfirm('poweroff')}
-            >
-              {busy === 'poweroff' ? <span className="spinner" aria-hidden="true" /> : null}
-              {busy === 'poweroff' ? 'Scheduling…' : 'Shut down…'}
-            </button>
-          </div>
-        </section>
-        {!canPower ? <p className="settings-unavailable">Power controls are not available on this host.</p> : null}
+        {section === 'about' ? (
+          <AboutLegal />
+        ) : (
+          <>
+            <header className="settings-heading">
+              <h2>System</h2>
+              <p>Restart or shut down this server.</p>
+            </header>
+            <section className="settings-group" aria-label="Power">
+              <div className="settings-row">
+                <div>
+                  <h3>Restart</h3>
+                  <p>Stop active sessions, then start the server again.</p>
+                </div>
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="settings-reboot"
+                  disabled={!canPower || busy !== null}
+                  onClick={() => setConfirm('reboot')}
+                >
+                  {busy === 'reboot' ? <span className="spinner" aria-hidden="true" /> : null}
+                  {busy === 'reboot' ? 'Scheduling…' : 'Restart…'}
+                </button>
+              </div>
+              <div className="settings-row">
+                <div>
+                  <h3>Shut down</h3>
+                  <p>Power off the server and disconnect every session.</p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  data-testid="settings-poweroff"
+                  disabled={!canPower || busy !== null}
+                  onClick={() => setConfirm('poweroff')}
+                >
+                  {busy === 'poweroff' ? <span className="spinner" aria-hidden="true" /> : null}
+                  {busy === 'poweroff' ? 'Scheduling…' : 'Shut down…'}
+                </button>
+              </div>
+            </section>
+            {!canPower ? <p className="settings-unavailable">Power controls are not available on this host.</p> : null}
+          </>
+        )}
       </main>
 
       {confirm ? (

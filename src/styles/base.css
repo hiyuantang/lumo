@@ -50,10 +50,14 @@ button {
 }
 
 .wallpaper {
-  background:
-    radial-gradient(120% 90% at 15% 0%, var(--wallpaper-glow-1), transparent 60%),
-    radial-gradient(110% 90% at 90% 100%, var(--wallpaper-glow-2), transparent 55%),
-    linear-gradient(155deg, var(--wallpaper-1) 0%, var(--wallpaper-2) 52%, var(--wallpaper-3) 100%);
+  background-color: #075c65;
+  background-image: url('../assets/lumio-tidal.webp');
+  background-position: center;
+  background-size: cover;
+}
+
+[data-theme='dark'] .wallpaper {
+  background-image: linear-gradient(rgba(4, 21, 29, 0.55), rgba(4, 21, 29, 0.55)), url('../assets/lumio-tidal.webp');
 }
 
 .desktop-root {

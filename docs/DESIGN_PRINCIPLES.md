@@ -28,11 +28,21 @@ application names. The following rules are binding for every UI task:
 
 ## Interaction rules
 
+The current surface treatment follows the public macOS 27 direction:
+clearer glass, rounded window geometry, consistent toolbars and full-height
+sidebars. Lumio retains its original assets, typography, icons, palette and
+window controls. See [DESKTOP_STYLE.md](DESKTOP_STYLE.md) for the visual
+system and generated-wallpaper provenance.
+
 1. All shell interaction renders locally in the browser with **zero
    server round trips**: moving a window, opening a menu or switching
    applications never touches the network.
 2. Motion is 120–200 ms ease-out. Nothing bounces, nothing lingers.
 3. Every destructive action confirms before it executes.
+4. Markdown editing and preview render locally. Typing, scrolling and
+   preview updates require no server round trip; explicit file operations
+   use the authenticated data-source interface. Preserve local edits when
+   a save fails, and warn before discarding unsaved work.
 
 ## Accessibility
 

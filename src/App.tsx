@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { CSSProperties } from 'react';
 import { CommandCenter } from './shell/CommandCenter';
 import { Dock } from './shell/Dock';
 import { LoginScreen } from './shell/LoginScreen';
@@ -7,11 +8,13 @@ import { NotificationCenter, ShortcutsDialog } from './shell/NotificationCenter'
 import { ReauthProvider } from './shell/ReauthSheet';
 import { ShellProvider, useIsNarrow, useShell } from './shell/ShellContext';
 import { WindowManager } from './shell/WindowManager';
+import { dockSpace } from './shell/windowGeometry';
 
 function Desktop() {
   const narrow = useIsNarrow();
+  const { state } = useShell();
   return (
-    <div className={`desktop-root${narrow ? ' narrow' : ''}`}>
+    <div className={`desktop-root${narrow ? ' narrow' : ''}`} style={{ '--dock-space': `${dockSpace(state.viewport)}px` } as CSSProperties}>
       <MenuBar />
       <main className="desktop wallpaper" aria-label="Desktop">
         <WindowManager />

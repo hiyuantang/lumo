@@ -10,3 +10,5 @@ test-results/
 server/bin/
 server/internal/static/dist/
 docker/.build/
+__pycache__/
+*.pyc

@@ -1,153 +1,244 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { APP_COMPONENTS } from '../apps';
 import { APPS } from '../apps/registry';
 import { IconMinus, IconX, IconZoom } from './icons';
 import { useShell, type WindowState } from './ShellContext';
+import { useWindowMinimize } from './useWindowMinimize';
+import { clampRect, COMPACT_WIDTH, resizeRect, snapRect, snapTargetAt, type ResizeDirection, type SnapTarget } from './windowGeometry';
 import '../styles/window.css';
 
 const RESIZE_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
-type ResizeDir = (typeof RESIZE_DIRS)[number];
+const SNAP_LABELS: Record<SnapTarget, string> = { left: 'Tile left', right: 'Tile right', maximize: 'Maximize' };
 
 export function Window({ win }: { win: WindowState }) {
   const { state, actions, reducedMotion } = useShell();
   const meta = APPS[win.appId];
   const Body = APP_COMPONENTS[win.appId];
   const focused = state.focused === win.appId;
-  const [minimizing, setMinimizing] = useState(false);
+  const minimize = useWindowMinimize(win, state.viewport, reducedMotion);
+  const [interacting, setInteracting] = useState<'drag' | 'resize' | null>(null);
+  const [snapTarget, setSnapTarget] = useState<SnapTarget | null>(null);
+  const gestureCleanup = useRef<(() => void) | null>(null);
 
-  function minimize() {
-    if (reducedMotion) {
-      actions.minimizeApp(win.appId);
-      return;
-    }
-    setMinimizing(true);
-    window.setTimeout(() => {
-      actions.minimizeApp(win.appId);
-      setMinimizing(false);
-    }, 180);
+  useEffect(() => () => {
+    gestureCleanup.current?.();
+  }, []);
+
+  function trackPointer(e: ReactPointerEvent<HTMLElement>, handlers: {
+    move: (event: PointerEvent) => void;
+    finish?: () => void;
+    cancel: () => void;
+  }) {
+    gestureCleanup.current?.();
+    e.preventDefault();
+    const el = e.currentTarget;
+    const pointerId = e.pointerId;
+    let frame: number | null = null;
+    let pending: PointerEvent | null = null;
+    const flush = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null;
+      if (!pending) return;
+      const event = pending;
+      pending = null;
+      handlers.move(event);
+    };
+    const move = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      pending = event;
+      if (frame === null) frame = requestAnimationFrame(flush);
+    };
+    const cleanup = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', pointerCancel);
+      window.removeEventListener('keydown', keydown);
+      window.removeEventListener('blur', cancel);
+      window.removeEventListener('resize', cancel);
+      el.removeEventListener('lostpointercapture', pointerCancel);
+      gestureCleanup.current = null;
+      if (el.hasPointerCapture(pointerId)) el.releasePointerCapture(pointerId);
+    };
+    const cancel = () => {
+      cleanup();
+      setInteracting(null);
+      setSnapTarget(null);
+      handlers.cancel();
+    };
+    const pointerCancel = (event: PointerEvent) => {
+      if (event.pointerId === pointerId) cancel();
+    };
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      cancel();
+    };
+    const up = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      pending = event;
+      flush();
+      cleanup();
+      setInteracting(null);
+      setSnapTarget(null);
+      handlers.finish?.();
+    };
+    gestureCleanup.current = cleanup;
+    el.setPointerCapture(pointerId);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', pointerCancel);
+    window.addEventListener('keydown', keydown);
+    window.addEventListener('blur', cancel);
+    window.addEventListener('resize', cancel);
+    el.addEventListener('lostpointercapture', pointerCancel);
   }
 
   function onTitlePointerDown(e: ReactPointerEvent<HTMLElement>) {
-    if (e.button !== 0 || win.maximized) return;
+    if (e.button !== 0 || !e.isPrimary || state.viewport.w <= COMPACT_WIDTH) return;
     if ((e.target as HTMLElement).closest('.window-controls')) return;
-    const el = e.currentTarget;
     const startX = e.clientX;
     const startY = e.clientY;
-    const orig = { x: win.x, y: win.y };
-    el.setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => {
-      actions.updateRect(win.appId, {
-        x: orig.x + ev.clientX - startX,
-        y: orig.y + ev.clientY - startY,
-        w: win.w,
-        h: win.h,
-      });
-    };
-    const up = () => {
-      el.removeEventListener('pointermove', move);
-      el.removeEventListener('pointerup', up);
-    };
-    el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', up);
+    const placed = win.maximized || Boolean(win.snapped);
+    const floating = clampRect(placed ? (win.restore ?? { ...win, ...meta.defaultSize }) : win, state.viewport);
+    const offsetX = placed ? ((startX - win.x) / win.w) * floating.w : startX - win.x;
+    const offsetY = Math.min(startY - win.y, 49);
+    let moved = false;
+    let target: SnapTarget | null = null;
+    trackPointer(e, {
+      move: (event) => {
+        if (!moved && Math.hypot(event.clientX - startX, event.clientY - startY) < 6) return;
+        if (!moved) {
+          moved = true;
+          setInteracting('drag');
+        }
+        actions.updateRect(win.appId, { ...floating, x: event.clientX - offsetX, y: event.clientY - offsetY });
+        target = snapTargetAt(event.clientX, event.clientY, state.viewport, meta.minSize);
+        setSnapTarget(target);
+      },
+      finish: () => {
+        if (moved && target) actions.snapWindow(win.appId, target, floating);
+      },
+      cancel: () => {
+        if (moved) actions.cancelWindowGesture(win.appId, win);
+      },
+    });
   }
 
-  function onResizePointerDown(e: ReactPointerEvent<HTMLDivElement>, dir: ResizeDir) {
-    if (e.button !== 0 || win.maximized) return;
-    e.preventDefault();
+  function onResizePointerDown(e: ReactPointerEvent<HTMLDivElement>, direction: ResizeDirection) {
+    if (e.button !== 0 || !e.isPrimary || win.maximized || state.viewport.w <= COMPACT_WIDTH) return;
     e.stopPropagation();
-    const el = e.currentTarget;
     const startX = e.clientX;
     const startY = e.clientY;
-    const orig = { x: win.x, y: win.y, w: win.w, h: win.h };
-    el.setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
-      let { x, y, w, h } = orig;
-      if (dir.includes('e')) w = Math.max(meta.minSize.w, orig.w + dx);
-      if (dir.includes('s')) h = Math.max(meta.minSize.h, orig.h + dy);
-      if (dir.includes('w')) {
-        w = Math.max(meta.minSize.w, orig.w - dx);
-        x = orig.x + orig.w - w;
-      }
-      if (dir.includes('n')) {
-        h = Math.max(meta.minSize.h, orig.h - dy);
-        y = orig.y + orig.h - h;
-      }
-      actions.updateRect(win.appId, { x, y, w, h });
-    };
-    const up = () => {
-      el.removeEventListener('pointermove', move);
-      el.removeEventListener('pointerup', up);
-    };
-    el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', up);
+    let moved = false;
+    trackPointer(e, {
+      move: (event) => {
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+        if (!moved && Math.hypot(dx, dy) < 2) return;
+        if (!moved) {
+          moved = true;
+          setInteracting('resize');
+        }
+        actions.updateRect(win.appId, resizeRect(win, direction, dx, dy, meta.minSize, state.viewport));
+      },
+      cancel: () => {
+        if (moved) actions.cancelWindowGesture(win.appId, win);
+      },
+    });
   }
 
   const Icon = meta.icon;
+  const preview = snapTarget ? snapRect(snapTarget, state.viewport) : null;
   const className = [
     'window',
     focused ? 'focused' : '',
     win.maximized ? 'maximized' : '',
-    minimizing ? 'minimizing' : '',
+    win.snapped ? 'snapped' : '',
+    interacting === 'drag' ? 'dragging' : '',
+    minimize.phase,
+    minimize.hasMinimized ? 'has-minimized' : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   return (
-    <section
-      className={className}
-      role="dialog"
-      aria-label={meta.title}
-      data-testid={`window-${win.appId}`}
-      hidden={win.minimized}
-      style={{ left: win.x, top: win.y, width: win.w, height: win.h, zIndex: win.z }}
-      onPointerDownCapture={() => {
-        if (!focused) actions.focusApp(win.appId);
-      }}
-    >
-      <header
-        className="window-titlebar"
-        onPointerDown={onTitlePointerDown}
-        onDoubleClick={(e) => {
-          if (!(e.target as HTMLElement).closest('.window-controls')) actions.toggleMaximize(win.appId);
+    <>
+      {snapTarget && preview && (
+        <div
+          className="window-snap-preview"
+          data-testid="window-snap-preview"
+          data-snap-target={snapTarget}
+          aria-hidden="true"
+          style={{ left: preview.x, top: preview.y, width: preview.w, height: preview.h, zIndex: win.z }}
+        >
+          <span>{SNAP_LABELS[snapTarget]}</span>
+        </div>
+      )}
+      <section
+        ref={minimize.ref}
+        className={className}
+        role="dialog"
+        tabIndex={-1}
+        aria-label={meta.title}
+        data-testid={`window-${win.appId}`}
+        data-window-placement={win.maximized ? 'maximized' : (win.snapped ?? 'floating')}
+        data-window-visibility={minimize.phase}
+        hidden={minimize.hidden}
+        style={{ left: win.x, top: win.y, width: win.w, height: win.h, zIndex: win.z }}
+        onFocusCapture={minimize.rememberFocus}
+        onPointerDownCapture={() => {
+          if (!focused) actions.focusApp(win.appId);
         }}
       >
-        <div className="window-controls">
-          <button type="button" className="wc wc-min" aria-label={`Minimize ${meta.title}`} onClick={minimize}>
-            <IconMinus size={10} />
-          </button>
-          <button
-            type="button"
-            className="wc wc-zoom"
-            aria-label={win.maximized ? `Restore ${meta.title}` : `Maximize ${meta.title}`}
-            onClick={() => actions.toggleMaximize(win.appId)}
-          >
-            <IconZoom size={10} />
-          </button>
-          <button
-            type="button"
-            className="wc wc-close"
-            data-testid={`window-close-${win.appId}`}
-            aria-label={`Close ${meta.title}`}
-            onClick={() => actions.closeApp(win.appId)}
-          >
-            <IconX size={10} />
-          </button>
+        <header
+          className="window-titlebar"
+          data-testid={`window-titlebar-${win.appId}`}
+          onPointerDown={onTitlePointerDown}
+          onDoubleClick={(e) => {
+            if (state.viewport.w > COMPACT_WIDTH && !(e.target as HTMLElement).closest('.window-controls')) actions.toggleMaximize(win.appId);
+          }}
+        >
+          <div className="window-controls">
+            <button
+              type="button"
+              className="wc wc-close"
+              data-testid={`window-close-${win.appId}`}
+              aria-label={`Close ${meta.title}`}
+              title="Close"
+              onClick={() => actions.closeApp(win.appId)}
+            >
+              <IconX size={10} />
+            </button>
+            <button type="button" className="wc wc-min" data-testid={`window-minimize-${win.appId}`} aria-label={`Minimize ${meta.title}`} title="Minimize to Dock" onClick={() => actions.minimizeApp(win.appId)}>
+              <IconMinus size={10} />
+            </button>
+            <button
+              type="button"
+              className="wc wc-zoom"
+              data-testid={`window-maximize-${win.appId}`}
+              aria-label={win.maximized ? `Restore ${meta.title}` : `Maximize ${meta.title}`}
+              title={win.maximized ? 'Restore' : 'Maximize'}
+              disabled={state.viewport.w <= COMPACT_WIDTH}
+              onClick={() => actions.toggleMaximize(win.appId)}
+            >
+              <IconZoom size={10} />
+            </button>
+          </div>
+          <span className="window-title">
+            <Icon size={13} />
+            {meta.title}
+          </span>
+        </header>
+        <div className="window-body">
+          <Body />
         </div>
-        <span className="window-title">
-          <Icon size={13} />
-          {meta.title}
-        </span>
-      </header>
-      <div className="window-body">
-        <Body />
-      </div>
-      {!win.maximized &&
-        RESIZE_DIRS.map((dir) => (
-          <div key={dir} className={`resize-handle rh-${dir}`} aria-hidden="true" onPointerDown={(e) => onResizePointerDown(e, dir)} />
-        ))}
-    </section>
+        {!win.maximized &&
+          RESIZE_DIRS.map((dir) => (
+            <div key={dir} className={`resize-handle rh-${dir}`} data-testid={`window-resize-${win.appId}-${dir}`} aria-hidden="true" onPointerDown={(e) => onResizePointerDown(e, dir)} />
+          ))}
+      </section>
+    </>
   );
 }

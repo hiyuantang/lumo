@@ -17,6 +17,12 @@ test('phase 1 shell: login, services, notifications, layout restore', async ({ p
   await expect(servicesWindow).toBeVisible();
   await expect(servicesWindow).toHaveAttribute('role', 'dialog');
 
+  await servicesWindow.getByRole('button', { name: 'Minimize Services', exact: true }).click();
+  await expect(servicesWindow).toBeHidden();
+  await expect(page.getByTestId('dock-app-services')).toHaveAttribute('aria-label', 'Services, minimized');
+  await page.getByTestId('dock-app-services').click();
+  await expect(servicesWindow).toBeVisible();
+
   await servicesWindow.getByTestId('service-row-nginx.service').click();
   await servicesWindow.getByTestId('service-action-restart').click();
 

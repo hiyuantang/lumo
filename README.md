@@ -10,6 +10,12 @@ command center — but it never pretends the browser is running GNOME or
 macOS, and it never hides the server behind a duplicate configuration
 database.
 
+The primary workflow is browsing VPS files, editing Markdown and text,
+using a terminal and managing the system. The browser draws these tools
+locally and exchanges file contents, terminal text and system data with
+the server. Native graphical application and full-desktop streaming are
+outside the product scope.
+
 ## What it is
 
 - **A web desktop, not a dashboard.** After logging in you get a calm
@@ -30,6 +36,7 @@ database.
 |---|---|
 | Home | Health, uptime, CPU, memory, storage, updates and alerts |
 | Files | The real filesystem under your user's permissions |
+| Markdown editor | Server Markdown/text files with local preview (planned; basic text editing exists in Files) |
 | Terminal | A real PTY running as your Linux user |
 | Services | systemd units, dependencies, start/stop/restart |
 | Logs | journald with live filters and saved searches |
@@ -38,6 +45,11 @@ database.
 | Network | Interfaces, addresses, DNS, routes, listeners, firewall |
 | Containers | Docker/Podman containers, images, logs, Compose projects |
 | Settings | Users, SSH keys, security, TLS, locale, time |
+
+Command-line software is usable through Terminal. Applications that
+already provide a web interface can be accessed separately. Lumio builds
+focused interfaces for selected server capabilities; it does not recreate
+every installed application. See [Product scope](docs/PRODUCT.md).
 
 ### Architecture at a glance
 
@@ -72,8 +84,10 @@ automatic rollback.
 > or against a real Ubuntu host via the Lumio OS services: PAM login as
 > a real Linux user, a per-user session agent (terminal and files run
 > as that user), and a root privileged broker for typed service actions
-> with polkit authorization and an audit trail. Still bind to
-> localhost / SSH tunnel only — TLS and packaging remain in Phase 7.
+> with polkit authorization and an audit trail. A source installer now
+> provisions an account, a random port, HTTPS and startup services; its
+> full systemd installation gate and public certificate issuance still
+> need deployment verification. See [VPS installation](docs/INSTALL.md).
 > Services includes dependencies, loaded unit files and related-log navigation;
 > Logs includes boot/time filters, structured fields, saved searches, export
 > and service navigation; Updates provides saved plans, security and size
@@ -84,9 +98,22 @@ automatic rollback.
 > transaction. The gateway ships CSP, cross-origin opener/resource controls, permissions
 > policy and no-store API responses. The Network app exposes live interfaces
 > and the typed confirm-or-revert workflow. Firewall rollback and the
-> remaining Phase 6/7 packaging work remain.
+> remaining Phase 6/7 release work remain.
+> Files already supports basic text editing; the Markdown workflow with
+> local preview and unsaved-work protection is planned.
 > The numbered flow below describes the intended experience once the
 > first release ships.
+
+Install this checkout on an Ubuntu VPS:
+
+```sh
+sudo bash scripts/install.sh
+```
+
+After verification succeeds, it prints the HTTPS address, generated
+username and password. Upgrades preserve those details. The
+[installation guide](docs/INSTALL.md) covers certificates, firewall ports,
+existing accounts and password recovery.
 
 Run the desktop with mock data:
 
@@ -118,9 +145,11 @@ Useful shortcuts: `⌘/Ctrl+K` command center, `Alt+W` close window,
 The target experience for the first release:
 
 1. **Install** one Ubuntu package on your server.
-2. **Connect** securely over HTTPS and log in as a real Linux user.
+2. **Connect** to `https://VPS-IP:port` or a configured hostname over HTTPS
+   and log in as a real Linux user.
 3. **Land on the desktop** — check host health on Home, browse files,
-   open a terminal, inspect and control services, stream logs.
+   edit and preview Markdown, open a terminal, inspect and control services,
+   stream logs.
 4. **Elevate only when needed** — privileged actions ask for
    authorization and are recorded in an audit trail.
 5. **Uninstall cleanly** at any time without damaging the server.

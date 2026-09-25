@@ -9,19 +9,17 @@ import {
 } from 'react';
 import { getDataSource } from '../api/source';
 import { APPS, APP_ORDER, type AppId } from '../apps/registry';
+import { canSnap, clampRect, snapRect, workArea, MENUBAR_H, type Rect, type SnapTarget, type Viewport } from './windowGeometry';
 
-export interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
+export { MENUBAR_H } from './windowGeometry';
+export type { Rect } from './windowGeometry';
 
 export interface WindowState extends Rect {
   appId: AppId;
   z: number;
   minimized: boolean;
   maximized: boolean;
+  snapped: 'left' | 'right' | null;
   restore: Rect | null;
 }
 
@@ -34,13 +32,6 @@ export interface ShellNotification {
 
 export type ThemePref = 'light' | 'dark' | null;
 export type MotionPref = 'system' | 'reduced' | 'full';
-
-export const MENUBAR_H = 32;
-
-interface Viewport {
-  w: number;
-  h: number;
-}
 
 interface NavigationIntent {
   target: 'logs' | 'services';
@@ -76,6 +67,8 @@ type Action =
   | { type: 'focus-app'; appId: AppId }
   | { type: 'minimize-app'; appId: AppId }
   | { type: 'toggle-maximize'; appId: AppId }
+  | { type: 'snap-window'; appId: AppId; target: SnapTarget; restore?: Rect }
+  | { type: 'cancel-window-gesture'; appId: AppId; previous: WindowState }
   | { type: 'update-rect'; appId: AppId; rect: Rect }
   | { type: 'cycle-window'; dir: 1 | -1 }
   | { type: 'notify'; title: string; body: string }
@@ -103,16 +96,17 @@ function loadJSON<T>(key: string): T | null {
   }
 }
 
-function clampRect(rect: Rect, viewport: Viewport): Rect {
-  const w = Math.min(rect.w, viewport.w);
-  const h = Math.min(rect.h, Math.max(160, viewport.h - MENUBAR_H));
-  const x = Math.min(Math.max(rect.x, 0), Math.max(0, viewport.w - w));
-  const y = Math.min(Math.max(rect.y, MENUBAR_H), Math.max(MENUBAR_H, viewport.h - h));
-  return { x, y, w, h };
-}
-
-function fullAreaRect(viewport: Viewport): Rect {
-  return { x: 0, y: MENUBAR_H, w: viewport.w, h: Math.max(160, viewport.h - MENUBAR_H) };
+function fitWindow(win: WindowState, viewport: Viewport): WindowState {
+  if (win.maximized) return { ...win, snapped: null, ...workArea(viewport) };
+  if (win.snapped && canSnap(win.snapped, viewport, APPS[win.appId].minSize)) {
+    return { ...win, ...snapRect(win.snapped, viewport) };
+  }
+  return {
+    ...win,
+    ...clampRect(win.snapped ? (win.restore ?? win) : win, viewport),
+    snapped: null,
+    restore: null,
+  };
 }
 
 function reducer(state: ShellState, action: Action): ShellState {
@@ -160,6 +154,7 @@ function reducer(state: ShellState, action: Action): ShellState {
         z,
         minimized: false,
         maximized: false,
+        snapped: null,
         restore: null,
       };
       return {
@@ -187,7 +182,7 @@ function reducer(state: ShellState, action: Action): ShellState {
       let focused = state.focused;
       if (focused === action.appId) {
         const remaining = Object.values(windows)
-          .filter((w): w is WindowState => Boolean(w))
+          .filter((w): w is WindowState => Boolean(w) && !w.minimized)
           .sort((a, b) => b.z - a.z);
         focused = remaining[0]?.appId ?? null;
       }
@@ -222,8 +217,8 @@ function reducer(state: ShellState, action: Action): ShellState {
       if (!win) return state;
       const z = state.zTop + 1;
       const next: WindowState = win.maximized
-        ? { ...win, maximized: false, ...(win.restore ?? win), restore: null, z }
-        : { ...win, maximized: true, restore: { x: win.x, y: win.y, w: win.w, h: win.h }, ...fullAreaRect(state.viewport), z };
+        ? { ...win, ...clampRect(win.restore ?? win, state.viewport), maximized: false, snapped: null, restore: null, z }
+        : { ...win, maximized: true, snapped: null, restore: win.restore ?? { x: win.x, y: win.y, w: win.w, h: win.h }, ...workArea(state.viewport), z };
       return {
         ...state,
         zTop: z,
@@ -231,11 +226,40 @@ function reducer(state: ShellState, action: Action): ShellState {
         windows: { ...state.windows, [action.appId]: next },
       };
     }
+    case 'snap-window': {
+      const win = state.windows[action.appId];
+      if (!win || !canSnap(action.target, state.viewport, APPS[action.appId].minSize)) return state;
+      const z = state.zTop + 1;
+      const restore = action.restore ?? win.restore ?? { x: win.x, y: win.y, w: win.w, h: win.h };
+      return {
+        ...state,
+        zTop: z,
+        focused: action.appId,
+        windows: {
+          ...state.windows,
+          [action.appId]: {
+            ...win,
+            ...snapRect(action.target, state.viewport),
+            maximized: action.target === 'maximize',
+            snapped: action.target === 'maximize' ? null : action.target,
+            minimized: false,
+            restore,
+            z,
+          },
+        },
+      };
+    }
+    case 'cancel-window-gesture': {
+      const win = state.windows[action.appId];
+      if (!win) return state;
+      const previous = fitWindow(action.previous, state.viewport);
+      return { ...state, windows: { ...state.windows, [action.appId]: { ...previous, z: win.z, minimized: win.minimized } } };
+    }
     case 'update-rect': {
       const win = state.windows[action.appId];
-      if (!win || win.maximized) return state;
+      if (!win) return state;
       const rect = clampRect(action.rect, state.viewport);
-      return { ...state, windows: { ...state.windows, [action.appId]: { ...win, ...rect } } };
+      return { ...state, windows: { ...state.windows, [action.appId]: { ...win, ...rect, maximized: false, snapped: null, restore: null } } };
     }
     case 'cycle-window': {
       const visible = APP_ORDER.filter((id) => {
@@ -287,9 +311,7 @@ function reducer(state: ShellState, action: Action): ShellState {
       const windows: Partial<Record<AppId, WindowState>> = {};
       for (const [id, win] of Object.entries(state.windows)) {
         if (!win) continue;
-        windows[id as AppId] = win.maximized
-          ? { ...win, ...fullAreaRect(action.viewport) }
-          : { ...win, ...clampRect(win, action.viewport) };
+        windows[id as AppId] = fitWindow(win, action.viewport);
       }
       return { ...state, viewport: action.viewport, windows };
     }
@@ -312,9 +334,7 @@ function initState(): ShellState {
   if (stored?.windows) {
     for (const [id, win] of Object.entries(stored.windows)) {
       if (!win || !APPS[id as AppId]) continue;
-      windows[id as AppId] = win.maximized
-        ? { ...win, ...fullAreaRect(viewport) }
-        : { ...win, ...clampRect(win, viewport) };
+      windows[id as AppId] = fitWindow({ ...win, appId: id as AppId }, viewport);
     }
   }
   return {
@@ -345,6 +365,8 @@ export interface ShellActions {
   focusApp(appId: AppId): void;
   minimizeApp(appId: AppId): void;
   toggleMaximize(appId: AppId): void;
+  snapWindow(appId: AppId, target: SnapTarget, restore?: Rect): void;
+  cancelWindowGesture(appId: AppId, previous: WindowState): void;
   updateRect(appId: AppId, rect: Rect): void;
   notify(title: string, body: string): void;
   clearNotifications(): void;
@@ -478,6 +500,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       focusApp: (appId) => dispatch({ type: 'focus-app', appId }),
       minimizeApp: (appId) => dispatch({ type: 'minimize-app', appId }),
       toggleMaximize: (appId) => dispatch({ type: 'toggle-maximize', appId }),
+      snapWindow: (appId, target, restore) => dispatch({ type: 'snap-window', appId, target, restore }),
+      cancelWindowGesture: (appId, previous) => dispatch({ type: 'cancel-window-gesture', appId, previous }),
       updateRect: (appId, rect) => dispatch({ type: 'update-rect', appId, rect }),
       notify: (title, body) => dispatch({ type: 'notify', title, body }),
       clearNotifications: () => dispatch({ type: 'clear-notifications' }),

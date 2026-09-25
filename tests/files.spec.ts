@@ -11,6 +11,11 @@ test('mock files: edit, save, re-read and delete round-trip', async ({ page }) =
   await page.getByTestId('dock-app-files').click();
   const files = page.getByTestId('app-files');
 
+  await files.getByTestId('files-location-Documents').click();
+  await expect(files.getByRole('navigation', { name: 'Path' })).toContainText('Documents');
+  await expect(files.getByTestId('files-location-Documents')).toHaveAttribute('aria-current', 'location');
+  await files.getByTestId('files-location-home').click();
+
   await files.getByTestId('file-row-notes.txt').dblclick();
   await page.getByTestId('quicklook-edit').click();
 
