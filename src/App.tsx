@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { CSSProperties } from 'react';
 import { CommandCenter } from './shell/CommandCenter';
+import { ContextMenuProvider } from './shell/ContextMenu';
 import { Dock } from './shell/Dock';
+import { AppCatalogProvider } from './shell/AppCatalogContext';
 import { LoginScreen } from './shell/LoginScreen';
 import { MenuBar } from './shell/MenuBar';
 import { NotificationCenter, ShortcutsDialog } from './shell/NotificationCenter';
@@ -36,15 +38,17 @@ function Shell() {
       </div>
     );
   }
-  return state.user ? <Desktop /> : <LoginScreen />;
+  return state.user ? <AppCatalogProvider><Desktop /></AppCatalogProvider> : <LoginScreen />;
 }
 
 export default function App() {
   return (
     <ShellProvider>
-      <ReauthProvider>
-        <Shell />
-      </ReauthProvider>
+      <ContextMenuProvider>
+        <ReauthProvider>
+          <Shell />
+        </ReauthProvider>
+      </ContextMenuProvider>
     </ShellProvider>
   );
 }

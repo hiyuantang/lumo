@@ -42,7 +42,7 @@ export function Updates() {
           setOperation(null);
           if (next.success) {
             setPlan(null);
-            actions.notify('Updates installed', 'The saved package plan completed successfully.');
+            actions.notify('Updates installed', '');
             source
               .getOverview()
               .then((overview) => setRebootRequired(overview.alerts.some((alert) => alert.id === 'reboot-required')))
@@ -65,7 +65,7 @@ export function Updates() {
     setPlan(null);
     try {
       setRefreshedAt(await source.refreshUpdates());
-      actions.notify('Package metadata refreshed', 'Calculate a new plan to review available updates.');
+      actions.notify('Package list refreshed', '');
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -105,10 +105,10 @@ export function Updates() {
     <div className="app updates" data-testid="app-updates">
       <div className="app-toolbar updates-toolbar">
         <button type="button" className="btn" data-testid="updates-refresh" disabled={operation !== null} onClick={() => void refresh()}>
-          {operation === 'refresh' ? 'Refreshing…' : 'Refresh metadata'}
+          {operation === 'refresh' ? 'Refreshing…' : 'Refresh package list'}
         </button>
         <button type="button" className="btn btn-primary" data-testid="updates-plan" disabled={operation !== null} onClick={() => void calculatePlan()}>
-          {operation === 'plan' ? 'Calculating…' : 'Calculate plan'}
+          {operation === 'plan' ? 'Checking…' : 'Check for updates'}
         </button>
         {refreshedAt && <span className="updates-refreshed">Refreshed {formatDate(refreshedAt)}</span>}
       </div>
@@ -117,7 +117,6 @@ export function Updates() {
         <header className="updates-header">
           <div>
             <h2>Software Updates</h2>
-            <p>Review an exact, short-lived package plan before anything is installed.</p>
           </div>
           {rebootRequired && <span className="updates-reboot" data-testid="updates-reboot-required">Reboot required</span>}
         </header>
@@ -131,14 +130,13 @@ export function Updates() {
               <span>{progress.percent}%</span>
             </div>
             <div className="meter"><div className="meter-fill" style={{ width: `${progress.percent}%` }} /></div>
-            {!progress.done && <p>Keep this window open to follow progress. Installation continues on the server if you disconnect.</p>}
+            {!progress.done && <p>Installation continues if you disconnect.</p>}
           </section>
         )}
 
         {!plan && !progress && (
           <div className="updates-empty">
-            <p>No saved plan.</p>
-            <span>Refresh metadata when needed, then calculate a plan to see package and size changes.</span>
+            <p>Check for available updates.</p>
           </div>
         )}
 
@@ -152,7 +150,7 @@ export function Updates() {
             </section>
 
             {plan.packages.length === 0 ? (
-              <div className="updates-empty"><p>The system is up to date.</p></div>
+              <div className="updates-empty"><p>Up to date.</p></div>
             ) : (
               <div className="updates-table" role="table" aria-label="Update plan">
                 <div className="updates-row updates-row-head" role="row">
@@ -172,7 +170,7 @@ export function Updates() {
             )}
 
             <footer className="updates-plan-footer">
-              <p>This operation cannot be rolled back automatically. The plan expires {formatDate(plan.expiresAt)}.</p>
+              <p>Review expires {formatDate(plan.expiresAt)}.</p>
               <button
                 type="button"
                 className="btn btn-primary"
@@ -191,7 +189,7 @@ export function Updates() {
         <div className="quicklook-overlay" onPointerDown={() => setConfirming(false)}>
           <div className="file-confirm" role="alertdialog" aria-modal="true" aria-label="Install update plan" data-testid="updates-confirm" onPointerDown={(event) => event.stopPropagation()}>
             <p>Install {plan.packages.length} package update{plan.packages.length === 1 ? '' : 's'}?</p>
-            <span className="updates-confirm-note">Package installation is not transactionally rollbackable.</span>
+            <span className="updates-confirm-note">This cannot be undone automatically.</span>
             <div className="file-confirm-actions">
               <button type="button" className="btn" onClick={() => setConfirming(false)}>Cancel</button>
               <button type="button" className="btn btn-primary" data-testid="updates-confirm-apply" onClick={() => void applyPlan()}>Install</button>

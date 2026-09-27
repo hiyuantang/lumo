@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+polkit.addRule(function(action, subject) {
+    var actions = [
+        "os.lumo.services.manage",
+        "os.lumo.packages.apply",
+        "os.lumo.files.write-privileged",
+        "os.lumo.system.power",
+        "os.lumo.system.settings",
+        "os.lumo.containers.manage",
+        "os.lumo.websites.manage",
+        "os.lumo.network.apply"
+    ];
+    if (actions.indexOf(action.id) !== -1) {
+        return subject.isInGroup("lumo-admin") ? polkit.Result.AUTH_SELF : polkit.Result.NO;
+    }
+});

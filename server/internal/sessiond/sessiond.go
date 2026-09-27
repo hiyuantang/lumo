@@ -17,19 +17,18 @@ import (
 	"sync"
 	"time"
 
-	"lumio-os/server/internal/auth"
-	"lumio-os/server/internal/strictjson"
+	"lumo/server/internal/auth"
+	"lumo/server/internal/strictjson"
 )
 
 const (
 	idleExpiry     = 7 * 24 * time.Hour
 	absoluteExpiry = 30 * 24 * time.Hour
 	ReauthWindow   = 5 * time.Minute
-	agentSockGroup = "lumio-gw"
+	agentSockGroup = "lumo-gw"
 	maxBodyBytes   = 1 << 20
 )
 
-var ErrUnauthorized = errors.New("unauthorized")
 var ErrNotFound = errors.New("not found")
 var ErrUnavailable = errors.New("session daemon unavailable")
 

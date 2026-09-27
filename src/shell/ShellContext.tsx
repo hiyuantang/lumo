@@ -2,25 +2,38 @@
 import {
   createContext,
   useContext,
+  useCallback,
+  useRef,
   useEffect,
   useMemo,
   useReducer,
   type ReactNode,
 } from 'react';
+import { clearWindowState } from './appStateStorage';
 import { getDataSource } from '../api/source';
-import { APPS, APP_ORDER, type AppId } from '../apps/registry';
+import type { ServerAppID } from '../api/server-apps';
+import { APPS, APP_ORDER, type AppId, type SettingsSection } from '../apps/registry';
 import { canSnap, clampRect, snapRect, workArea, MENUBAR_H, type Rect, type SnapTarget, type Viewport } from './windowGeometry';
 
-export { MENUBAR_H } from './windowGeometry';
-export type { Rect } from './windowGeometry';
+export type WindowId = AppId | `preview:${string}` | `opencode:${string}`;
 
 export interface WindowState extends Rect {
+  id: WindowId;
+  previewMode?: 'rendered' | 'raw';
   appId: AppId;
+  filePath?: string[];
+  projectPath?: string;
   z: number;
   minimized: boolean;
   maximized: boolean;
   snapped: 'left' | 'right' | null;
   restore: Rect | null;
+}
+
+type WindowLayout = Pick<WindowState, 'x' | 'y' | 'w' | 'h' | 'maximized' | 'snapped' | 'restore'>;
+
+function windowLayout({ x, y, w, h, maximized, snapped, restore }: WindowLayout): WindowLayout {
+  return { x, y, w, h, maximized, snapped, restore };
 }
 
 export interface ShellNotification {
@@ -33,18 +46,21 @@ export interface ShellNotification {
 export type ThemePref = 'light' | 'dark' | null;
 export type MotionPref = 'system' | 'reduced' | 'full';
 
-interface NavigationIntent {
-  target: 'logs' | 'services';
-  unit: string;
-  nonce: number;
-}
+type NavigationIntent = (
+  | { target: 'logs' | 'services'; unit: string }
+  | { target: 'settings'; section: SettingsSection }
+  | { target: 'library'; appId: ServerAppID }
+  | { target: 'trash'; empty: true }
+  | { target: 'preview'; windowId: WindowId; edit: boolean }
+) & { nonce: number };
 
 interface ShellState {
   user: string | null;
   authReady: boolean;
-  windows: Partial<Record<AppId, WindowState>>;
+  windows: Partial<Record<WindowId, WindowState>>;
+  remembered: Partial<Record<AppId, WindowLayout>>;
   zTop: number;
-  focused: AppId | null;
+  focused: WindowId | null;
   notifications: ShellNotification[];
   unread: number;
   theme: ThemePref;
@@ -54,6 +70,7 @@ interface ShellState {
   shortcutsOpen: boolean;
   navigation: NavigationIntent | null;
   viewport: Viewport;
+  fileRevision: number;
 }
 
 type Action =
@@ -61,29 +78,40 @@ type Action =
   | { type: 'logout' }
   | { type: 'auth-ready' }
   | { type: 'open-app'; appId: AppId }
+  | { type: 'empty-trash' }
+  | { type: 'opencode-project'; id: WindowId; path: string | null }
+  | { type: 'new-preview' }
+  | { type: 'open-opencode'; path: string }
+  | { type: 'new-opencode' }
+  | { type: 'preview-mode'; id: WindowId; mode: 'rendered' | 'raw' }
+  | { type: 'open-preview'; path: string[]; edit: boolean; windowId?: WindowId }
+  | { type: 'files-changed' }
   | { type: 'open-related'; target: 'logs' | 'services'; unit: string }
-  | { type: 'close-app'; appId: AppId }
-  | { type: 'close-focused' }
-  | { type: 'focus-app'; appId: AppId }
-  | { type: 'minimize-app'; appId: AppId }
-  | { type: 'toggle-maximize'; appId: AppId }
-  | { type: 'snap-window'; appId: AppId; target: SnapTarget; restore?: Rect }
-  | { type: 'cancel-window-gesture'; appId: AppId; previous: WindowState }
-  | { type: 'update-rect'; appId: AppId; rect: Rect }
+  | { type: 'open-settings'; section: SettingsSection }
+  | { type: 'open-library'; appId: ServerAppID }
+  | { type: 'close-app'; appId: WindowId }
+  | { type: 'focus-app'; appId: WindowId }
+  | { type: 'minimize-app'; appId: WindowId }
+  | { type: 'toggle-maximize'; appId: WindowId }
+  | { type: 'snap-window'; appId: WindowId; target: SnapTarget; restore?: Rect }
+  | { type: 'cancel-window-gesture'; appId: WindowId; previous: WindowState }
+  | { type: 'update-rect'; appId: WindowId; rect: Rect }
   | { type: 'cycle-window'; dir: 1 | -1 }
   | { type: 'notify'; title: string; body: string }
   | { type: 'clear-notifications' }
   | { type: 'toggle-theme' }
   | { type: 'toggle-motion' }
+  | { type: 'set-theme'; theme: ThemePref }
+  | { type: 'set-motion'; motion: MotionPref }
   | { type: 'set-palette'; open: boolean }
   | { type: 'toggle-palette' }
   | { type: 'set-notif-open'; open: boolean }
   | { type: 'set-shortcuts-open'; open: boolean }
   | { type: 'set-viewport'; viewport: Viewport };
 
-const SESSION_KEY = 'lumio-os.session.v1';
-const WINDOWS_KEY = 'lumio-os.windows.v1';
-const PREFS_KEY = 'lumio-os.prefs.v1';
+const SESSION_KEY = 'lumo.session.v1';
+const WINDOWS_KEY = 'lumo.windows.v1';
+const PREFS_KEY = 'lumo.prefs.v1';
 
 let notificationId = 1;
 
@@ -94,6 +122,10 @@ function loadJSON<T>(key: string): T | null {
   } catch {
     return null;
   }
+}
+
+function localStorageAvailable(key: string): boolean {
+  try { return localStorage.getItem(key) !== null; } catch { return false; }
 }
 
 function fitWindow(win: WindowState, viewport: Viewport): WindowState {
@@ -109,15 +141,30 @@ function fitWindow(win: WindowState, viewport: Viewport): WindowState {
   };
 }
 
+function createWindow(state: ShellState, appId: AppId, id: WindowId): ShellState {
+  const saved = state.remembered[appId];
+  const count = Object.keys(state.windows).length;
+  const rect = clampRect(saved ?? { x: 96 + count * 40, y: MENUBAR_H + 40 + count * 32, ...APPS[appId].defaultSize }, state.viewport);
+  const win = fitWindow({ ...(saved ? windowLayout(saved) : {}), ...rect, appId, id, z: state.zTop + 1, minimized: false, maximized: saved?.maximized ?? false, snapped: saved?.snapped ?? null, restore: saved?.restore ?? null }, state.viewport);
+  if ((appId === 'preview' || appId === 'opencode') && !win.maximized && !win.snapped && Object.values(state.windows).some((item) => item?.appId === appId)) {
+    Object.assign(win, clampRect({ ...win, x: 96 + count * 40, y: MENUBAR_H + 40 + count * 32 }, state.viewport));
+  }
+  return { ...state, windows: { ...state.windows, [id]: win }, focused: id, zTop: win.z };
+}
+
 function reducer(state: ShellState, action: Action): ShellState {
   switch (action.type) {
-    case 'login':
-      return { ...state, user: action.user };
+    case 'login': {
+      if (state.user === action.user) return state;
+      const saved = initState(action.user);
+      return { ...state, user: action.user, windows: saved.windows, remembered: saved.remembered, zTop: saved.zTop, focused: saved.focused, navigation: saved.navigation };
+    }
     case 'logout':
       return {
         ...state,
         user: null,
         windows: {},
+        remembered: {},
         focused: null,
         paletteOpen: false,
         notifOpen: false,
@@ -126,46 +173,45 @@ function reducer(state: ShellState, action: Action): ShellState {
       };
     case 'auth-ready':
       return { ...state, authReady: true };
+    case 'files-changed':
+      return { ...state, fileRevision: state.fileRevision + 1 };
+    case 'new-opencode':
+      return createWindow(state, 'opencode', state.windows.opencode ? `opencode:${state.zTop + 1}` : 'opencode');
+    case 'new-preview':
+      return createWindow(state, 'preview', state.windows.preview ? `preview:${state.zTop + 1}` : 'preview');
+    case 'preview-mode': {
+      const win = state.windows[action.id];
+      return win ? { ...state, windows: { ...state.windows, [action.id]: { ...win, previewMode: action.mode } } } : state;
+    }
+    case 'open-preview': {
+      const previews = Object.values(state.windows).filter((win): win is WindowState => win?.appId === 'preview').sort((a, b) => b.z - a.z);
+      const existing = action.windowId ? previews.find((win) => win.id === action.windowId) : previews.find((win) => win.filePath?.join('/') === action.path.join('/')) ?? previews.find((win) => !win.filePath);
+      const sameFile = existing?.filePath?.join('/') === action.path.join('/');
+      const id: WindowId = existing?.id ?? (state.windows.preview ? `preview:${state.zTop + 1}` : 'preview');
+      const next = existing ? reducer(state, { type: 'focus-app', appId: existing.id }) : createWindow(state, 'preview', id);
+      return { ...next, navigation: { target: 'preview', windowId: id, edit: action.edit, nonce: (state.navigation?.nonce ?? 0) + 1 }, windows: { ...next.windows, [id]: { ...next.windows[id]!, filePath: sameFile ? existing!.filePath : action.path, previewMode: sameFile ? existing!.previewMode : undefined } } };
+    }
+    case 'empty-trash': {
+      const next = reducer(state, { type: 'open-app', appId: 'trash' });
+      return { ...next, navigation: { target: 'trash', empty: true, nonce: (state.navigation?.nonce ?? 0) + 1 } };
+    }
+    case 'opencode-project': {
+      const win = state.windows[action.id];
+      return win ? { ...state, windows: { ...state.windows, [action.id]: { ...win, projectPath: action.path ?? undefined } } } : state;
+    }
+    case 'open-opencode': {
+      const existing = Object.values(state.windows).find((win) => win?.appId === 'opencode' && win.projectPath === action.path);
+      if (existing) return reducer(state, { type: 'focus-app', appId: existing.id });
+      const id: WindowId = state.windows.opencode ? `opencode:${state.zTop + 1}` : 'opencode';
+      const next = createWindow(state, 'opencode', id);
+      return { ...next, windows: { ...next.windows, [id]: { ...next.windows[id]!, projectPath: action.path } } };
+    }
     case 'open-app': {
-      const existing = state.windows[action.appId];
-      const z = state.zTop + 1;
-      if (existing) {
-        return {
-          ...state,
-          zTop: z,
-          focused: action.appId,
-          windows: { ...state.windows, [action.appId]: { ...existing, minimized: false, z } },
-        };
-      }
-      const meta = APPS[action.appId];
-      const openCount = Object.keys(state.windows).length;
-      const rect = clampRect(
-        {
-          x: 96 + openCount * 40,
-          y: MENUBAR_H + 40 + openCount * 32,
-          w: meta.defaultSize.w,
-          h: meta.defaultSize.h,
-        },
-        state.viewport,
-      );
-      const win: WindowState = {
-        appId: action.appId,
-        ...rect,
-        z,
-        minimized: false,
-        maximized: false,
-        snapped: null,
-        restore: null,
-      };
-      return {
-        ...state,
-        zTop: z,
-        focused: action.appId,
-        windows: { ...state.windows, [action.appId]: win },
-      };
+      const existing = Object.values(state.windows).filter((win): win is WindowState => win?.appId === action.appId).sort((a, b) => b.z - a.z)[0];
+      return existing ? reducer(state, { type: 'focus-app', appId: existing.id }) : createWindow(state, action.appId, action.appId);
     }
     case 'open-related': {
-      const opened = reducer(state, { type: 'open-app', appId: action.target });
+      const opened = reducer(state, { type: 'open-app', appId: 'home' });
       return {
         ...opened,
         navigation: {
@@ -175,21 +221,31 @@ function reducer(state: ShellState, action: Action): ShellState {
         },
       };
     }
+    case 'open-settings': {
+      const opened = reducer(state, { type: 'open-app', appId: 'settings' });
+      return {
+        ...opened,
+        navigation: { target: 'settings', section: action.section, nonce: (state.navigation?.nonce ?? 0) + 1 },
+      };
+    }
+    case 'open-library': {
+      const opened = reducer(state, { type: 'open-app', appId: 'library' });
+      return { ...opened, navigation: { target: 'library', appId: action.appId, nonce: (state.navigation?.nonce ?? 0) + 1 } };
+    }
     case 'close-app': {
-      if (!state.windows[action.appId]) return state;
+      const closed = state.windows[action.appId];
+      if (!closed) return state;
       const windows = { ...state.windows };
       delete windows[action.appId];
       let focused = state.focused;
       if (focused === action.appId) {
         const remaining = Object.values(windows)
-          .filter((w): w is WindowState => Boolean(w) && !w.minimized)
+          .filter((w): w is WindowState => !!w && !w.minimized)
           .sort((a, b) => b.z - a.z);
-        focused = remaining[0]?.appId ?? null;
+        focused = remaining[0]?.id ?? null;
       }
-      return { ...state, windows, focused };
+      return { ...state, windows, focused, navigation: (state.navigation?.target === 'preview' ? state.navigation.windowId === action.appId : state.navigation?.target === closed.appId || (closed.appId === 'home' && (state.navigation?.target === 'logs' || state.navigation?.target === 'services'))) ? null : state.navigation, remembered: { ...state.remembered, [closed.appId]: windowLayout(closed) } };
     }
-    case 'close-focused':
-      return state.focused ? reducer(state, { type: 'close-app', appId: state.focused }) : state;
     case 'focus-app': {
       const win = state.windows[action.appId];
       if (!win) return state;
@@ -207,9 +263,9 @@ function reducer(state: ShellState, action: Action): ShellState {
       if (!win) return state;
       const windows = { ...state.windows, [action.appId]: { ...win, minimized: true } };
       const remaining = Object.values(windows)
-        .filter((w): w is WindowState => Boolean(w) && !w.minimized)
+        .filter((w): w is WindowState => !!w && !w.minimized)
         .sort((a, b) => b.z - a.z);
-      const focused = state.focused === action.appId ? (remaining[0]?.appId ?? null) : state.focused;
+      const focused = state.focused === action.appId ? (remaining[0]?.id ?? null) : state.focused;
       return { ...state, windows, focused };
     }
     case 'toggle-maximize': {
@@ -228,7 +284,7 @@ function reducer(state: ShellState, action: Action): ShellState {
     }
     case 'snap-window': {
       const win = state.windows[action.appId];
-      if (!win || !canSnap(action.target, state.viewport, APPS[action.appId].minSize)) return state;
+      if (!win || !canSnap(action.target, state.viewport, APPS[win.appId].minSize)) return state;
       const z = state.zTop + 1;
       const restore = action.restore ?? win.restore ?? { x: win.x, y: win.y, w: win.w, h: win.h };
       return {
@@ -262,12 +318,9 @@ function reducer(state: ShellState, action: Action): ShellState {
       return { ...state, windows: { ...state.windows, [action.appId]: { ...win, ...rect, maximized: false, snapped: null, restore: null } } };
     }
     case 'cycle-window': {
-      const visible = APP_ORDER.filter((id) => {
-        const w = state.windows[id];
-        return w && !w.minimized;
-      });
+      const visible = Object.values(state.windows).filter((win): win is WindowState => !!win && !win.minimized).sort((a, b) => APP_ORDER.indexOf(a.appId) - APP_ORDER.indexOf(b.appId) || a.id.localeCompare(b.id)).map((win) => win.id);
       if (visible.length === 0) return state;
-      const raw = visible.indexOf(state.focused as AppId);
+      const raw = visible.indexOf(state.focused as WindowId);
       const idx = raw === -1 ? (action.dir === 1 ? -1 : 0) : raw;
       const nextId = visible[(idx + action.dir + visible.length) % visible.length] ?? visible[0];
       return reducer(state, { type: 'focus-app', appId: nextId });
@@ -287,6 +340,10 @@ function reducer(state: ShellState, action: Action): ShellState {
       const resolved = state.theme ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       return { ...state, theme: resolved === 'dark' ? 'light' : 'dark' };
     }
+    case 'set-theme':
+      return { ...state, theme: action.theme };
+    case 'set-motion':
+      return { ...state, motion: action.motion };
     case 'toggle-motion': {
       const reduced =
         state.motion === 'reduced' ||
@@ -308,10 +365,10 @@ function reducer(state: ShellState, action: Action): ShellState {
       return { ...state, shortcutsOpen: action.open };
     case 'set-viewport': {
       if (action.viewport.w === state.viewport.w && action.viewport.h === state.viewport.h) return state;
-      const windows: Partial<Record<AppId, WindowState>> = {};
+      const windows: Partial<Record<WindowId, WindowState>> = {};
       for (const [id, win] of Object.entries(state.windows)) {
         if (!win) continue;
-        windows[id as AppId] = fitWindow(win, action.viewport);
+        windows[id as WindowId] = fitWindow(win, action.viewport);
       }
       return { ...state, viewport: action.viewport, windows };
     }
@@ -320,29 +377,42 @@ function reducer(state: ShellState, action: Action): ShellState {
   }
 }
 
-function initState(): ShellState {
+function initState(account?: string): ShellState {
   const session = loadJSON<{ user: string }>(SESSION_KEY);
   const prefs = loadJSON<{ theme: ThemePref; motion: MotionPref }>(PREFS_KEY);
   const isLive = getDataSource().capabilities.isLive;
+  const user = account ?? (isLive ? null : session?.user ?? null);
   const stored = loadJSON<{
-    windows: Partial<Record<AppId, WindowState>>;
+    remembered?: Partial<Record<AppId, WindowLayout>>;
+    windows: Partial<Record<WindowId | 'network' | 'logs' | 'updates' | 'services', WindowState>>;
     zTop: number;
-    focused: AppId | null;
-  }>(WINDOWS_KEY);
+    focused: WindowId | 'network' | 'logs' | 'updates' | 'services' | null;
+  }>(user && localStorageAvailable(`${WINDOWS_KEY}:${encodeURIComponent(user)}`) ? `${WINDOWS_KEY}:${encodeURIComponent(user)}` : (!isLive || session?.user === user ? WINDOWS_KEY : 'lumo.windows.unused'));
+  const legacyPreviewMode = loadJSON<unknown>(`lumo.view.v1:${encodeURIComponent(user ?? '')}:preview:markdown-mode`);
+  const restorePreviewMode = (win: WindowState): WindowState => win.appId === 'preview' && !win.id && (legacyPreviewMode === 'raw' || legacyPreviewMode === 'rendered') ? { ...win, previewMode: legacyPreviewMode } : win;
+  const remembered = Object.fromEntries(Object.entries(stored?.remembered ?? {}).filter(([, win]) => !!win).map(([id, win]) => [id, windowLayout(win!)]));
   const viewport = { w: window.innerWidth, h: window.innerHeight };
-  const windows: Partial<Record<AppId, WindowState>> = {};
+  const windows: Partial<Record<WindowId, WindowState>> = {};
   if (stored?.windows) {
     for (const [id, win] of Object.entries(stored.windows)) {
-      if (!win || !APPS[id as AppId]) continue;
-      windows[id as AppId] = fitWindow({ ...win, appId: id as AppId }, viewport);
+      const appId = (id === 'network' || id === 'updates') ? 'settings' : (id === 'logs' || id === 'services') ? 'home' : id.startsWith('preview:') ? 'preview' : id.startsWith('opencode:') ? 'opencode' : id as AppId;
+      const windowId = ((id === 'network' || id === 'updates') ? 'settings' : (id === 'logs' || id === 'services') ? 'home' : id) as WindowId;
+      if (!win || !APPS[appId] || ((id === 'network' || id === 'updates') && stored.windows.settings) || ((id === 'logs' || id === 'services') && stored.windows.home)) continue;
+      windows[windowId] = fitWindow({ ...restorePreviewMode(win), id: windowId, appId }, viewport);
     }
   }
+  const focused = (stored?.focused === 'network' || stored?.focused === 'updates') ? 'settings' : (stored?.focused === 'logs' || stored?.focused === 'services') ? 'home' : stored?.focused;
+  const migratedNetwork = stored?.windows.network && (stored.focused === 'network' || !stored.windows.settings);
+  if (stored?.focused && ['network', 'logs', 'updates', 'services'].includes(stored.focused) && focused && windows[focused]) {
+    windows[focused] = { ...windows[focused]!, minimized: false, z: Math.max(windows[focused]!.z, stored.windows[stored.focused]?.z ?? 0) };
+  }
   return {
-    user: isLive ? null : (session?.user ?? null),
+    user,
     authReady: !isLive,
     windows,
+    remembered,
     zTop: stored?.zTop ?? 0,
-    focused: stored?.focused && windows[stored.focused] ? stored.focused : null,
+    focused: focused && windows[focused] ? focused : null,
     notifications: [],
     unread: 0,
     theme: prefs?.theme ?? null,
@@ -350,8 +420,9 @@ function initState(): ShellState {
     paletteOpen: false,
     notifOpen: false,
     shortcutsOpen: false,
-    navigation: null,
+    navigation: stored?.focused === 'services' ? { target: 'services', unit: '', nonce: 1 } : stored?.focused === 'updates' ? { target: 'settings', section: 'updates', nonce: 1 } : stored?.focused === 'logs' ? { target: 'logs', unit: 'all', nonce: 1 } : migratedNetwork ? { target: 'settings', section: 'network', nonce: 1 } : null,
     viewport,
+    fileRevision: 0,
   };
 }
 
@@ -359,19 +430,32 @@ export interface ShellActions {
   login(user: string): void;
   logout(): void;
   openApp(appId: AppId): void;
+  emptyTrash(): void;
+  setOpenCodeProject(id: WindowId, path: string | null): void;
+  openOpenCode(path: string): void;
+  openPreview(path: string[], edit?: boolean, windowId?: WindowId): void;
+  newPreviewWindow(): void;
+  newOpenCodeWindow(): void;
+  setPreviewMode(id: WindowId, mode: 'rendered' | 'raw'): void;
+  filesChanged(): void;
+  registerWindowGuard(appId: WindowId, guard: (proceed: () => void) => void): () => void;
+  openSettings(section: SettingsSection): void;
+  openLibrary(appId: ServerAppID): void;
   openLogs(unit: string): void;
   openService(unit: string): void;
-  closeApp(appId: AppId): void;
-  focusApp(appId: AppId): void;
-  minimizeApp(appId: AppId): void;
-  toggleMaximize(appId: AppId): void;
-  snapWindow(appId: AppId, target: SnapTarget, restore?: Rect): void;
-  cancelWindowGesture(appId: AppId, previous: WindowState): void;
-  updateRect(appId: AppId, rect: Rect): void;
+  closeApp(appId: WindowId): void;
+  focusApp(appId: WindowId): void;
+  minimizeApp(appId: WindowId): void;
+  toggleMaximize(appId: WindowId): void;
+  snapWindow(appId: WindowId, target: SnapTarget, restore?: Rect): void;
+  cancelWindowGesture(appId: WindowId, previous: WindowState): void;
+  updateRect(appId: WindowId, rect: Rect): void;
   notify(title: string, body: string): void;
   clearNotifications(): void;
   toggleTheme(): void;
   toggleMotion(): void;
+  setTheme(theme: ThemePref): void;
+  setMotion(motion: MotionPref): void;
   setPalette(open: boolean): void;
   setNotifOpen(open: boolean): void;
   setShortcutsOpen(open: boolean): void;
@@ -387,7 +471,21 @@ interface ShellContextValue {
 const ShellContext = createContext<ShellContextValue | null>(null);
 
 export function ShellProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, null as unknown as ShellState, initState);
+  const [state, dispatch] = useReducer(reducer, null as unknown as ShellState, () => initState());
+
+  const currentState = useRef(state);
+  currentState.current = state;
+  const windowGuards = useRef(new Map<WindowId, (proceed: () => void) => void>());
+  const requestWindowAction = useCallback((appId: WindowId, proceed: () => void) => {
+    const guard = windowGuards.current.get(appId);
+    if (guard) { dispatch({ type: 'focus-app', appId }); guard(proceed); }
+    else proceed();
+  }, []);
+
+  const closeWindow = useCallback((appId: WindowId) => requestWindowAction(appId, () => {
+    clearWindowState(currentState.current.user, appId);
+    dispatch({ type: 'close-app', appId });
+  }), [requestWindowAction]);
 
   const systemDark = useMediaQuery('(prefers-color-scheme: dark)');
   const systemReduced = useMediaQuery('(prefers-reduced-motion: reduce)');
@@ -428,24 +526,25 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   }, [reducedMotion]);
 
   useEffect(() => {
+    if (!state.user) return;
     try {
       localStorage.setItem(
-        WINDOWS_KEY,
-        JSON.stringify({ windows: state.windows, zTop: state.zTop, focused: state.focused }),
+        `${WINDOWS_KEY}:${encodeURIComponent(state.user)}`,
+        JSON.stringify({ windows: state.windows, remembered: state.remembered, zTop: state.zTop, focused: state.focused }),
       );
     } catch {
       /* storage unavailable */
     }
-  }, [state.windows, state.zTop, state.focused]);
+  }, [state.user, state.windows, state.remembered, state.zTop, state.focused]);
 
   useEffect(() => {
     try {
       if (state.user) localStorage.setItem(SESSION_KEY, JSON.stringify({ user: state.user }));
-      else localStorage.removeItem(SESSION_KEY);
+      else if (state.authReady) localStorage.removeItem(SESSION_KEY);
     } catch {
       /* storage unavailable */
     }
-  }, [state.user]);
+  }, [state.user, state.authReady]);
 
   useEffect(() => {
     try {
@@ -469,7 +568,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'toggle-palette' });
       } else if (e.altKey && !mod && e.code === 'KeyW') {
         e.preventDefault();
-        dispatch({ type: 'close-focused' });
+        const appId = currentState.current.focused;
+        if (appId) closeWindow(appId);
       } else if (e.ctrlKey && e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
         e.preventDefault();
         dispatch({ type: 'cycle-window', dir: e.key === 'ArrowRight' ? 1 : -1 });
@@ -483,20 +583,36 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     () => ({
       login: (user) => dispatch({ type: 'login', user }),
       logout: () => {
-        const source = getDataSource();
-        if (source.capabilities.isLive) {
-          void source
-            .logout()
-            .catch(() => {})
-            .finally(() => dispatch({ type: 'logout' }));
-        } else {
-          dispatch({ type: 'logout' });
-        }
+        const ids = [...windowGuards.current.keys()];
+        const next = () => { const id = ids.shift(); if (id) requestWindowAction(id, next); else logout(); };
+        const logout = () => {
+          const source = getDataSource();
+          if (source.capabilities.isLive) {
+            void source.logout().catch(() => {}).finally(() => dispatch({ type: 'logout' }));
+          } else {
+            dispatch({ type: 'logout' });
+          }
+        };
+        next();
+      },
+      registerWindowGuard: (appId, guard) => { windowGuards.current.set(appId, guard); return () => { if (windowGuards.current.get(appId) === guard) windowGuards.current.delete(appId); }; },
+      filesChanged: () => dispatch({ type: 'files-changed' }),
+      newPreviewWindow: () => dispatch({ type: 'new-preview' }),
+      newOpenCodeWindow: () => dispatch({ type: 'new-opencode' }),
+      setPreviewMode: (id, mode) => dispatch({ type: 'preview-mode', id, mode }),
+      emptyTrash: () => dispatch({ type: 'empty-trash' }),
+      setOpenCodeProject: (id, path) => dispatch({ type: 'opencode-project', id, path }),
+      openOpenCode: (path) => dispatch({ type: 'open-opencode', path }),
+      openPreview: (path, edit = false, windowId) => {
+        const open = () => dispatch({ type: 'open-preview', path, edit, windowId });
+        if (windowId) requestWindowAction(windowId, open); else open();
       },
       openApp: (appId) => dispatch({ type: 'open-app', appId }),
+      openSettings: (section) => dispatch({ type: 'open-settings', section }),
+      openLibrary: (appId) => dispatch({ type: 'open-library', appId }),
       openLogs: (unit) => dispatch({ type: 'open-related', target: 'logs', unit }),
       openService: (unit) => dispatch({ type: 'open-related', target: 'services', unit }),
-      closeApp: (appId) => dispatch({ type: 'close-app', appId }),
+      closeApp: closeWindow,
       focusApp: (appId) => dispatch({ type: 'focus-app', appId }),
       minimizeApp: (appId) => dispatch({ type: 'minimize-app', appId }),
       toggleMaximize: (appId) => dispatch({ type: 'toggle-maximize', appId }),
@@ -507,6 +623,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       clearNotifications: () => dispatch({ type: 'clear-notifications' }),
       toggleTheme: () => dispatch({ type: 'toggle-theme' }),
       toggleMotion: () => dispatch({ type: 'toggle-motion' }),
+      setTheme: (theme) => dispatch({ type: 'set-theme', theme }),
+      setMotion: (motion) => dispatch({ type: 'set-motion', motion }),
       setPalette: (open) => dispatch({ type: 'set-palette', open }),
       setNotifOpen: (open) => dispatch({ type: 'set-notif-open', open }),
       setShortcutsOpen: (open) => dispatch({ type: 'set-shortcuts-open', open }),

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { SkillCatalog, SkillDetail } from './skills';
+import type { TrashItem, TrashSelection } from './trash';
 import { LiveDataSource } from './client';
 import { ApiError } from './transport';
 import { MockDataSource } from '../mock/source';
+import type { AppCatalog, AppLogs, ContainerAction, ContainerDetail, ContainerSnapshot, ServerAppID, WebsiteDefinition, WebsiteResult, WebsiteSnapshot } from './server-apps';
 
 export type ServiceState = 'active' | 'inactive' | 'failed';
 export type ServiceAction = 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'disable';
@@ -11,6 +14,19 @@ export interface PowerSchedule {
   action: `system.${PowerAction}`;
   scheduledAt: string;
 }
+
+export interface SystemSettings {
+  hostname: string;
+  runtimeHostname: string;
+  timezone: string;
+  ntp: boolean;
+  canNtp: boolean;
+  ntpSynchronized: boolean;
+  serverTime: string;
+  revision: string;
+}
+
+export type SystemSettingsChange = { timezone: string } | { ntp: boolean };
 
 export interface NetworkRoute {
   to: string;
@@ -97,6 +113,15 @@ export interface SystemAlert {
   text: string;
 }
 
+export interface ProcessInfo {
+  pid: number;
+  name: string;
+  user: string;
+  state: string;
+  cpuPercent: number | null;
+  memoryBytes: number;
+}
+
 export interface SystemOverview {
   hostname: string;
   os: string;
@@ -111,6 +136,10 @@ export interface SystemOverview {
   securityUpdates: number;
   alerts: SystemAlert[];
   cpuHistory: number[];
+  cpuCores: number;
+  cpuPerCore: { id: number; usagePercent: number | null }[];
+  cpuLoad: number[];
+  network: { interface: string; rxBytesPerSec: number; txBytesPerSec: number }[];
 }
 
 export interface SystemIdentity {
@@ -164,6 +193,9 @@ export interface FsEntry {
   kind: 'dir' | 'file';
   size: number;
   modified: string;
+  modifiedAt?: string;
+  mode?: string;
+  symlinkTarget?: string | null;
   content?: string;
   children?: FsEntry[];
 }
@@ -197,6 +229,8 @@ export interface UpdatePackage {
 }
 
 export interface UpdatePlan {
+  appId?: ServerAppID;
+  operation?: 'install' | 'uninstall';
   id: string;
   createdAt: string;
   expiresAt: string;
@@ -220,6 +254,8 @@ export interface UpdateProgress {
 }
 
 export interface TerminalOpenOptions {
+  program?: 'opencode';
+  directory?: string;
   cols: number;
   rows: number;
   user?: string;
@@ -242,8 +278,6 @@ export interface SourceCapabilities {
   isLive: boolean;
   canServiceActions: boolean;
   canTerminal: boolean;
-  canWriteFiles: boolean;
-  canManageUpdates: boolean;
   canPowerControl: boolean;
   canConfigureNetwork: boolean;
 }
@@ -258,6 +292,18 @@ export interface SessionUser {
 export type Unsubscribe = () => void;
 
 export interface DataSource {
+  listSkills(): Promise<SkillCatalog>;
+  readSkill(id: string): Promise<SkillDetail>;
+  getAppCatalog(): Promise<AppCatalog>;
+  uninstallOpenCode(): Promise<void>;
+  planAppInstall(id: ServerAppID, operation?: 'install' | 'uninstall'): Promise<UpdatePlan>;
+  getContainers(): Promise<ContainerSnapshot>;
+  getContainer(id: string): Promise<ContainerDetail>;
+  getContainerLogs(id: string): Promise<AppLogs>;
+  runContainerAction(id: string, action: ContainerAction, revision: string): Promise<ContainerDetail>;
+  getWebsites(): Promise<WebsiteSnapshot>;
+  getWebsiteLogs(kind: 'access' | 'error'): Promise<AppLogs>;
+  saveWebsite(id: string, definition: WebsiteDefinition, revision: string): Promise<WebsiteResult>;
   readonly kind: 'mock' | 'live';
   readonly capabilities: SourceCapabilities;
 
@@ -268,7 +314,12 @@ export interface DataSource {
   onSessionExpired(listener: () => void): Unsubscribe;
 
   getIdentity(): Promise<SystemIdentity>;
+  onIdentityChanged(listener: (hostname: string) => void): Unsubscribe;
+  getSystemSettings(): Promise<SystemSettings>;
+  getTimezones(): Promise<string[]>;
+  updateSystemSettings(change: SystemSettingsChange, expectedRevision: string): Promise<SystemSettings>;
   getOverview(): Promise<SystemOverview>;
+  listProcesses(): Promise<ProcessInfo[]>;
   uptimeSeconds(): number;
   sampleLoad(): LoadSample;
   subscribeMetrics(onSample: (sample: LoadSample) => void, intervalMs?: number): Unsubscribe;
@@ -287,11 +338,16 @@ export interface DataSource {
   listJournalUnits(): Promise<string[]>;
 
   homePath(): string[];
+  absolutePath(path: string[]): string;
+  createEntry(path: string[], kind: 'file' | 'directory'): Promise<void>;
   listDir(path: string[]): Promise<FsEntry[]>;
   readFile(path: string[]): Promise<FileRead>;
   readSystemFile(path: string): Promise<FileRead>;
   writeFile(path: string[], contentBase64: string, expectedRevision: string | null): Promise<FileWrite>;
   writePrivilegedFile(path: string, contentBase64: string, expectedRevision: string, restartUnit?: string): Promise<PrivilegedFileWrite>;
+  listTrash(): Promise<TrashItem[]>;
+  restoreTrash(item: TrashSelection): Promise<string>;
+  deleteTrash(items: TrashSelection[]): Promise<void>;
   deleteFile(path: string[]): Promise<void>;
 
   refreshUpdates(): Promise<string>;
@@ -310,18 +366,18 @@ export function describeError(err: unknown): string {
   if (err instanceof ApiError) {
     switch (err.code) {
       case 'unauthorized':
-        return 'Your session has expired. Please log in again.';
+        return 'Session expired. Log in again.';
       case 'forbidden':
-        return 'This action is not permitted.';
+        return 'Action not permitted.';
       case 'not_found':
-        return 'This item no longer exists.';
+        return 'Item no longer exists.';
       case 'conflict':
       case 'stale_revision':
-        return 'The system changed while you worked. Refresh and try again.';
+        return 'Changed on the server. Refresh and try again.';
       case 'busy':
-        return 'The server is busy. Try again in a moment.';
+        return 'Server busy. Try again.';
       case 'unavailable':
-        return 'The server is unreachable right now.';
+        return 'Server unreachable.';
       default:
         return err.message || 'Something went wrong.';
     }
@@ -330,7 +386,7 @@ export function describeError(err: unknown): string {
 }
 
 function liveModeEnabled(): boolean {
-  const flag = import.meta.env.VITE_LUMIO_LIVE as string | undefined;
+  const flag = import.meta.env.VITE_LUMO_LIVE as string | undefined;
   if (flag === '1' || flag === 'true') return true;
   if (flag === '0' || flag === 'false') return false;
   return import.meta.env.PROD;

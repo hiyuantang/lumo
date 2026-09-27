@@ -8,7 +8,7 @@ export function WindowManager() {
   return (
     <>
       {windows.map((win) => (
-        <Window key={win.appId} win={win} />
+        <Window key={win.id} win={win} />
       ))}
     </>
   );

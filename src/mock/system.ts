@@ -1,15 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { LoadSample, ServiceAction, ServiceDetail, ServiceUnit, SystemOverview } from '../api/source';
 
-export type {
-  LoadSample,
-  ServiceAction,
-  ServiceState,
-  ServiceUnit,
-  SystemAlert,
-  SystemOverview,
-} from '../api/source';
-
 const SERVICES: ServiceUnit[] = [
   { name: 'ssh.service', description: 'OpenSSH server daemon', state: 'active', enabled: true, pid: 812, memoryMb: 6, since: 'boot' },
   { name: 'cron.service', description: 'Regular background program processing daemon', state: 'active', enabled: true, pid: 655, memoryMb: 2, since: 'boot' },
@@ -20,7 +11,7 @@ const SERVICES: ServiceUnit[] = [
   { name: 'ufw.service', description: 'Uncomplicated firewall', state: 'active', enabled: true, pid: 402, memoryMb: 1, since: 'boot' },
   { name: 'fail2ban.service', description: 'Ban hosts that cause multiple authentication errors', state: 'active', enabled: true, pid: 980, memoryMb: 22, since: 'boot' },
   { name: 'systemd-resolved.service', description: 'Network Name Resolution manager', state: 'active', enabled: true, pid: 510, memoryMb: 9, since: 'boot' },
-  { name: 'lumio-backup.service', description: 'Nightly off-site backup job', state: 'failed', enabled: true, pid: null, memoryMb: 0, since: '2h ago' },
+  { name: 'lumo-backup.service', description: 'Nightly off-site backup job', state: 'failed', enabled: true, pid: null, memoryMb: 0, since: '2h ago' },
 ];
 
 let services = SERVICES.map((s) => ({ ...s }));
@@ -145,11 +136,15 @@ export function getOverview(): SystemOverview {
     pendingUpdates: 14,
     securityUpdates: 3,
     alerts: [
-      { id: 'a1', level: 'critical', text: 'lumio-backup.service failed during last run' },
+      { id: 'a1', level: 'critical', text: 'lumo-backup.service failed during last run' },
       { id: 'a2', level: 'warning', text: '3 security updates are ready to install' },
       { id: 'a3', level: 'info', text: '/srv volume reached 35% usage' },
     ],
     cpuHistory: [...history],
+    cpuCores: 8,
+    cpuPerCore: Array.from({ length: 8 }, (_, id) => ({ id, usagePercent: Math.round((load.cpuPercent + id * 7) % 100) })),
+    cpuLoad: [0.42, 0.38, 0.31],
+    network: [{ interface: 'eth0', rxBytesPerSec: load.netDownKbps * 1024, txBytesPerSec: load.netUpKbps * 1024 }],
   };
 }
 

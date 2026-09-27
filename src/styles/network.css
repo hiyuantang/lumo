@@ -1,47 +1,44 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
-.network-app {
-  flex-direction: row;
+.settings-network {
+  min-width: 0;
 }
 
-.network-sidebar {
-  width: 210px;
-  flex: none;
-  overflow-y: auto;
-  border-right: 1px solid var(--border);
-  background: var(--surface);
+.network-interfaces {
+  padding: 14px;
+  margin-bottom: 22px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-raised);
 }
 
-.network-sidebar > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3);
-  border-bottom: 1px solid var(--border);
-  font-size: 12.5px;
-}
-
-.network-refresh {
-  min-height: 24px;
-  padding: 3px 8px;
-  font-size: 11.5px;
+.network-interfaces > h3 {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .network-interface-list {
-  padding: var(--space-2);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
 }
 
 .network-interface {
   display: flex;
   width: 100%;
+  min-width: 0;
   align-items: center;
   gap: var(--space-2);
-  padding: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-m);
   color: var(--text);
   text-align: left;
 }
 
 .network-interface.selected {
+  border-color: var(--accent);
   background: var(--accent-soft);
 }
 
@@ -69,17 +66,15 @@
   background: var(--text-faint);
 }
 
-.network-status.up,
+.network-status.up { background: var(--accent); }
+
 .network-state.up {
   background: var(--accent-soft);
   color: var(--accent);
 }
 
 .network-content {
-  flex: 1;
   min-width: 0;
-  overflow-y: auto;
-  padding: var(--space-5);
 }
 
 .network-heading {
@@ -90,20 +85,13 @@
   margin-bottom: var(--space-4);
 }
 
-.network-heading h2,
+.network-heading h3,
 .network-editor h3 {
   margin: 0;
 }
 
-.network-heading h2 {
-  font-size: 20px;
-}
-
-.network-heading p,
-.network-editor header p {
-  margin: var(--space-1) 0 0;
-  color: var(--text-muted);
-  font-size: 12.5px;
+.network-heading h3 {
+  font-size: 17px;
 }
 
 .network-state {
@@ -153,7 +141,7 @@
 
 .network-details {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1px;
   overflow: hidden;
   margin-bottom: var(--space-4);
@@ -170,17 +158,14 @@
   background: var(--surface-raised);
 }
 
-.network-details span,
-.network-editor footer span {
+.network-details span {
   color: var(--text-muted);
   font-size: 11.5px;
 }
 
 .network-details strong {
-  overflow: hidden;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .network-editor {
@@ -203,6 +188,7 @@
 
 .network-mode {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
@@ -224,7 +210,7 @@
 
 .network-fields {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
   border-bottom: 1px solid var(--border);
 }
@@ -250,7 +236,7 @@
 .network-editor > footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--space-3);
 }
 
@@ -270,36 +256,10 @@
   line-height: 1.45;
 }
 
-@media (max-width: 680px) {
-  .network-app {
-    flex-direction: column;
-  }
-
-  .network-sidebar {
-    width: auto;
-    max-height: 142px;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .network-interface-list {
-    display: flex;
-    overflow-x: auto;
-  }
-
-  .network-interface {
-    width: 150px;
-    flex: none;
-  }
-
+@container (max-width: 620px) {
   .network-details,
   .network-fields {
     grid-template-columns: 1fr;
-  }
-
-  .network-content {
-    padding: var(--space-4);
-    padding-bottom: calc(var(--dock-h) + var(--space-5));
   }
 
   .network-pending,

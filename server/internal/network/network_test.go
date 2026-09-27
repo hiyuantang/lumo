@@ -127,7 +127,7 @@ func TestControllerApplyAndConfirm(t *testing.T) {
 	if len(pending.Token) != 64 || pending.PreviousRevision != revision || pending.ConfirmTimeout != 30 {
 		t.Fatalf("pending = %+v", pending)
 	}
-	if len(backend.deltas) != 1 || !strings.HasPrefix(backend.deltas[0], "90-lumio:ethernets.eth0=") {
+	if len(backend.deltas) != 1 || !strings.HasPrefix(backend.deltas[0], "90-lumo:ethernets.eth0=") {
 		t.Fatalf("deltas = %v", backend.deltas)
 	}
 	if strings.Contains(backend.deltas[0], "network:") || len(backend.tried) != 1 || backend.tried[0] != 30 {

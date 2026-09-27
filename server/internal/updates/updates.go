@@ -37,6 +37,8 @@ type Package struct {
 }
 
 type Plan struct {
+	AppID               string    `json:"appId,omitempty"`
+	Operation           string    `json:"operation,omitempty"`
 	ID                  string    `json:"id"`
 	CreatedAt           time.Time `json:"createdAt"`
 	ExpiresAt           time.Time `json:"expiresAt"`
@@ -156,6 +158,24 @@ func (w *Worker) Refresh(ctx context.Context) (RefreshResult, error) {
 var planLinePattern = regexp.MustCompile(`^Inst\s+(\S+)(?:\s+\[([^\]]+)\])?\s+\((\S+)(?:\s+([^)]*))?\)`)
 
 func (w *Worker) CalculatePlan(ctx context.Context) (Plan, error) {
+	return w.calculatePlan(ctx, "", "")
+}
+
+func (w *Worker) CalculateInstallPlan(ctx context.Context, appID string) (Plan, error) {
+	if appID != "docker" && appID != "nginx" {
+		return Plan{}, errors.New("unsupported application")
+	}
+	return w.calculatePlan(ctx, appID, "install")
+}
+
+func (w *Worker) CalculateRemovalPlan(ctx context.Context, appID string) (Plan, error) {
+	if appID != "docker" && appID != "nginx" {
+		return Plan{}, errors.New("unsupported application")
+	}
+	return w.calculatePlan(ctx, appID, "uninstall")
+}
+
+func (w *Worker) calculatePlan(ctx context.Context, appID, operation string) (Plan, error) {
 	if !w.Available() {
 		return Plan{}, ErrUnavailable
 	}
@@ -163,16 +183,38 @@ func (w *Worker) CalculatePlan(ctx context.Context) (Plan, error) {
 		return Plan{}, ErrBusy
 	}
 	defer w.opMu.Unlock()
-	output, err := w.runner.Output(ctx, w.aptGet, "-s", "-V", "-o", "Dpkg::Use-Pty=0", "upgrade")
+	args := []string{"-s", "-V", "-o", "Dpkg::Use-Pty=0", "upgrade"}
+	if appID != "" {
+		packages := []string{"nginx"}
+		if appID == "docker" {
+			packages = []string{"docker.io", "docker-compose-v2"}
+		}
+		args = []string{"-s", "-V", "--no-remove", "-o", "Dpkg::Use-Pty=0", "install", "--"}
+		if operation == "uninstall" {
+			args = []string{"-s", "-V", "-o", "Dpkg::Use-Pty=0", "remove", "--"}
+		}
+		args = append(args, packages...)
+	}
+	output, err := w.runner.Output(ctx, w.aptGet, args...)
 	if err != nil {
 		return Plan{}, fmt.Errorf("apt plan failed: %s", commandFailure(output, err))
 	}
 	packages := parsePlanOutput(string(output))
+	if operation == "uninstall" {
+		if len(packages) != 0 {
+			return Plan{}, errors.New("removal requires installing other packages; resolve package dependencies first")
+		}
+		packages = parseRemovalOutput(string(output))
+	}
 	for i := range packages {
-		packages[i].DownloadBytes, packages[i].InstalledDeltaBytes = w.packageSizes(ctx, packages[i])
+		if operation != "uninstall" {
+			packages[i].DownloadBytes, packages[i].InstalledDeltaBytes = w.packageSizes(ctx, packages[i])
+		}
 	}
 	now := time.Now().UTC()
 	plan := Plan{
+		AppID:          appID,
+		Operation:      operation,
 		ID:             "pln_" + randomID(),
 		CreatedAt:      now,
 		ExpiresAt:      now.Add(planLifetime),
@@ -206,6 +248,18 @@ func parsePlanOutput(output string) []Package {
 			ToVersion:   match[3],
 			Security:    strings.Contains(strings.ToLower(match[4]), "-security"),
 		})
+	}
+	return packages
+}
+
+var removalLinePattern = regexp.MustCompile(`^Remv\s+(\S+)\s+\[([^\]]+)\]`)
+
+func parseRemovalOutput(output string) []Package {
+	packages := []Package{}
+	for _, line := range strings.Split(output, "\n") {
+		if match := removalLinePattern.FindStringSubmatch(strings.TrimSpace(line)); match != nil {
+			packages = append(packages, Package{Name: match[1], FromVersion: match[2], ToVersion: match[2]})
+		}
 	}
 	return packages
 }
@@ -284,11 +338,40 @@ func (w *Worker) apply(plan Plan, requestID string, done func(Progress)) {
 	}
 	targets := make([]string, 0, len(plan.Packages))
 	for _, pkg := range plan.Packages {
-		targets = append(targets, pkg.Name+"="+pkg.ToVersion)
+		if plan.Operation == "uninstall" {
+			targets = append(targets, pkg.Name)
+		} else {
+			targets = append(targets, pkg.Name+"="+pkg.ToVersion)
+		}
+	}
+	if plan.AppID != "" {
+		args := append([]string{"-s", "-V", "--no-remove", "-o", "Dpkg::Use-Pty=0", "install", "--"}, targets...)
+		if plan.Operation == "uninstall" {
+			args = append([]string{"-s", "-V", "-o", "Dpkg::Use-Pty=0", "remove", "--"}, targets...)
+		}
+		output, err := w.runner.Output(ctx, w.aptGet, args...)
+		actual := parsePlanOutput(string(output))
+		if plan.Operation == "uninstall" {
+			if len(actual) != 0 {
+				err = errors.New("removal requires installing other packages")
+			}
+			actual = parseRemovalOutput(string(output))
+		}
+		if err != nil || !samePackagePlan(plan.Packages, actual) {
+			progress := w.finish(requestID, false, "The package plan changed. Review a new package plan before continuing.")
+			done(progress)
+			return
+		}
 	}
 	args := []string{"-y", "--no-remove", "-o", "Dpkg::Use-Pty=0", "install", "--"}
+	if plan.Operation == "uninstall" {
+		args = []string{"-y", "-o", "Dpkg::Use-Pty=0", "remove", "--"}
+	}
 	args = append(args, targets...)
 	w.setProgress(requestID, "downloading", 2, "Downloading packages")
+	if plan.Operation == "uninstall" {
+		w.setProgress(requestID, "removing", 2, "Removing packages")
+	}
 	configured := 0
 	lastLine := ""
 	err := w.runner.Stream(ctx, w.aptGet, args, func(line string) {
@@ -301,7 +384,7 @@ func (w *Worker) apply(plan Plan, requestID string, done func(Progress)) {
 			w.setProgress(requestID, "downloading", 10, trimmed)
 		case strings.HasPrefix(trimmed, "Unpacking "):
 			w.setProgress(requestID, "installing", 45, trimmed)
-		case strings.HasPrefix(trimmed, "Setting up "):
+		case strings.HasPrefix(trimmed, "Setting up "), strings.HasPrefix(trimmed, "Removing "):
 			configured++
 			percent := 50 + (configured*45)/len(plan.Packages)
 			w.setProgress(requestID, "installing", min(percent, 95), trimmed)
@@ -325,6 +408,23 @@ func (w *Worker) Progress(requestID string) (Progress, bool) {
 	defer w.mu.Unlock()
 	progress, ok := w.progress[requestID]
 	return progress, ok
+}
+
+func samePackagePlan(expected, actual []Package) bool {
+	if len(expected) != len(actual) {
+		return false
+	}
+	versions := map[string]string{}
+	for _, pkg := range expected {
+		versions[pkg.Name] = pkg.ToVersion
+	}
+	for _, pkg := range actual {
+		if versions[pkg.Name] != pkg.ToVersion {
+			return false
+		}
+		delete(versions, pkg.Name)
+	}
+	return len(versions) == 0
 }
 
 func (w *Worker) setProgress(requestID, phase string, percent int, message string) Progress {

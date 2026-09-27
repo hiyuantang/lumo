@@ -3,10 +3,53 @@ package terminal
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestProgramAndProjectValidation(t *testing.T) {
+	m := NewManager()
+	for _, opts := range []OpenOptions{
+		{Program: "arbitrary-command"},
+		{Program: "opencode", Shell: "/bin/sh"},
+		{Directory: "relative/project"},
+		{Directory: filepath.Join(t.TempDir(), "missing")},
+	} {
+		if _, err := m.Open(opts); !errors.Is(err, ErrValidation) {
+			t.Fatalf("options %+v: expected validation failure, got %v", opts, err)
+		}
+	}
+	if m.Count() != 0 {
+		t.Fatal("invalid requests created sessions")
+	}
+}
+
+func TestProjectDirectoryIsLiteral(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "project with spaces; echo injected")
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager()
+	sess, err := m.Open(OpenOptions{Shell: "/bin/sh", Directory: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.Kill()
+	if sess.cmd.Dir != path || len(sess.cmd.Args) != 1 {
+		t.Fatal("directory was interpreted as command arguments")
+	}
+	if err := sess.Write([]byte("pwd\n")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "literal working directory", func() bool {
+		sess.mu.Lock()
+		defer sess.mu.Unlock()
+		return strings.Contains(string(sess.scrollback), path)
+	})
+}
 
 func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Helper()

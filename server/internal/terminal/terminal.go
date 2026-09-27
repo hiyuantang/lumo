@@ -31,9 +31,11 @@ var (
 )
 
 type OpenOptions struct {
-	Cols  uint16
-	Rows  uint16
-	Shell string
+	Cols      uint16
+	Rows      uint16
+	Shell     string
+	Program   string
+	Directory string
 }
 
 type Session struct {
@@ -234,10 +236,39 @@ func (m *Manager) Open(opts OpenOptions) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(shell)
+	if opts.Program != "" && opts.Program != "shell" && opts.Program != "opencode" {
+		return nil, fmt.Errorf("%w: unsupported terminal program", ErrValidation)
+	}
+	command := shell
+	if opts.Program == "opencode" {
+		if opts.Shell != "" {
+			return nil, fmt.Errorf("%w: shell cannot be set for OpenCode", ErrValidation)
+		}
+		command = OpenCodePath()
+		if command == "" {
+			return nil, fmt.Errorf("%w: OpenCode is not installed for this account", ErrNotFound)
+		}
+	}
+	directory := homeDir()
+	if opts.Directory != "" && opts.Directory != "~" {
+		if !filepath.IsAbs(opts.Directory) {
+			return nil, fmt.Errorf("%w: project folder must be an absolute path", ErrValidation)
+		}
+		directory = filepath.Clean(opts.Directory)
+	}
+	info, err := os.Stat(directory)
+	if err != nil || !info.IsDir() {
+		return nil, fmt.Errorf("%w: project folder is unavailable", ErrValidation)
+	}
+	cmd := exec.Command(command)
 	cmd.Env = cleanEnv(shell)
-	if home := homeDir(); home != "" {
-		cmd.Dir = home
+	cmd.Dir = directory
+	if opts.Program == "opencode" {
+		for index, value := range cmd.Env {
+			if len(value) > 5 && value[:5] == "PATH=" {
+				cmd.Env[index] = "PATH=" + filepath.Join(homeDir(), ".opencode/bin") + ":" + filepath.Join(homeDir(), ".local/bin") + ":" + value[5:]
+			}
+		}
 	}
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: opts.Cols, Rows: opts.Rows})
 	if err != nil {
@@ -281,6 +312,15 @@ func (m *Manager) Count() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.sessions)
+}
+
+func OpenCodePath() string {
+	for _, path := range []string{filepath.Join(homeDir(), ".opencode/bin/opencode"), filepath.Join(homeDir(), ".local/bin/opencode"), "/usr/local/bin/opencode", "/usr/bin/opencode"} {
+		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
+			return path
+		}
+	}
+	return ""
 }
 
 func resolveShell(requested string) (string, error) {

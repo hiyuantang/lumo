@@ -1,0 +1,32 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.file-picker { padding: 0; width: min(560px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); border: 1px solid var(--border); border-radius: 18px; color: var(--text); background: var(--surface-raised); box-shadow: 0 24px 80px #0005; overflow: hidden; }
+.file-picker[open] { animation: file-picker-appear 160ms ease-out; }
+.file-picker::backdrop { background: #091b2259; }
+.file-picker-body { display: flex; flex-direction: column; height: min(500px, calc(100dvh - 34px)); }
+.file-picker header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.file-picker h2 { margin: 0; font-size: 16px; }
+.file-picker-close { width: 28px; height: 28px; border-radius: 50%; font-size: 22px; color: var(--text-muted); }
+.file-picker-close:hover { background: var(--surface); color: var(--text); }
+.file-picker-location, .file-picker-filter { display: flex; align-items: center; gap: 8px; padding: 12px 16px 0; }
+.file-picker-location > .btn { display: grid; place-items: center; width: 32px; height: 30px; padding: 0; flex-shrink: 0; }
+.file-picker-location nav { display: flex; align-items: center; min-width: 0; overflow: auto; }
+.file-picker-location nav button { flex-shrink: 0; padding: 5px 7px; border-radius: 6px; color: var(--text-muted); }
+.file-picker-location nav button:hover { background: var(--accent-soft); color: var(--accent); }
+.file-picker-location nav button + button::before { content: '/'; margin-right: 12px; color: var(--text-faint); }
+.file-picker-filter .input { appearance: none; flex: 1; min-width: 0; height: 32px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-sunken); color: var(--text); font-size: 12px; }
+.file-picker-filter .input::placeholder { color: var(--text-faint); }
+.file-picker-filter .input::-webkit-search-cancel-button { display: none; }
+.file-picker-filter .btn { flex-shrink: 0; }
+.file-picker-filter [aria-pressed='true'] { color: var(--accent); background: var(--accent-soft); }
+.file-picker-list { flex: 1; min-height: 0; overflow: auto; margin: 12px 8px; }
+.file-picker-list > p, .file-picker-list > div { padding: 24px 16px; color: var(--text-muted); text-align: center; }
+.file-picker-list > button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 8px; text-align: left; }
+.file-picker-list > button:hover { background: var(--surface); }
+.file-picker-list > button[aria-selected='true'] { background: var(--accent-soft); }
+.file-picker-list svg { flex-shrink: 0; color: var(--accent); }
+.file-picker-list span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-picker-list small { flex-shrink: 0; color: var(--text-muted); }
+.file-picker footer { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
+.file-picker footer > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px var(--font-mono); color: var(--text-muted); }
+@keyframes file-picker-appear { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+.motion-reduced .file-picker[open] { animation: none; }

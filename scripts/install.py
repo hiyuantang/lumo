@@ -26,11 +26,25 @@ import time
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
-CONFIG = Path('/etc/lumio/install.json')
-LIB = Path('/usr/local/lib/lumio')
-TLS = Path('/etc/lumio/tls')
-CERTBOT = Path('/opt/lumio-certbot/bin/certbot')
-SERVICES = ['lumiod-broker', 'lumiod-sessiond', 'lumiod-gateway']
+CONFIG = Path('/etc/lumo/install.json')
+LIB = Path('/usr/local/lib/lumo')
+TLS = Path('/etc/lumo/tls')
+CERTBOT = Path('/opt/lumo-certbot/bin/certbot')
+ACME = Path('/etc/lumo/acme')
+ACME_WORK = Path('/etc/lumo/acme-work')
+ACME_LOGS = Path('/etc/lumo/acme-logs')
+STATE = Path('/var/lib/lumo')
+RUNTIME = Path('/run/lumo')
+UNIT_DIR = Path('/etc/systemd/system')
+CONTROL = Path('/usr/local/bin/lumo')
+LEGACY_CONTROL = Path('/usr/local/bin/lumoctl')
+PAM = Path('/etc/pam.d/lumod')
+POLICY = Path('/usr/share/polkit-1/actions/os.lumo.policy')
+RULES = Path('/etc/polkit-1/rules.d/50-lumo.rules')
+LOCK = Path('/run/lock/lumo-install.lock')
+PROCESS_CGROUP = Path('/proc/self/cgroup')
+SERVICES = ['lumod-broker', 'lumod-sessiond', 'lumod-gateway']
+UNIT_NAMES = [service + '.service' for service in SERVICES] + ['lumo-cert-renew.service', 'lumo-cert-renew.timer']
 
 
 def run(args, *, capture=False, data=None, cwd=None, env=None):
@@ -123,7 +137,7 @@ def choose_port(requested=None):
 
 def choose_username():
     for _ in range(128):
-        username = 'lumio_' + secrets.token_hex(3)
+        username = 'lumo_' + secrets.token_hex(3)
         try:
             pwd.getpwnam(username)
         except KeyError:
@@ -131,13 +145,17 @@ def choose_username():
     raise RuntimeError('Could not create a unique username.')
 
 
-def require_host():
+def require_host(installing=True):
     if sys.platform != 'linux' or os.geteuid() != 0:
-        raise RuntimeError('Run with sudo on Ubuntu 24.04 or 26.04.')
+        raise RuntimeError('Run with sudo on the Linux host where Lumo is installed.')
+    if not Path('/run/systemd/system').is_dir():
+        raise RuntimeError('A running systemd host is required.')
+    if not installing:
+        return
     release = dict(line.split('=', 1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
     if release.get('ID', '').strip('"') != 'ubuntu' or release.get('VERSION_ID', '').strip('"') not in ('24.04', '26.04'):
         raise RuntimeError('Supported hosts: Ubuntu 24.04 and 26.04.')
-    if platform.machine() not in ('x86_64', 'aarch64') or not Path('/run/systemd/system').is_dir():
+    if platform.machine() not in ('x86_64', 'aarch64'):
         raise RuntimeError('A systemd host with an amd64 or arm64 CPU is required.')
 
 
@@ -155,7 +173,7 @@ def build_binary(directory):
     source.mkdir()
     for name in ('src', 'tests', 'server'):
         shutil.copytree(ROOT / name, source / name, ignore=shutil.ignore_patterns('node_modules', 'dist', 'bin', '.tools', '__pycache__'))
-    for name in ('package.json', 'package-lock.json', 'index.html', 'tsconfig.json', 'vite.config.ts', 'playwright.config.ts'):
+    for name in ('package.json', 'package-lock.json', 'index.html', 'tsconfig.json', 'vite.config.ts', 'playwright.config.ts', 'playwright.docker.config.ts'):
         shutil.copy2(ROOT / name, source / name)
     with urllib.request.urlopen('https://go.dev/dl/?mode=json', timeout=30) as response:
         releases = json.load(response)
@@ -169,14 +187,14 @@ def build_binary(directory):
         raise RuntimeError('The Go download checksum did not match.')
     with tarfile.open(archive_path) as bundle:
         bundle.extractall(directory, filter='data')
-    env = {**os.environ, 'VITE_LUMIO_LIVE': '1', 'CGO_ENABLED': '1', 'GOTOOLCHAIN': 'local',
+    env = {**os.environ, 'VITE_LUMO_LIVE': '1', 'CGO_ENABLED': '1', 'GOTOOLCHAIN': 'local',
            'GOCACHE': str(source / '.tools/gocache'), 'GOMODCACHE': str(source / '.tools/gomodcache'),
            'GOPATH': str(source / '.tools/gopath')}
     run(['npm', 'ci', '--ignore-scripts'], cwd=source, env=env)
     run(['npm', 'run', 'build'], cwd=source, env=env)
     shutil.copytree(source / 'dist', source / 'server/internal/static/dist')
-    binary = directory / 'lumiod'
-    run([directory / 'go/bin/go', 'build', '-trimpath', '-tags', 'pam,webdist', '-o', binary, './cmd/lumiod'], cwd=source / 'server', env=env)
+    binary = directory / 'lumod'
+    run([directory / 'go/bin/go', 'build', '-trimpath', '-tags', 'pam,webdist', '-o', binary, './cmd/lumod'], cwd=source / 'server', env=env)
     return binary
 
 
@@ -187,9 +205,11 @@ def validate_binary(binary):
 
 
 def acme_command(config, args):
-    command = [str(CERTBOT), 'certonly', '--non-interactive', '--agree-tos', '--cert-name', 'lumio',
-               '--preferred-challenges', 'http', '--deploy-hook', '/usr/local/bin/lumioctl renew-certificate']
+    command = [str(CERTBOT), 'certonly', '--non-interactive', '--agree-tos', '--cert-name', 'lumo',
+               '--preferred-challenges', 'http', '--deploy-hook', '/usr/local/bin/lumo renew-certificate']
     command += ['--email', args.email] if args.email else ['--register-unsafely-without-email']
+    if config.get('acme_isolated'):
+        command += acme_directories()
     command += ['--webroot', '--webroot-path', str(Path(args.webroot).resolve())] if args.webroot else ['--standalone']
     try:
         ipaddress.ip_address(config['host'])
@@ -197,6 +217,10 @@ def acme_command(config, args):
     except ValueError:
         command += ['--domains', config['host']]
     return command
+
+
+def acme_directories():
+    return ['--config-dir', str(ACME), '--work-dir', str(ACME_WORK), '--logs-dir', str(ACME_LOGS)]
 
 
 def certificate_sources(config, args):
@@ -219,13 +243,18 @@ def certificate_sources(config, args):
     if not args.webroot and not available_port(80):
         raise RuntimeError('Port 80 is occupied. Use --webroot with your existing web server, or supply --cert and --key.')
     print('Certificate validation needs inbound TCP 80; allow it in the VPS/provider firewall.', flush=True)
+    if not config.get('acme_isolated') and any(path.exists() or path.is_symlink() for path in (ACME, ACME_WORK, ACME_LOGS)):
+        raise RuntimeError('Untracked Lumo certificate directories already exist; preserve or move them before installing.')
+    config['acme_isolated'] = True
+    config.setdefault('certbot_owned', not CERTBOT.parent.parent.exists())
+    save_config(config)
     install_packages(['python3-venv'])
-    run(['python3', '-m', 'venv', '/opt/lumio-certbot'])
-    run(['/opt/lumio-certbot/bin/pip', 'install', 'certbot>=5.4,<6'])
+    run(['python3', '-m', 'venv', CERTBOT.parent.parent])
+    run([CERTBOT.parent / 'pip', 'install', 'certbot>=5.4,<6'])
     command = acme_command(config, args)
     hook = command.index('--deploy-hook')
     run(command[:hook] + command[hook + 2:])
-    return '/etc/letsencrypt/live/lumio/fullchain.pem', '/etc/letsencrypt/live/lumio/privkey.pem', True
+    return str(ACME / 'live/lumo/fullchain.pem'), str(ACME / 'live/lumo/privkey.pem'), True
 
 
 def validate_certificate(cert, key, host):
@@ -243,13 +272,13 @@ def copy_certificate(config):
     validate_certificate(config['cert_source'], config['key_source'], config['host'])
     TLS.mkdir(parents=True, exist_ok=True)
     os.chmod(TLS, 0o750)
-    os.chown(TLS, 0, grp.getgrnam('lumio-gw').gr_gid)
+    os.chown(TLS, 0, grp.getgrnam('lumo-gw').gr_gid)
     generation = TLS / ('pair-' + secrets.token_hex(8))
     generation.mkdir(mode=0o750)
     os.chmod(generation, 0o750)
-    os.chown(generation, 0, grp.getgrnam('lumio-gw').gr_gid)
-    write(generation / 'cert.pem', Path(config['cert_source']).read_bytes(), 0o640, 'lumio-gw')
-    write(generation / 'key.pem', Path(config['key_source']).read_bytes(), 0o640, 'lumio-gw')
+    os.chown(generation, 0, grp.getgrnam('lumo-gw').gr_gid)
+    write(generation / 'cert.pem', Path(config['cert_source']).read_bytes(), 0o640, 'lumo-gw')
+    write(generation / 'key.pem', Path(config['key_source']).read_bytes(), 0o640, 'lumo-gw')
     link = TLS / ('next-' + secrets.token_hex(8))
     link.symlink_to(generation.name)
     os.replace(link, TLS / 'current')
@@ -260,14 +289,25 @@ def copy_certificate(config):
 
 
 def provision_accounts(config):
-    for group in ('lumio-gw', 'lumio-users', 'lumio-admin'):
+    if config.get('ready') and 'added_groups' not in config:
+        config['legacy_memberships'] = True
+    config.setdefault('created_groups', {})
+    for group in ('lumo-gw', 'lumo-users', 'lumo-admin'):
+        try:
+            grp.getgrnam(group)
+        except KeyError:
+            config['created_groups'][group] = None
+            save_config(config)
         run(['groupadd', '--system', '--force', group])
+        if group in config['created_groups'] and config['created_groups'][group] is None:
+            config['created_groups'][group] = grp.getgrnam(group).gr_gid
+            save_config(config)
     try:
-        gateway = pwd.getpwnam('lumio-gw')
-        if gateway.pw_uid == 0 or gateway.pw_gid != grp.getgrnam('lumio-gw').gr_gid:
-            raise RuntimeError('The existing lumio-gw account has unexpected permissions.')
+        gateway = pwd.getpwnam('lumo-gw')
+        if gateway.pw_uid == 0 or gateway.pw_gid != grp.getgrnam('lumo-gw').gr_gid:
+            raise RuntimeError('The existing lumo-gw account has unexpected permissions.')
     except KeyError:
-        run(['useradd', '--system', '--gid', 'lumio-gw', '--no-create-home', '--shell', '/usr/sbin/nologin', 'lumio-gw'])
+        run(['useradd', '--system', '--gid', 'lumo-gw', '--no-create-home', '--shell', '/usr/sbin/nologin', 'lumo-gw'])
     try:
         account = pwd.getpwnam(config['username'])
         if account.pw_uid == 0 or (config.get('uid') is not None and account.pw_uid != config['uid']):
@@ -276,8 +316,16 @@ def provision_accounts(config):
         if not config['managed_user']:
             raise RuntimeError('The requested existing user does not exist.')
         run(['useradd', '--create-home', '--shell', '/bin/bash', config['username']])
-    run(['usermod', '-aG', 'lumio-users,lumio-admin,systemd-journal', config['username']])
-    config['uid'] = pwd.getpwnam(config['username']).pw_uid
+    account = pwd.getpwnam(config['username'])
+    config['uid'] = account.pw_uid
+    current_groups = os.getgrouplist(config['username'], account.pw_gid)
+    additions = config.setdefault('added_groups', {})
+    for name in ('lumo-users', 'lumo-admin', 'systemd-journal'):
+        group = grp.getgrnam(name)
+        if group.gr_gid not in current_groups:
+            additions[name] = group.gr_gid
+    save_config(config)
+    run(['usermod', '-aG', 'lumo-users,lumo-admin,systemd-journal', config['username']])
 
 
 def set_password(username):
@@ -290,37 +338,38 @@ def units(config):
     prefix = '# SPDX-License-Identifier: AGPL-3.0-only\n'
     output = {}
     for service in SERVICES:
-        role = service.removeprefix('lumiod-')
+        role = service.removeprefix('lumod-')
         after = 'network.target dbus.service polkit.service'
         if role == 'gateway':
-            after += ' lumiod-sessiond.service lumiod-broker.service'
+            after += ' lumod-sessiond.service lumod-broker.service'
         options = ''
         extra = 'UMask=0027\n' if role == 'sessiond' else 'UMask=0077\n'
         if role == 'gateway':
-            options = f" -addr :{config['port']} -tls-cert /etc/lumio/tls/current/cert.pem -tls-key /etc/lumio/tls/current/key.pem"
-            extra += 'User=lumio-gw\nGroup=lumio-gw\nNoNewPrivileges=true\nProtectSystem=strict\nProtectHome=true\nPrivateTmp=true\nPrivateDevices=true\nCapabilityBoundingSet=\nExecReload=/bin/kill -HUP $MAINPID\n'
+            options = f" -addr :{config['port']} -tls-cert /etc/lumo/tls/current/cert.pem -tls-key /etc/lumo/tls/current/key.pem"
+            extra += 'User=lumo-gw\nGroup=lumo-gw\nNoNewPrivileges=true\nProtectSystem=strict\nProtectHome=true\nPrivateTmp=true\nPrivateDevices=true\nCapabilityBoundingSet=\nExecReload=/bin/kill -HUP $MAINPID\n'
         output[service + '.service'] = prefix + f'''[Unit]
-Description=Lumio OS {role}
+Description=Lumo {role}
 After={after}
 
 [Service]
 Type=simple
-ExecStart=/usr/local/lib/lumio/lumiod {role}{options}
+ExecStart=/usr/local/lib/lumo/lumod {role}{options}
 Restart=on-failure
 RestartSec=2
 {extra}
 [Install]
 WantedBy=multi-user.target
 '''
-    output['lumio-cert-renew.service'] = prefix + '''[Unit]
-Description=Renew Lumio HTTPS certificate
+    renewal_paths = ' ' + ' '.join(acme_directories()) if config.get('acme_isolated') else ''
+    output['lumo-cert-renew.service'] = prefix + f'''[Unit]
+Description=Renew Lumo HTTPS certificate
 After=network-online.target
 [Service]
 Type=oneshot
-ExecStart=/opt/lumio-certbot/bin/certbot renew --cert-name lumio --quiet --deploy-hook "/usr/local/bin/lumioctl renew-certificate"
+ExecStart=/opt/lumo-certbot/bin/certbot renew{renewal_paths} --cert-name lumo --quiet --deploy-hook "/usr/local/bin/lumo renew-certificate"
 '''
-    output['lumio-cert-renew.timer'] = prefix + '''[Unit]
-Description=Check Lumio HTTPS certificate every hour
+    output['lumo-cert-renew.timer'] = prefix + '''[Unit]
+Description=Check Lumo HTTPS certificate every hour
 [Timer]
 OnBootSec=5min
 OnUnitActiveSec=1h
@@ -367,7 +416,7 @@ def health_check(config, password=None):
             return
         except (OSError, RuntimeError, http.client.HTTPException):
             if attempt == 29:
-                raise RuntimeError('Startup/login verification failed. Check journalctl -u lumiod-gateway -u lumiod-sessiond -u lumiod-broker.')
+                raise RuntimeError('Startup/login verification failed. Check journalctl -u lumod-gateway -u lumod-sessiond -u lumod-broker.')
             time.sleep(1)
 
 
@@ -382,11 +431,11 @@ def activate(config, password, files, previous):
         run(['systemctl', 'enable', *SERVICES])
         run(['systemctl', 'restart', *SERVICES])
         health_check(config, password)
-        run(['systemctl', 'enable' if config['acme'] else 'disable', '--now', 'lumio-cert-renew.timer'])
+        run(['systemctl', 'enable' if config['acme'] else 'disable', '--now', 'lumo-cert-renew.timer'])
         config['ready'] = True
         save_config(config)
     except Exception:
-        if previous and previous.get('ready') and backups[LIB / 'lumiod']:
+        if previous and previous.get('ready') and backups[LIB / 'lumod']:
             for path, backup in backups.items():
                 if backup is not None:
                     write(path, *backup)
@@ -399,7 +448,7 @@ def activate(config, password, files, previous):
             save_config(previous)
             run(['systemctl', 'daemon-reload'])
             run(['systemctl', 'restart', *SERVICES])
-            run(['systemctl', 'enable' if previous['acme'] else 'disable', '--now', 'lumio-cert-renew.timer'])
+            run(['systemctl', 'enable' if previous['acme'] else 'disable', '--now', 'lumo-cert-renew.timer'])
         else:
             with contextlib.suppress(RuntimeError):
                 run(['systemctl', 'stop', *SERVICES])
@@ -407,8 +456,8 @@ def activate(config, password, files, previous):
 
 
 def install(args):
-    policy = (ROOT / 'docker/os.lumio.policy').read_bytes()
-    rules = (ROOT / 'deploy/os.lumio.rules').read_bytes()
+    policy = (ROOT / 'docker/os.lumo.policy').read_bytes()
+    rules = (ROOT / 'deploy/os.lumo.rules').read_bytes()
     previous = load_config()
     if previous:
         config = dict(previous)
@@ -423,8 +472,9 @@ def install(args):
             raise ValueError('--user must name an existing non-root Linux user.')
         config = {'host': validate_host(args.host or public_host()), 'port': choose_port(args.port),
                   'username': username, 'managed_user': not bool(args.user), 'ready': False}
+        save_config(config)
     install_packages(['ca-certificates', 'curl', 'libpam0g', 'libpam-modules', 'dbus', 'polkitd', 'openssl'])
-    with tempfile.TemporaryDirectory(prefix='lumio-install-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='lumo-install-') as temporary:
         directory = Path(temporary)
         binary = Path(args.binary).resolve() if args.binary else build_binary(directory)
         validate_binary(binary)
@@ -440,25 +490,27 @@ def install(args):
         LIB.mkdir(parents=True, exist_ok=True)
         os.chmod(LIB, 0o755)
         files = {
-            LIB / 'lumiod': (binary.read_bytes(), 0o755),
+            LIB / 'lumod': (binary.read_bytes(), 0o755),
             LIB / 'installer.py': (Path(__file__).read_bytes(), 0o644),
-            Path('/usr/local/bin/lumioctl'): ('#!/bin/sh\n# SPDX-License-Identifier: AGPL-3.0-only\nexec /usr/bin/python3 /usr/local/lib/lumio/installer.py "$@"\n', 0o755),
-            Path('/etc/pam.d/lumiod'): ('# SPDX-License-Identifier: AGPL-3.0-only\nauth required pam_succeed_if.so user ingroup lumio-users quiet\nauth required pam_unix.so\naccount required pam_unix.so\n', 0o644),
-            Path('/usr/share/polkit-1/actions/os.lumio.policy'): (policy, 0o644),
-            Path('/etc/polkit-1/rules.d/50-lumio.rules'): (rules, 0o644),
+            CONTROL: ('#!/bin/sh\n# SPDX-License-Identifier: AGPL-3.0-only\nexec /usr/bin/python3 /usr/local/lib/lumo/installer.py "$@"\n', 0o755),
+            LEGACY_CONTROL: ('#!/bin/sh\n# SPDX-License-Identifier: AGPL-3.0-only\nexec /usr/local/bin/lumo "$@"\n', 0o755),
+            PAM: ('# SPDX-License-Identifier: AGPL-3.0-only\nauth required pam_succeed_if.so user ingroup lumo-users quiet\nauth required pam_unix.so\naccount required pam_unix.so\n', 0o644),
+            POLICY: (policy, 0o644),
+            RULES: (rules, 0o644),
         }
         for name, content in units(config).items():
-            files[Path('/etc/systemd/system') / name] = (content, 0o644)
+            files[UNIT_DIR / name] = (content, 0o644)
         activate(config, password, files, previous)
-    print('\nLumio OS installed successfully\n')
+    print('\nLumo installed successfully\n')
     show_status(config)
     print(f'Password:  {password}' if password else 'Password:  unchanged (use your existing password)')
     if password:
-        print('Save this password; Lumio does not keep a plaintext copy.')
+        print('Save this password; Lumo does not keep a plaintext copy.')
     print(f"\nAllow inbound TCP {config['port']} in the host and provider firewall.")
     if config['acme']:
         print('Keep TCP 80 reachable for automatic certificate renewal.')
-    print('Reset password: sudo lumioctl reset-password')
+    print('Reset password: sudo lumo reset-password')
+    print('Uninstall: sudo lumo uninstall (keeps Linux accounts and files)')
 
 
 def show_status(config):
@@ -466,9 +518,173 @@ def show_status(config):
     print(f"Address:   https://{host}:{config['port']}\nUsername:  {config['username']}")
 
 
+def uninstall_paths(config, purge):
+    files = [PAM, POLICY, RULES, *[UNIT_DIR / name for name in UNIT_NAMES]]
+    trees = [RUNTIME, TLS, *[UNIT_DIR / (name + '.d') for name in UNIT_NAMES]]
+    if config.get('acme_isolated'):
+        trees += [ACME, ACME_WORK, ACME_LOGS]
+    if config.get('certbot_owned'):
+        trees.append(CERTBOT.parent.parent)
+    if purge:
+        trees.append(STATE)
+    files += [LIB / 'lumod', LEGACY_CONTROL, CONTROL, LIB / 'installer.py', CONFIG]
+    return files, trees
+
+
+def check_cleanup_paths(files, trees, config):
+    if set(config.get('added_groups', {})) - {'lumo-users', 'lumo-admin', 'systemd-journal'}:
+        raise RuntimeError('Unexpected group in the installation record.')
+    if set(config.get('created_groups', {})) - {'lumo-users', 'lumo-admin', 'lumo-gw'}:
+        raise RuntimeError('Unexpected group in the installation record.')
+    for path in [*files, *trees]:
+        for parent in path.parents:
+            if parent.is_symlink():
+                raise RuntimeError(f'Refusing to remove files through a symlink directory: {parent}')
+        if path in files and path.is_dir() and not path.is_symlink():
+            raise RuntimeError(f'Expected an installed file, found a directory: {path}')
+    for path in trees:
+        if path.is_symlink():
+            continue
+        for directory, children, _ in os.walk(path, followlinks=False):
+            for candidate in [Path(directory), *[Path(directory) / child for child in children]]:
+                if not candidate.is_symlink() and os.path.ismount(candidate):
+                    raise RuntimeError(f'Unmount this directory before uninstalling: {candidate}')
+    if not config.get('acme'):
+        for name in ('cert_source', 'key_source'):
+            if not config.get(name):
+                continue
+            source = Path(config[name]).resolve()
+            if any(source == path.resolve() or path.resolve() in source.parents for path in [*files, *trees, STATE]):
+                raise RuntimeError(f'Move your supplied certificate outside Lumo directories before uninstalling: {source}')
+    if config.get('added_groups'):
+        try:
+            account = pwd.getpwnam(config['username'])
+        except KeyError:
+            account = None
+        if account is not None and (account.pw_uid == 0 or account.pw_uid != config.get('uid')):
+            raise RuntimeError('The login account identity changed; uninstall stopped without changing the account.')
+
+
+def remove_tree(path):
+    if path.is_symlink():
+        path.unlink()
+    elif path.exists():
+        shutil.rmtree(path)
+
+
+def stop_units():
+    order = ['lumo-cert-renew.timer', 'lumo-cert-renew.service',
+             'lumod-gateway.service', 'lumod-sessiond.service', 'lumod-broker.service']
+    for unit in order:
+        state = run(['systemctl', 'show', '--property=LoadState', '--value', unit], capture=True).strip()
+        if state == 'not-found':
+            continue
+        run(['systemctl', 'stop', unit])
+        if unit != 'lumo-cert-renew.service':
+            run(['systemctl', 'disable', unit])
+        active = run(['systemctl', 'show', '--property=ActiveState', '--value', unit], capture=True).strip()
+        if active == 'failed':
+            run(['systemctl', 'reset-failed', unit])
+
+
+def restore_memberships(config):
+    additions = config.get('added_groups', {})
+    if additions:
+        try:
+            account = pwd.getpwnam(config['username'])
+        except KeyError:
+            account = None
+        if account is not None and (account.pw_uid == 0 or account.pw_uid != config.get('uid')):
+            raise RuntimeError('The login account identity changed; group memberships were left untouched.')
+        if account is not None:
+            for name, gid in additions.items():
+                if name not in ('lumo-users', 'lumo-admin', 'systemd-journal'):
+                    raise RuntimeError('Unexpected group in the installation record.')
+                try:
+                    group = grp.getgrnam(name)
+                except KeyError:
+                    continue
+                if group.gr_gid != gid:
+                    print(f'Kept changed group identity: {name}')
+                elif config['username'] in group.gr_mem:
+                    run(['gpasswd', '--delete', config['username'], name], capture=True)
+    for name, gid in config.get('created_groups', {}).items():
+        if name not in ('lumo-gw', 'lumo-users', 'lumo-admin'):
+            raise RuntimeError('Unexpected group in the installation record.')
+        try:
+            group = grp.getgrnam(name)
+        except KeyError:
+            continue
+        if gid == group.gr_gid and not group.gr_mem and not any(user.pw_gid == gid for user in pwd.getpwall()):
+            run(['groupdel', name], capture=True)
+
+
+def uninstall(config, *, purge=False, yes=False, dry_run=False):
+    files, trees = uninstall_paths(config, purge)
+    present = any(path.exists() or path.is_symlink() for path in [*files, *trees])
+    if not present:
+        print('Lumo is already uninstalled.')
+        if STATE.exists():
+            print(f'Recovery records remain in {STATE}; use the source installer with uninstall --purge to remove them.')
+        return
+    check_cleanup_paths(files, trees, config)
+    if not dry_run and PROCESS_CGROUP.exists() and re.search(r'/lumod-sessiond\.service(?:/|$)', PROCESS_CGROUP.read_text(), re.M):
+        raise RuntimeError('Run uninstall over SSH or the VPS console; stopping Lumo would terminate this terminal and interrupt removal.')
+    print('Uninstall Lumo:')
+    print('  Stop and disable the web service, user sessions, broker and certificate renewal.')
+    print('  Remove Lumo program files, startup units, PAM/polkit rules and managed HTTPS files.')
+    print('  Keep Linux accounts, home folders, shared OS packages, external certificates and firewall settings.')
+    print(f'  {"PERMANENTLY DELETE audit logs and rollback backups in" if purge else "Keep audit logs and rollback backups in"} {STATE}.')
+    if dry_run:
+        for path in files + trees:
+            if path.exists() or path.is_symlink():
+                print(f'  Remove: {path}')
+        print('Preview only; no changes made.')
+        return
+    if not yes:
+        if not sys.stdin.isatty():
+            raise RuntimeError('Uninstall needs confirmation. Review --dry-run, then pass --yes for unattended removal.')
+        confirmation = 'purge' if purge else 'uninstall'
+        if input(f'Type {confirmation} to continue: ').strip() != confirmation:
+            print('Uninstall cancelled; no changes made.')
+            return
+    stop_units()
+    final_files = [LIB / 'lumod', LEGACY_CONTROL, CONTROL, LIB / 'installer.py', CONFIG]
+    for path in files:
+        if path not in final_files:
+            path.unlink(missing_ok=True)
+    for name in UNIT_NAMES:
+        remove_tree(UNIT_DIR / (name + '.d'))
+    run(['systemctl', 'daemon-reload'])
+    restore_memberships(config)
+    for path in trees:
+        remove_tree(path)
+    for path in final_files:
+        path.unlink(missing_ok=True)
+    for directory in (LIB, CONFIG.parent):
+        if directory.is_dir() and not any(directory.iterdir()):
+            directory.rmdir()
+    print('\nLumo uninstalled. Linux accounts and personal files were preserved.')
+    if not purge and STATE.exists():
+        print(f'Kept recovery records: {STATE}')
+    if config.get('username'):
+        print(f"Kept Linux login: {config['username']} (existing SSH access is unchanged).")
+    if config.get('legacy_memberships') or (config and 'added_groups' not in config):
+        print('Older installation: pre-existing group memberships were kept because their original state was not recorded.')
+    if config.get('acme') and not config.get('acme_isolated'):
+        print(f"Kept externally stored certificate: {config.get('cert_source', '/etc/letsencrypt/live/lumo')}")
+    if CERTBOT.parent.parent.exists():
+        print(f'Kept pre-existing certificate tooling: {CERTBOT.parent.parent}')
+    for directory in (LIB, CONFIG.parent):
+        if directory.exists():
+            print(f'Kept additional files in: {directory}')
+    if config.get('port'):
+        print(f"You can now close TCP {config['port']} in the host/provider firewall. Keep TCP 80 if another service uses it.")
+
+
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Install and manage Lumio OS on Ubuntu.')
-    parser.add_argument('command', choices=('install', 'status', 'reset-password', 'renew-certificate'), nargs='?', default='install')
+    parser = argparse.ArgumentParser(prog='lumo', description='Install and manage Lumo on Ubuntu.')
+    parser.add_argument('command', choices=('install', 'uninstall', 'status', 'reset-password', 'renew-certificate'), nargs='?', default='install')
     parser.add_argument('--host', type=validate_host)
     parser.add_argument('--port', type=int)
     parser.add_argument('--user', help='Use an existing non-root Linux user without changing its password.')
@@ -478,30 +694,44 @@ def main(argv=None):
     parser.add_argument('--webroot', help='Existing web server root for HTTP certificate validation on port 80.')
     parser.add_argument('--email', help='Email for the certificate authority account.')
     parser.add_argument('--accept-acme-terms', action='store_true', help='Accept the Let’s Encrypt subscriber agreement explicitly.')
+    parser.add_argument('--purge', action='store_true', help='With uninstall, also delete Lumo audit logs and rollback backups. Never deletes Linux accounts or personal files.')
+    parser.add_argument('--yes', action='store_true', help='Confirm uninstall without an interactive prompt.')
+    parser.add_argument('--dry-run', action='store_true', help='Preview uninstall without changing files or services.')
     args = parser.parse_args(argv)
-    require_host()
+    if args.command != 'uninstall' and (args.purge or args.yes or args.dry_run):
+        parser.error('--purge, --yes and --dry-run apply only to uninstall.')
+    if args.command != 'install' and (args.accept_acme_terms or any(
+            getattr(args, name) is not None for name in ('host', 'port', 'user', 'binary', 'cert', 'key', 'webroot', 'email'))):
+        parser.error('Host, account, binary and certificate options apply only to install.')
+    require_host(installing=args.command == 'install')
+    if args.command == 'uninstall' and args.dry_run:
+        uninstall(load_config() or {}, purge=args.purge, dry_run=True)
+        return
     os.umask(0o077)
-    with open('/run/lock/lumio-install.lock', 'a') as lock:
+    with LOCK.open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if args.command == 'install':
             install(args)
             return
+        if args.command == 'uninstall':
+            uninstall(load_config() or {}, purge=args.purge, yes=args.yes)
+            return
         config = load_config()
         if not config:
-            raise RuntimeError('Lumio is not installed.')
+            raise RuntimeError('Lumo is not installed.')
         if args.command == 'status':
             show_status(config)
         elif args.command == 'reset-password':
             if not config['managed_user']:
                 raise RuntimeError('This is an existing Linux account. Use sudo passwd USER to manage its password.')
             password = set_password(config['username'])
-            run(['systemctl', 'restart', 'lumiod-sessiond', 'lumiod-gateway'])
+            run(['systemctl', 'restart', 'lumod-sessiond', 'lumod-gateway'])
             health_check(config, password)
             show_status(config)
             print(f'Password:  {password}\nSave this password; it is shown only now.')
         elif args.command == 'renew-certificate':
             copy_certificate(config)
-            run(['systemctl', 'reload', 'lumiod-gateway'])
+            run(['systemctl', 'reload', 'lumod-gateway'])
 
 
 if __name__ == '__main__':

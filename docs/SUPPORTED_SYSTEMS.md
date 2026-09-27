@@ -1,4 +1,4 @@
-# Lumio OS — Supported Systems
+# Lumo — Supported Systems
 
 ## Primary target
 

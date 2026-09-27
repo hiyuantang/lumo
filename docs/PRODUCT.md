@@ -1,4 +1,4 @@
-# Lumio OS — Product
+# Lumo — Product
 
 ## Definition
 
@@ -6,7 +6,7 @@
 
 The main workflow is everyday work on a VPS: browse files, edit Markdown
 and text, use a terminal and manage the system through a familiar desktop.
-Users install Lumio OS on the VPS and access it from a local browser at
+Users install Lumo on the VPS and access it from a local browser at
 `https://VPS-IP:port` or a configured hostname.
 
 The browser draws the desktop, applications and document previews locally.
@@ -44,7 +44,7 @@ normal Linux permissions.
 - Native graphical applications and full remote desktops are not streamed.
   Recreating arbitrary desktop applications as web apps is outside scope.
 
-Other software can still be installed and run on the VPS; Lumio does not
+Other software can still be installed and run on the VPS; Lumo does not
 provide a graphical interface for every installed program.
 
 ## Core applications
@@ -53,15 +53,26 @@ provide a graphical interface for every installed program.
 |---|---|---|
 | Home | Health, uptime, CPU, memory, storage, updates and alerts | Phase 2 complete |
 | Files | Real filesystem plus protected configuration repair | Phase 5 complete |
+| Preview | Read text and Markdown in an independent window; switch between raw and rendered Markdown | Available |
 | Markdown editor | Edit server Markdown/text files with a local preview | Planned; basic text editing already exists in Files |
 | Terminal | A real PTY running as the logged-in Linux user | Phase 3 complete |
 | Services | systemd units, dependencies, startup and restart operations | Phase 5 complete |
 | Logs | journald with live filters and saved searches | Phase 5 complete |
 | Updates | Package refresh, upgrade plan, installation and reboot status | Phase 5 complete |
 | Storage | Disks, partitions, mounts, filesystems and SMART status | planned |
-| Network | Interfaces, addresses, DNS, routes, listeners and firewall | Phase 6 in progress: live interfaces and typed Netplan transactions with dead-man rollback |
-| Containers | Docker or Podman containers, images, logs and Compose projects | planned |
-| Settings | Users, SSH keys, security, TLS, locale, time and product settings | Phase 6 in progress: reauthenticated power controls |
+| App Library | Detect, install and open the two supported integrations | Initial implementation; fixed Docker and Nginx catalog, reviewed package plans and installation progress |
+| Containers | Existing Docker containers, lifecycle controls, logs, ports, storage and Compose project labels | Initial implementation; deployment, Compose editing, images and Podman remain planned |
+| Websites | Nginx static sites, local HTTP proxies, configuration and logs | Initial implementation; validation, backups and reload; certificate issuance remains planned |
+| Settings | Server identity, network, time, appearance and system controls; users, SSH keys, security, TLS, locale, listeners and firewall remain planned | Phase 6 in progress: read-only server identity, reauthenticated time edits, live interfaces and typed Netplan transactions with dead-man rollback, local appearance and power controls |
+
+Network is a section inside Settings, with one interface for viewing addresses
+and testing IP, gateway and DNS changes. Command Center opens this section in
+the existing Settings window. Updates and Services remain separate applications.
+
+App Library installs the server software needed by Containers and Websites and
+opens those same applications. It is a curated two-entry catalog, with no
+third-party plugin upload or arbitrary installation scripts. Packages already
+installed outside Lumo are detected. See [server applications](SERVER_APPS.md).
 
 ## Markdown editing workflow
 
@@ -123,7 +134,7 @@ It explicitly does not include:
 
 ## Naming and branding
 
-- The product name is **Lumio OS**.
+- The product name is **Lumo**.
 - Original logo and iconography are pending; all branding, visual assets,
   typography, icons and window controls are original work.
 - Never use Apple or Cockpit assets.

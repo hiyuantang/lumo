@@ -10,8 +10,8 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"lumio-os/server/internal/httpapi"
-	"lumio-os/server/internal/strictjson"
+	"lumo/server/internal/httpapi"
+	"lumo/server/internal/strictjson"
 )
 
 type inFrame struct {

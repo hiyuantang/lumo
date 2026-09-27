@@ -1,4 +1,4 @@
-# Lumio OS — Design Principles
+# Lumo — Design Principles
 
 ## Feeling
 
@@ -14,7 +14,7 @@
 
 ## Originality rules
 
-Lumio OS ships its own product name and logo, wallpaper, color system,
+Lumo ships its own product name and logo, wallpaper, color system,
 icon set, typography, window controls, sound and animation language, and
 application names. The following rules are binding for every UI task:
 
@@ -30,7 +30,7 @@ application names. The following rules are binding for every UI task:
 
 The current surface treatment follows the public macOS 27 direction:
 clearer glass, rounded window geometry, consistent toolbars and full-height
-sidebars. Lumio retains its original assets, typography, icons, palette and
+sidebars. Lumo retains its original assets, typography, icons, palette and
 window controls. See [DESKTOP_STYLE.md](DESKTOP_STYLE.md) for the visual
 system and generated-wallpaper provenance.
 

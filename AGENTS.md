@@ -1,8 +1,8 @@
-# Lumio OS — Agent Guide
+# Lumo — Agent Guide
 
 ## License (IMPORTANT — read before editing)
 
-Lumio OS is licensed under the **GNU Affero General Public License v3 only**
+Lumo is licensed under the **GNU Affero General Public License v3 only**
 (`AGPL-3.0-only`), NOT `AGPL-3.0-or-later`.
 
 - The [LICENSE](LICENSE) file is the FSF's standard AGPL-3.0 text. The
@@ -72,25 +72,29 @@ Frontend:
 
 - `npm install` — install dependencies.
 - `npm run dev` — dev server with mock data (default).
-- `npm run dev:live` — dev server against a running `lumiod`
+- `npm run dev:live` — dev server against a running `lumod`
   (proxies `/api`, including WebSocket, to `127.0.0.1:8080`).
 - `npm run build` — typecheck (`tsc --noEmit`) and build. Must pass
   clean before any change is considered done. Production builds default
   to live mode; `npm run build:mock` forces mock.
-- `npm test` — Playwright tests (chromium only; one-time browser setup
-  via `npx playwright install chromium`).
+- `npm test` / `npm run test:ui` — visual and interaction tests with simulated
+  data (Chromium; one-time setup via `npx playwright install chromium`).
+- `npm run test:docker` — real Ubuntu operations and browser-to-Ubuntu workflows.
+- `npm run test:unit` — Go and installer unit checks.
+- `npm run test:all` — build, unit, interface and Docker gates.
+- See `docs/TESTING.md` for coverage boundaries and screenshot baselines.
 
-Backend (`server/` module `lumio-os/server`):
+Backend (`server/` module `lumo/server`):
 
 - `cd server && go test ./...` — unit tests (run on macOS).
-- `scripts/integration-test.sh` — full integration gate: builds a
-  linux/arm64 `lumiod`, runs a privileged systemd Ubuntu 24.04
-  container, asserts REST + WebSocket behavior including the
-  "systemctl change appears over WS" exit gate. Requires Docker.
-- `scripts/build-with-web.sh` — build `server/bin/lumiod` with the
+- `scripts/integration-test.sh` — builds the live frontend and PAM-enabled
+  backend, runs Linux Go tests, then checks REST, WebSocket and browser
+  workflows in a disposable privileged systemd Ubuntu 24.04 container.
+  Requires Docker; follows the Docker engine architecture.
+- `scripts/build-with-web.sh` — build `server/bin/lumod` with the
   frontend embedded (`-tags webdist`).
-- `lumiod` binds `127.0.0.1:8080` by default; no auth in Phase 2
-  (localhost-only). The wire contract is `docs/PROTOCOL.md`; implement
+- `lumod gateway` binds `127.0.0.1:8080` by default and authenticates
+  through `sessiond`. The wire contract is `docs/PROTOCOL.md`; implement
   from it, not from other projects.
 
 Layout:
@@ -102,7 +106,7 @@ Layout:
 - `src/mock/` — mock implementation of the seam. Apps must read system
   state only through the seam (`src/api/source.ts`); never call `fetch`
   directly from components.
-- `server/cmd/lumiod/` — the agent binary. Subcommands: `gateway`
+- `server/cmd/lumod/` — the agent binary. Subcommands: `gateway`
   (unprivileged web frontend), `sessiond` (root, PAM + spawns per-user
   agents), `agent` (per-user worker, runs as the real UID), `broker`
   (root, typed privileged actions + polkit + audit). No subcommand runs
@@ -110,7 +114,8 @@ Layout:
 - `server/internal/` — auth, broker, files, gateway, httpapi, ipc,
   journal, sessiond, services, system, terminal, wsapi.
 - `docker/` — systemd test image; `scripts/` — build and test scripts.
-- `tests/` — Playwright specs.
+- `tests/ui/` — visual and interaction checks with simulated responses.
+- `tests/docker/` — real Ubuntu API and browser workflows.
 
 UI checks use `data-testid` hooks; keep existing testids stable and add
 new ones for new interactive elements.

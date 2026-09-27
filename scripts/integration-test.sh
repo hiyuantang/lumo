@@ -8,12 +8,18 @@ export GOMODCACHE="$ROOT/.tools/gomodcache"
 export GOCACHE="$ROOT/.tools/gocache"
 export GOPATH="$ROOT/.tools/gopath"
 
-IMAGE="lumio-os-integration:phase5"
-CONTAINER="lumio-os-it"
-PORT="${PORT:-18080}"
-BASE="http://127.0.0.1:${PORT}"
-WSURL="ws://127.0.0.1:${PORT}/api/v1/ws"
-BUILD_DIR="$ROOT/docker/.build"
+docker info >/dev/null 2>&1 || { echo "Docker is unavailable. Start Docker Desktop, then retry."; exit 1; }
+
+IMAGE="lumo-integration:test"
+BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/lumo-docker.XXXXXX")"
+CONTAINER="$(basename "$BUILD_DIR" | tr '[:upper:]' '[:lower:]')"
+PORT="${PORT:-}"
+if [[ -n "$PORT" && ! "$PORT" =~ ^[0-9]+$ ]]; then
+    echo "PORT must be a numeric host port, or unset for an automatically assigned port."
+    exit 1
+fi
+BASE=""
+WSURL=""
 
 PASS=0
 FAIL=0
@@ -48,7 +54,7 @@ expect_status_code() {
     shift 5
     local body code
     body="$(curl -s -o /dev/stdout -w '\n%{http_code}' -X "$method" \
-        -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' "$@" "$url" 2>/dev/null)"
+        -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' "$@" "$url" 2>/dev/null)"
     code="$(tail -n1 <<<"$body")"
     if [[ "$code" == "$want_code" ]] && grep -qF "$needle" <<<"$body"; then
         ok "$name"
@@ -68,40 +74,50 @@ wait_for_log() {
 }
 
 audit_query() {
-    docker exec "$CONTAINER" sqlite3 /var/lib/lumio/audit.db "$1" 2>/dev/null
+    docker exec "$CONTAINER" sqlite3 /var/lib/lumo/audit.db "$1" 2>/dev/null
 }
 
 cleanup() {
-    echo "== cleanup =="
-    docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-    docker rmi -f "$IMAGE" >/dev/null 2>&1 || true
-    rm -rf "$BUILD_DIR"
+    local status=$?
+    if docker inspect "$CONTAINER" >/dev/null 2>&1; then
+        docker logs "$CONTAINER" >"$BUILD_DIR/container.log" 2>&1 || true
+        docker exec "$CONTAINER" journalctl --no-pager -n 300 >"$BUILD_DIR/system-journal.log" 2>&1 || true
+        docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+    fi
+    rm -f "$COOKIE_JAR"
+    echo "Test artifacts: $BUILD_DIR"
+    return "$status"
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 echo "== building wscheck (host) =="
 mkdir -p "$BUILD_DIR/host"
 (cd "$ROOT/server" && CGO_ENABLED=0 "$GO" build -o "$BUILD_DIR/host/wscheck" ./cmd/wscheck) || exit 1
 
-echo "== building image $IMAGE (compiles lumiod with PAM inside) =="
-docker build -q -t "$IMAGE" -f "$ROOT/docker/Dockerfile.ubuntu24" "$ROOT" >/dev/null || {
+echo "== building image $IMAGE (compiles lumod with PAM inside) =="
+docker build -t "$IMAGE" -f "$ROOT/docker/Dockerfile.ubuntu24" "$ROOT" >"$BUILD_DIR/build.log" 2>&1 || {
     echo "FAIL: docker build failed"
+    tail -60 "$BUILD_DIR/build.log"
     exit 1
 }
 
 echo "== starting container $CONTAINER =="
-docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 docker run -d --name "$CONTAINER" \
     --privileged --cgroupns=host \
     -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
     --tmpfs /run --tmpfs /run/lock \
-    -p "$PORT:8080" \
+    -p "127.0.0.1:${PORT}:8080" \
     "$IMAGE" >/dev/null || {
     echo "FAIL: docker run failed"
     exit 1
 }
 
-echo "== waiting for the gateway to answer =="
+PORT="$(docker inspect --format '{{(index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort}}' "$CONTAINER")"
+BASE="http://127.0.0.1:${PORT}"
+WSURL="ws://127.0.0.1:${PORT}/api/v1/ws"
+echo "== waiting for the gateway at $BASE =="
 healthy=0
 for _ in $(seq 1 120); do
     if curl -fsS "$BASE/api/v1/meta/version" >/dev/null 2>&1; then
@@ -129,7 +145,7 @@ if [[ "$BAD_LOGIN" == 401 ]]; then ok "login wrong password -> 401"; else bad "l
 LOGIN="$(curl -s -c "$COOKIE_JAR" -X POST -H 'Content-Type: application/json' \
     -d '{"username":"alice","password":"alice-pass"}' "$BASE/api/v1/auth/login")"
 CSRF="$(json_field "$LOGIN" csrf)"
-SESSION="$(awk '$6 == "lumio_session" {print $NF}' "$COOKIE_JAR" | tail -1)"
+SESSION="$(awk '$6 == "lumo_session" {print $NF}' "$COOKIE_JAR" | tail -1)"
 if [[ -n "$CSRF" && -n "$SESSION" ]] && grep -q '"ok":true' <<<"$LOGIN" && grep -q '"name":"alice"' <<<"$LOGIN"; then
     ok "login ok -> cookies + csrf"
 else
@@ -147,10 +163,10 @@ expect_in "identity user is alice" "$BASE/api/v1/system/identity" '"user":{"name
 echo "== Phase 4 gate 2: CSRF =="
 CODE="$(curl -s -o /dev/null -w '%{http_code}' -X POST -b "$COOKIE_JAR" -H 'Content-Type: application/json' \
     -d '{"path":"/home/alice/nope.txt","requestId":"it-csrf"}' "$BASE/api/v1/files/delete")"
-if [[ "$CODE" == 403 ]]; then ok "non-GET without X-Lumio-CSRF -> 403"; else bad "non-GET without X-Lumio-CSRF -> 403 (got $CODE)"; fi
-CODE="$(curl -s -o /dev/null -w '%{http_code}' -X POST -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' \
+if [[ "$CODE" == 403 ]]; then ok "non-GET without X-Lumo-CSRF -> 403"; else bad "non-GET without X-Lumo-CSRF -> 403 (got $CODE)"; fi
+CODE="$(curl -s -o /dev/null -w '%{http_code}' -X POST -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' \
     -d '{"path":"/home/alice/nope.txt","requestId":"it-csrf"}' "$BASE/api/v1/files/delete")"
-if [[ "$CODE" != 403 ]]; then ok "non-GET with X-Lumio-CSRF -> not 403 (got $CODE)"; else bad "non-GET with X-Lumio-CSRF still 403"; fi
+if [[ "$CODE" == 404 ]]; then ok "non-GET with X-Lumo-CSRF reaches missing-file check -> 404"; else bad "non-GET with X-Lumo-CSRF expected 404 (got $CODE)"; fi
 
 echo "== REST assertions (authenticated) =="
 expect_in "meta/version"            "$BASE/api/v1/meta/version"    '"protocolVersions":[1]'
@@ -177,8 +193,8 @@ expect_status_code "files.read missing -> 404" GET "$BASE/api/v1/files/read?path
 expect_status_code "unknown route -> 404" GET "$BASE/api/v1/nope" 404 '"code":"not_found"'
 
 echo "== Phase 5 Updates: saved plan + progress stream =="
-WSAUTH=(-cookie "lumio_session=$SESSION" -csrf "$CSRF")
-UPDATE_PLAN="$(curl -s -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
+WSAUTH=(-cookie "lumo_session=$SESSION" -csrf "$CSRF")
+UPDATE_PLAN="$(curl -s -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
     -d '{"requestId":"it-up-plan"}' "$BASE/api/v1/updates/plan")"
 PLAN_ID="$(json_field "$UPDATE_PLAN" id)"
 if [[ "$PLAN_ID" == pln_* ]] && grep -q '"packages":\[' <<<"$UPDATE_PLAN" && grep -q '"securityCount":' <<<"$UPDATE_PLAN"; then
@@ -187,7 +203,7 @@ else
     echo "  got: $UPDATE_PLAN"
     bad "updates.plan returns a saved package plan"
 fi
-UPDATE_APPLY="$(curl -s -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
+UPDATE_APPLY="$(curl -s -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
     -d "{\"requestId\":\"it-up-apply\",\"planId\":\"$PLAN_ID\"}" "$BASE/api/v1/updates/apply")"
 if grep -q '"requestId":"it-up-apply"' <<<"$UPDATE_APPLY"; then
     ok "updates.apply accepts the exact saved plan"
@@ -218,13 +234,13 @@ else
     bad "ws system.metrics tick"
 fi
 
-"$BUILD_DIR/host/wscheck" "${WSAUTH[@]}" -url "$WSURL" -mode journal -unit "" -match "lumio-integration-marker" -timeout 25s \
+"$BUILD_DIR/host/wscheck" "${WSAUTH[@]}" -url "$WSURL" -mode journal -unit "" -match "lumo-integration-marker" -timeout 25s \
     >"$BUILD_DIR/journal.log" 2>&1 &
 JPID=$!
 if wait_for_log "$BUILD_DIR/journal.log" "subscribed" 20; then
     sleep 1
     for _ in 1 2 3 4 5; do
-        docker exec "$CONTAINER" systemd-cat -t lumio-it echo "lumio-integration-marker" >/dev/null 2>&1
+        docker exec "$CONTAINER" systemd-cat -t lumo-it echo "lumo-integration-marker" >/dev/null 2>&1
         sleep 1
     done
 else
@@ -274,7 +290,7 @@ else
 fi
 
 echo "== Phase 4 gate 4: files.write permissions =="
-W1="$(curl -s -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' -X PUT \
+W1="$(curl -s -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' -X PUT \
     -d "{\"path\":\"/home/alice/x.txt\",\"content\":\"$(b64 hello-v1)\",\"requestId\":\"it-w1\"}" \
     "$BASE/api/v1/files/write")"
 REV1="$(json_field "$W1" revision)"
@@ -302,7 +318,7 @@ expect_status_code "files.write traversal escape -> forbidden" PUT \
     -d "{\"path\":\"/home/alice/../../etc/hostname\",\"content\":\"$(b64 x)\",\"requestId\":\"it-p2\"}"
 
 docker exec "$CONTAINER" sh -c 'echo trashme > /home/alice/trashme.txt' >/dev/null 2>&1
-D1="$(curl -s -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
+D1="$(curl -s -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
     -d '{"path":"/home/alice/trashme.txt","requestId":"it-d1"}' \
     "$BASE/api/v1/files/delete")"
 if grep -q '"trashed":true' <<<"$D1" \
@@ -321,7 +337,7 @@ echo "== Phase 4 gates 5-7: services.action through the broker =="
 docker exec "$CONTAINER" systemctl start cron >/dev/null 2>&1
 sleep 1
 PID1="$(docker exec "$CONTAINER" systemctl show cron.service -p MainPID --value)"
-A1="$(curl -s -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
+A1="$(curl -s -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
     -d '{"requestId":"it-a1","action":"restart","unit":"cron.service"}' \
     "$BASE/api/v1/services/action")"
 sleep 1
@@ -337,11 +353,11 @@ else
     bad "services.action restart cron"
 fi
 
-REPLAY="$(curl -s -D - -o /dev/null -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
+REPLAY="$(curl -s -D - -o /dev/null -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
     -d '{"requestId":"it-a1","action":"restart","unit":"cron.service"}' \
     "$BASE/api/v1/services/action")"
 BEGINS="$(audit_query "SELECT count(*) FROM audit WHERE request_id='it-a1' AND kind='begin'")"
-if grep -qi '^X-Lumio-Idempotent-Replay: true' <<<"$REPLAY" && [[ "$BEGINS" == 1 ]]; then
+if grep -qi '^X-Lumo-Idempotent-Replay: true' <<<"$REPLAY" && [[ "$BEGINS" == 1 ]]; then
     ok "services.action idempotent replay (one begin row)"
 else
     echo "  replay headers: $REPLAY"
@@ -377,7 +393,7 @@ else
 fi
 
 echo "== Phase 4 gate 9: reauthentication path =="
-REAUTH_NEED="$(curl -s -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
+REAUTH_NEED="$(curl -s -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
     -d '{"requestId":"it-r1","action":"restart","unit":"ssh.service"}' \
     "$BASE/api/v1/services/action")"
 if grep -q '"reauthRequired":true' <<<"$REAUTH_NEED"; then
@@ -386,10 +402,10 @@ else
     echo "  got: $REAUTH_NEED"
     bad "auth_admin unit -> 403 reauthRequired"
 fi
-BAD_REAUTH="$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
+BAD_REAUTH="$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
     -d '{"password":"wrong"}' "$BASE/api/v1/auth/reauth")"
 if [[ "$BAD_REAUTH" == 401 ]]; then ok "reauth wrong password -> 401"; else bad "reauth wrong password -> 401 (got $BAD_REAUTH)"; fi
-GOOD_REAUTH="$(curl -s -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
+GOOD_REAUTH="$(curl -s -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
     -d '{"password":"alice-pass"}' "$BASE/api/v1/auth/reauth")"
 if grep -q '"reauthenticatedUntil"' <<<"$GOOD_REAUTH"; then
     ok "reauth correct password -> 200"
@@ -397,7 +413,7 @@ else
     echo "  got: $GOOD_REAUTH"
     bad "reauth correct password -> 200"
 fi
-R2="$(curl -s -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
+R2="$(curl -s -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
     -d '{"requestId":"it-r2","action":"restart","unit":"ssh.service"}' \
     "$BASE/api/v1/services/action")"
 if grep -q '"ok":true' <<<"$R2"; then
@@ -408,7 +424,7 @@ else
 fi
 
 echo "== Phase 4 gate 10: polkit denial is audited =="
-DENY="$(curl -s -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
+DENY="$(curl -s -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
     -d '{"requestId":"it-a5","action":"restart","unit":"nginx.service"}' \
     "$BASE/api/v1/services/action")"
 DENY_AUDIT="$(audit_query "SELECT outcome FROM audit WHERE request_id='it-a5' AND kind='deny'")"
@@ -420,18 +436,18 @@ else
 fi
 
 echo "== Phase 4 gate 11: unknown cookie -> 401 =="
-CODE="$(curl -s -o /dev/null -w '%{http_code}' -H 'Cookie: lumio_session=deadbeef' "$BASE/api/v1/services")"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' -H 'Cookie: lumo_session=deadbeef' "$BASE/api/v1/services")"
 if [[ "$CODE" == 401 ]]; then ok "unknown session cookie -> 401"; else bad "unknown session cookie -> 401 (got $CODE)"; fi
 
 echo "== Phase 5 EXIT GATE: diagnose and repair a failed web service =="
-if docker exec "$CONTAINER" systemctl is-failed --quiet lumio-test-web.service; then
+if docker exec "$CONTAINER" systemctl is-failed --quiet lumo-test-web.service; then
     ok "repair fixture starts in failed state"
 else
     bad "repair fixture starts in failed state"
 fi
-expect_in "failed web service is visible in Services" "$BASE/api/v1/services" '"name":"lumio-test-web.service"'
-expect_in "failed web service error is visible in Logs" "$BASE/api/v1/journal?unit=lumio-test-web.service&limit=20" 'port must be between 1024 and 65535'
-WEB_CONFIG="$(curl -s -b "$COOKIE_JAR" "$BASE/api/v1/files/read?path=/etc/lumio-test-web.json")"
+expect_in "failed web service is visible in Services" "$BASE/api/v1/services" '"name":"lumo-test-web.service"'
+expect_in "failed web service error is visible in Logs" "$BASE/api/v1/journal?unit=lumo-test-web.service&limit=20" 'port must be between 1024 and 65535'
+WEB_CONFIG="$(curl -s -b "$COOKIE_JAR" "$BASE/api/v1/files/read?path=/etc/lumo-test-web.json")"
 WEB_REV="$(json_field "$WEB_CONFIG" revision)"
 if [[ -n "$WEB_REV" ]] && grep -q 'eyJwb3J0IjotMX0K' <<<"$WEB_CONFIG"; then
     ok "protected web-service config is readable with a revision"
@@ -439,8 +455,8 @@ else
     echo "  got: $WEB_CONFIG"
     bad "protected web-service config is readable with a revision"
 fi
-WEB_WRITE="$(curl -s -b "$COOKIE_JAR" -H "X-Lumio-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
-    -d "{\"path\":\"/etc/lumio-test-web.json\",\"content\":\"$(b64 '{"port":18081}')\",\"expectedRevision\":\"$WEB_REV\",\"restartUnit\":\"lumio-test-web.service\",\"requestId\":\"it-web-repair\"}" \
+WEB_WRITE="$(curl -s -b "$COOKIE_JAR" -H "X-Lumo-CSRF: $CSRF" -H 'Content-Type: application/json' -X POST \
+    -d "{\"path\":\"/etc/lumo-test-web.json\",\"content\":\"$(b64 '{"port":18081}')\",\"expectedRevision\":\"$WEB_REV\",\"restartUnit\":\"lumo-test-web.service\",\"requestId\":\"it-web-repair\"}" \
     "$BASE/api/v1/files/write-privileged")"
 if grep -q '"validation":{"kind":"json","checked":true}' <<<"$WEB_WRITE" \
     && grep -q '"restart":{"success":true' <<<"$WEB_WRITE"; then
@@ -451,7 +467,7 @@ else
 fi
 WEB_HEALTHY=0
 for _ in $(seq 1 20); do
-    if docker exec "$CONTAINER" curl -fsS http://127.0.0.1:18081 2>/dev/null | grep -q 'lumio phase 5 web service'; then
+    if docker exec "$CONTAINER" curl -fsS http://127.0.0.1:18081 2>/dev/null | grep -q 'lumo phase 5 web service'; then
         WEB_HEALTHY=1
         break
     fi
@@ -463,7 +479,7 @@ else
     bad "EXIT GATE: repaired web service answers HTTP"
 fi
 WEB_AUDIT="$(audit_query "SELECT kind || '|' || outcome FROM audit WHERE request_id='it-web-repair' ORDER BY id")"
-ROLLBACKS="$(docker exec "$CONTAINER" sh -c 'find /var/lib/lumio/rollback/files -type f | wc -l' 2>/dev/null)"
+ROLLBACKS="$(docker exec "$CONTAINER" sh -c 'find /var/lib/lumo/rollback/files -type f | wc -l' 2>/dev/null)"
 if grep -q 'begin|pending' <<<"$WEB_AUDIT" && grep -q 'end|success' <<<"$WEB_AUDIT" && [[ "$ROLLBACKS" -ge 1 ]]; then
     ok "protected repair is audited and has a rollback copy"
 else
@@ -472,6 +488,14 @@ else
 fi
 
 echo
+echo "== browser workflows against the real Ubuntu app =="
+if (cd "$ROOT" && LUMO_TEST_URL="$BASE" LUMO_TEST_CONTAINER="$CONTAINER" \
+    LUMO_TEST_OUTPUT="$BUILD_DIR/browser" npx --no-install playwright test --config playwright.docker.config.ts); then
+    ok "browser and API workflows against Ubuntu"
+else
+    bad "browser and API workflows against Ubuntu"
+fi
+
 echo "======================================"
 echo "integration summary: $PASS passed, $FAIL failed"
 if [[ "$FAIL" == 0 ]]; then

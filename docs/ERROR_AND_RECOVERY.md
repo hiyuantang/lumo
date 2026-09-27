@@ -1,4 +1,4 @@
-# Lumio OS — Error and Recovery
+# Lumo — Error and Recovery
 
 Failure semantics for the wire protocol and the privileged stack.
 Error codes and envelope shapes are defined in

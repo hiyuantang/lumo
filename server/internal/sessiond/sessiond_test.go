@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"lumio-os/server/internal/ipc"
+	"lumo/server/internal/ipc"
 )
 
 func testDaemon(t *testing.T) (*Daemon, *http.Client, string) {

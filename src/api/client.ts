@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { SkillCatalog, SkillDetail } from './skills';
+import type { ProcessInfo } from './source';
+import type { TrashItem, TrashSelection } from './trash';
+import { formatModified } from '../utils/file-format';
 import { base64ToText, textToBase64 } from './encoding';
 import type {
   WireAuthLogin,
@@ -46,6 +50,8 @@ import type {
   SessionUser,
   SourceCapabilities,
   SystemIdentity,
+  SystemSettings,
+  SystemSettingsChange,
   SystemOverview,
   TerminalHandlers,
   TerminalOpenOptions,
@@ -55,7 +61,8 @@ import type {
   UpdateProgress,
 } from './source';
 import { ApiError, apiGet, apiPost, apiPut, csrfToken, onSessionExpired as onSessionExpiredListener } from './transport';
-import { LumioSocket } from './ws';
+import { LumoSocket } from './ws';
+import type { AppCatalog, AppLogs, ContainerAction, ContainerDetail, ContainerSnapshot, ServerAppID, WebsiteDefinition, WebsiteResult, WebsiteSnapshot } from './server-apps';
 
 const MB = 1024 * 1024;
 const GB = 1024 * 1024 * 1024;
@@ -127,15 +134,10 @@ function mapFileEntry(entry: WireFileEntry): FsEntry {
     kind: entry.type === 'directory' ? 'dir' : 'file',
     size: entry.sizeBytes,
     modified: formatModified(entry.modifiedAt),
+    modifiedAt: entry.modifiedAt,
+    mode: entry.mode,
+    symlinkTarget: entry.symlinkTarget,
   };
-}
-
-function formatModified(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${months[date.getMonth()]} ${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function sortEntries(a: FsEntry, b: FsEntry): number {
@@ -149,19 +151,36 @@ function joinUnderHome(homeDir: string, path: string[]): string {
 }
 
 export class LiveDataSource implements DataSource {
+  getAppCatalog() { return apiGet<AppCatalog>('/apps'); }
+  async uninstallOpenCode(): Promise<void> { await apiPost('/apps/opencode/uninstall', { requestId: crypto.randomUUID() }); }
+
+  async planAppInstall(id: ServerAppID, operation: 'install' | 'uninstall' = 'install'): Promise<UpdatePlan> {
+    return (await apiPost<{ plan: UpdatePlan }>('/apps/plan', { requestId: crypto.randomUUID(), appId: id, operation })).plan;
+  }
+  getContainers() { return apiGet<ContainerSnapshot>('/containers'); }
+  getContainer(id: string) { return apiGet<ContainerDetail>('/containers/detail', { id }); }
+  getContainerLogs(id: string) { return apiGet<AppLogs>('/containers/logs', { id }); }
+  runContainerAction(id: string, action: ContainerAction, revision: string) {
+    return apiPost<ContainerDetail>('/containers/action', { requestId: crypto.randomUUID(), id, action, expectedRevision: revision });
+  }
+  getWebsites() { return apiGet<WebsiteSnapshot>('/websites'); }
+  getWebsiteLogs(kind: 'access' | 'error') { return apiGet<AppLogs>('/websites/logs', { kind }); }
+  saveWebsite(id: string, definition: WebsiteDefinition, revision: string) {
+    return apiPost<WebsiteResult>('/websites/save', { requestId: crypto.randomUUID(), id, definition, expectedRevision: revision });
+  }
   readonly kind = 'live' as const;
   readonly capabilities: SourceCapabilities = {
     isLive: true,
     canServiceActions: true,
     canTerminal: true,
-    canWriteFiles: true,
-    canManageUpdates: true,
     canPowerControl: true,
     canConfigureNetwork: true,
   };
 
-  private socket = new LumioSocket();
+  private socket = new LumoSocket();
   private identity: SystemIdentity | null = null;
+  private identityExpiresAt = 0;
+  private identityListeners = new Set<(hostname: string) => void>();
   private homeDir = '/home/user';
   private bootedAt = Date.now();
   private lastMetrics: WireMetricsSample | null = null;
@@ -171,7 +190,7 @@ export class LiveDataSource implements DataSource {
   async login(username: string, password: string): Promise<SessionUser> {
     const data = await apiPost<WireAuthLogin>('/auth/login', { username, password });
     if (data.csrf && !csrfToken()) {
-      document.cookie = `lumio_csrf=${encodeURIComponent(data.csrf)}; path=/; SameSite=Strict`;
+      document.cookie = `lumo_csrf=${encodeURIComponent(data.csrf)}; path=/; SameSite=Strict`;
     }
     return this.noteSessionUser(data.user);
   }
@@ -206,7 +225,7 @@ export class LiveDataSource implements DataSource {
   }
 
   async getIdentity(): Promise<SystemIdentity> {
-    if (!this.identity) {
+    if (!this.identity || Date.now() >= this.identityExpiresAt) {
       const data = await apiGet<WireIdentity>('/system/identity');
       this.identity = {
         hostname: data.hostname,
@@ -216,6 +235,7 @@ export class LiveDataSource implements DataSource {
         bootId: data.bootId,
         serverTime: data.serverTime,
       };
+      this.identityExpiresAt = Date.now() + 30_000;
       const home = data.user?.home;
       if (home && home.startsWith('/')) {
         this.homeDir = home.replace(/\/+$/, '') || '/';
@@ -223,6 +243,35 @@ export class LiveDataSource implements DataSource {
     }
     return this.identity;
   }
+
+  async getSystemSettings(): Promise<SystemSettings> {
+    return this.noteSettings(await apiGet<SystemSettings>('/system/settings'));
+  }
+
+  async getTimezones(): Promise<string[]> {
+    return (await apiGet<{ timezones: string[] }>('/system/timezones')).timezones;
+  }
+
+  async updateSystemSettings(change: SystemSettingsChange, expectedRevision: string): Promise<SystemSettings> {
+    return this.noteSettings(await apiPost<SystemSettings>('/system/settings', {
+      requestId: crypto.randomUUID(), change, expectedRevision,
+    }));
+  }
+
+  private noteSettings(settings: SystemSettings): SystemSettings {
+    if (this.identity) {
+      this.identity = { ...this.identity, hostname: settings.runtimeHostname, serverTime: settings.serverTime };
+    }
+    this.identityListeners.forEach((listener) => listener(settings.runtimeHostname));
+    return settings;
+  }
+
+  onIdentityChanged(listener: (hostname: string) => void): Unsubscribe {
+    this.identityListeners.add(listener);
+    return () => this.identityListeners.delete(listener);
+  }
+
+  async listProcesses(): Promise<ProcessInfo[]> { return (await apiGet<{ processes: ProcessInfo[] }>('/system/processes')).processes; }
 
   async getOverview(): Promise<SystemOverview> {
     const [identity, overview, metrics] = await Promise.all([
@@ -265,6 +314,10 @@ export class LiveDataSource implements DataSource {
       securityUpdates: overview.securityUpdatesPending,
       alerts,
       cpuHistory: [...this.cpuHistory],
+      cpuCores: metrics.cpu.cores,
+      cpuPerCore: metrics.cpu.perCore ?? [],
+      cpuLoad: [metrics.cpu.load1, metrics.cpu.load5, metrics.cpu.load15],
+      network: metrics.network,
     };
   }
 
@@ -357,15 +410,7 @@ export class LiveDataSource implements DataSource {
           this.units.clear();
           for (const unit of event.units) this.units.set(unit.name, unit);
         } else {
-          const fallback: WireServiceUnit = this.units.get(event.unit.name) ?? {
-            name: event.unit.name,
-            description: '',
-            loadState: 'loaded',
-            activeState: 'inactive',
-            subState: 'dead',
-            enabledState: 'disabled',
-          };
-          this.units.set(event.unit.name, { ...fallback, ...event.unit });
+          this.mergeServiceUnit(event.unit.name, event.unit);
         }
         onChange([...this.units.values()].map(mapServiceUnit).sort((a, b) => a.name.localeCompare(b.name)));
       },
@@ -380,7 +425,11 @@ export class LiveDataSource implements DataSource {
       unit: name,
       ...(expectedActiveState ? { expected: { activeState: expectedActiveState } } : {}),
     });
-    const fallback: WireServiceUnit = this.units.get(name) ?? {
+    return mapServiceUnit(this.mergeServiceUnit(name, data.unit));
+  }
+
+  private mergeServiceUnit(name: string, unit: Partial<WireServiceUnit>): WireServiceUnit {
+    const fallback = this.units.get(name) ?? {
       name,
       description: '',
       loadState: 'loaded',
@@ -388,9 +437,9 @@ export class LiveDataSource implements DataSource {
       subState: 'dead',
       enabledState: 'disabled',
     };
-    const merged = { ...fallback, ...data.unit };
+    const merged = { ...fallback, ...unit };
     this.units.set(name, merged);
-    return mapServiceUnit(merged);
+    return merged;
   }
 
   async queryJournal(query: JournalQuery = {}): Promise<JournalPage> {
@@ -437,9 +486,20 @@ export class LiveDataSource implements DataSource {
     return [...new Set(data.entries.map((entry) => entry.unit))].sort();
   }
 
+  listSkills(): Promise<SkillCatalog> { return apiGet('/skills'); }
+  readSkill(id: string): Promise<SkillDetail> { return apiGet('/skills/detail', { id }); }
+
   homePath(): string[] {
     const segment = this.homeDir.split('/').filter(Boolean).pop();
     return [segment ?? 'user'];
+  }
+
+  absolutePath(path: string[]): string {
+    return joinUnderHome(this.homeDir, path);
+  }
+
+  async createEntry(path: string[], kind: 'file' | 'directory'): Promise<void> {
+    await apiPost('/files/create', { path: this.absolutePath(path), kind, requestId: crypto.randomUUID() });
   }
 
   async listDir(path: string[]): Promise<FsEntry[]> {
@@ -447,16 +507,8 @@ export class LiveDataSource implements DataSource {
     return data.entries.map(mapFileEntry).sort(sortEntries);
   }
 
-  async readFile(path: string[]): Promise<FileRead> {
-    const data = await apiGet<WireFileRead>('/files/read', { path: joinUnderHome(this.homeDir, path) });
-    const content = data.encoding === 'utf-8' || data.encoding === 'ascii' ? base64ToText(data.content) : null;
-    return {
-      content,
-      contentBase64: data.content,
-      revision: data.revision,
-      truncated: data.truncated,
-      sizeBytes: data.sizeBytes,
-    };
+  readFile(path: string[]): Promise<FileRead> {
+    return this.readSystemFile(joinUnderHome(this.homeDir, path));
   }
 
   async readSystemFile(path: string): Promise<FileRead> {
@@ -502,6 +554,10 @@ export class LiveDataSource implements DataSource {
       restart: data.restart ?? null,
     };
   }
+
+  async listTrash(): Promise<TrashItem[]> { return (await apiGet<{ items: TrashItem[] }>('/trash')).items; }
+  async restoreTrash(item: TrashSelection): Promise<string> { return (await apiPost<{ path: string }>('/trash/restore', { requestId: crypto.randomUUID(), item })).path; }
+  async deleteTrash(items: TrashSelection[]): Promise<void> { await apiPost('/trash/delete', { requestId: crypto.randomUUID(), items }); }
 
   async deleteFile(path: string[]): Promise<void> {
     await apiPost<{ trashed: boolean }>('/files/delete', {
@@ -553,7 +609,7 @@ class LiveTerminalSession implements TerminalSession {
   private handle: { channel: number; close: () => void };
 
   constructor(
-    private socket: LumioSocket,
+    private socket: LumoSocket,
     opts: TerminalOpenOptions,
     private handlers: TerminalHandlers,
   ) {
@@ -565,6 +621,7 @@ class LiveTerminalSession implements TerminalSession {
         cols: this.cols,
         rows: this.rows,
         shell: null,
+        ...(opts.program ? { program: opts.program, directory: opts.directory } : {}),
         ...(this.sessionToken ? { session: this.sessionToken } : {}),
       }),
       onSubscribed: (data, reattached) => {

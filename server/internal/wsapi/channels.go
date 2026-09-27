@@ -7,12 +7,12 @@ import (
 	"encoding/json"
 	"time"
 
-	"lumio-os/server/internal/broker"
-	"lumio-os/server/internal/httpapi"
-	"lumio-os/server/internal/journal"
-	"lumio-os/server/internal/services"
-	"lumio-os/server/internal/strictjson"
-	"lumio-os/server/internal/terminal"
+	"lumo/server/internal/broker"
+	"lumo/server/internal/httpapi"
+	"lumo/server/internal/journal"
+	"lumo/server/internal/services"
+	"lumo/server/internal/strictjson"
+	"lumo/server/internal/terminal"
 )
 
 func (c *conn) startChannel(ctx context.Context, ch *channel, params json.RawMessage) error {
@@ -73,10 +73,12 @@ func (c *conn) startChannel(ctx context.Context, ch *channel, params json.RawMes
 		return nil
 	case "terminal.open":
 		var p struct {
-			Cols    uint16 `json:"cols"`
-			Rows    uint16 `json:"rows"`
-			Shell   string `json:"shell"`
-			Session string `json:"session"`
+			Cols      uint16 `json:"cols"`
+			Rows      uint16 `json:"rows"`
+			Shell     string `json:"shell"`
+			Program   string `json:"program"`
+			Directory string `json:"directory"`
+			Session   string `json:"session"`
 		}
 		if len(params) > 0 {
 			if err := strictjson.Unmarshal(params, &p); err != nil {
@@ -95,7 +97,7 @@ func (c *conn) startChannel(ctx context.Context, ch *channel, params json.RawMes
 			go c.runTerminal(ctx, ch, sess, att)
 			return nil
 		}
-		sess, err := c.hub.deps.Terminal.Open(terminal.OpenOptions{Cols: p.Cols, Rows: p.Rows, Shell: p.Shell})
+		sess, err := c.hub.deps.Terminal.Open(terminal.OpenOptions{Cols: p.Cols, Rows: p.Rows, Shell: p.Shell, Program: p.Program, Directory: p.Directory})
 		if err != nil {
 			return err
 		}

@@ -1,178 +1,146 @@
-# Lumio OS
+# Lumo
 
-A locally rendered, macOS-inspired web desktop for administering a real
-headless Ubuntu server.
+Manage your Ubuntu server from a desktop in your browser.
 
-Lumio OS runs in your browser but manages the actual machine: real files,
-real systemd services, real journal logs, real users and permissions. It
-feels like an operating system — a menu bar, a dock, movable windows, a
-command center — but it never pretends the browser is running GNOME or
-macOS, and it never hides the server behind a duplicate configuration
-database.
+Browse files, open a terminal, inspect logs and manage services in movable
+windows. Lumo connects to your actual server and uses your Linux account's
+permissions. Service changes made over SSH also appear in Lumo.
 
-The primary workflow is browsing VPS files, editing Markdown and text,
-using a terminal and managing the system. The browser draws these tools
-locally and exchanges file contents, terminal text and system data with
-the server. Native graphical application and full-desktop streaming are
-outside the product scope.
+## What you can do
 
-## What it is
+| App | Use it to |
+| --- | --- |
+| Monitor | View server health, per-core CPU, memory, network traffic, running processes, services and searchable logs |
+| Trash | Restore deleted files or permanently remove them |
+| Files | Browse folders and Trash, pin favorite folders, create files, inspect details, upload, download and edit text |
+| OpenCode | Use the installed OpenCode CLI in a project terminal, with sessions and provider setup handled by OpenCode |
+| Preview | Read and edit text files; switch Markdown between rendered and raw views |
+| Terminal | Run commands as your Linux user |
+| Skills | Browse account skills from `~/.agents/skills`, search descriptions and read their instructions |
+| App Library | Browse app details, install packages and uninstall apps |
+| Containers | Inspect existing Docker containers, view logs and start, stop or restart them |
+| Websites | Manage Nginx sites for static files or local web applications |
+| Settings | View server identity, manage network and time settings, adjust appearance and schedule a restart or shutdown |
 
-- **A web desktop, not a dashboard.** After logging in you get a calm
-  desktop with a menu bar, dock, windows, notifications and keyboard
-  shortcuts. All shell interaction renders locally in the browser; moving
-  a window or opening a menu never touches the network.
-- **The live system is the source of truth.** Changes made over SSH or
-  with other tools show up in the desktop immediately. There is no
-  competing desired-state database.
-- **Your normal Linux permissions.** You log in as a real Linux user and
-  ordinary operations run as that user. Elevated actions go through a
-  small, typed privileged broker (polkit + audit) — never a generic root
-  shell.
+Lumo manages one server per browser session. It runs command-line tools
+through Terminal; it does not stream a remote graphical desktop.
 
-### Core applications
+## Current status
 
-| Application | What it controls |
-|---|---|
-| Home | Health, uptime, CPU, memory, storage, updates and alerts |
-| Files | The real filesystem under your user's permissions |
-| Markdown editor | Server Markdown/text files with local preview (planned; basic text editing exists in Files) |
-| Terminal | A real PTY running as your Linux user |
-| Services | systemd units, dependencies, start/stop/restart |
-| Logs | journald with live filters and saved searches |
-| Updates | Package refresh, upgrade plan, installation, reboot status |
-| Storage | Disks, partitions, mounts, filesystems, SMART status |
-| Network | Interfaces, addresses, DNS, routes, listeners, firewall |
-| Containers | Docker/Podman containers, images, logs, Compose projects |
-| Settings | Users, SSH keys, security, TLS, locale, time |
+Lumo is in active development. Try it on a disposable server before using
+it for important workloads. Installation from source is available; there
+is no published release package yet. Full installation under systemd and
+public HTTPS certificate issuance still need deployment verification.
 
-Command-line software is usable through Terminal. Applications that
-already provide a web interface can be accessed separately. Lumio builds
-focused interfaces for selected server capabilities; it does not recreate
-every installed application. See [Product scope](docs/PRODUCT.md).
+The project targets **Ubuntu 26.04 LTS**, with **Ubuntu 24.04 LTS**
+compatibility, on amd64 and arm64. The automated Docker environment uses
+Ubuntu 24.04; it does not establish coverage for every supported system.
 
-### Architecture at a glance
+Markdown preview, dedicated storage management, user and SSH-key management,
+and firewall controls are planned. Files already supports basic text editing.
 
-```text
-Browser (React/TypeScript desktop, rendered locally)
-        │  HTTPS — REST for requests, WebSocket for events
-Web gateway (unprivileged)
-        │  local Unix sockets
-Per-user session agent (runs as your UID/GID)
-        │  typed privileged requests
-Privileged broker (root, tiny API surface, polkit + audit)
-        │
-systemd · journald · files · packages · network
-```
+## Install on your server
 
-The browser talks to an unprivileged gateway; a per-user agent performs
-ordinary work as the authenticated user; a tiny root-owned broker handles
-narrowly defined privileged actions (`services.restart`,
-`packages.applyPlan`, …) with authorization, validation and audit. Risky
-operations such as network or firewall changes are transactional with
-automatic rollback.
-
-### Supported systems
-
-- **Primary:** Ubuntu 26.04 LTS (amd64 and arm64)
-- **Compatibility:** Ubuntu 24.04 LTS
-- One server per browser session; no multi-host control plane.
-
-## How to use it
-
-> **Status: Phase 5 complete; Phases 6 and 7 in progress.** The desktop runs against mock data by default,
-> or against a real Ubuntu host via the Lumio OS services: PAM login as
-> a real Linux user, a per-user session agent (terminal and files run
-> as that user), and a root privileged broker for typed service actions
-> with polkit authorization and an audit trail. A source installer now
-> provisions an account, a random port, HTTPS and startup services; its
-> full systemd installation gate and public certificate issuance still
-> need deployment verification. See [VPS installation](docs/INSTALL.md).
-> Services includes dependencies, loaded unit files and related-log navigation;
-> Logs includes boot/time filters, structured fields, saved searches, export
-> and service navigation; Updates provides saved plans, security and size
-> breakdowns, installation progress and reboot state; Files can validate and
-> atomically update protected `/etc` files with rollback copies. Settings now
-> schedules typed, reauthenticated reboot and shutdown actions through logind,
-> while typed Netplan changes now use a broker-owned confirm-or-revert
-> transaction. The gateway ships CSP, cross-origin opener/resource controls, permissions
-> policy and no-store API responses. The Network app exposes live interfaces
-> and the typed confirm-or-revert workflow. Firewall rollback and the
-> remaining Phase 6/7 release work remain.
-> Files already supports basic text editing; the Markdown workflow with
-> local preview and unsaved-work protection is planned.
-> The numbered flow below describes the intended experience once the
-> first release ships.
-
-Install this checkout on an Ubuntu VPS:
+Copy this repository to your Ubuntu server, open its directory, and run:
 
 ```sh
 sudo bash scripts/install.sh
 ```
 
-After verification succeeds, it prints the HTTPS address, generated
-username and password. Upgrades preserve those details. The
-[installation guide](docs/INSTALL.md) covers certificates, firewall ports,
-existing accounts and password recovery.
+The installer builds Lumo, configures HTTPS and starts its services. After
+verification succeeds, it prints your browser address, username and password.
+Save these details, allow the printed port through your server and provider
+firewalls, then open the address and sign in.
 
-Run the desktop with mock data:
+You will need internet access and a reachable IP address or hostname.
+Automatic certificates also require inbound port 80. For an existing Linux
+account, your own certificate, or a private server, follow the
+[installation guide](docs/INSTALL.md).
+
+## Your first session
+
+1. Open **Monitor** to check the server's health.
+2. Use **Files** to browse your home folder. Double-click a file to open **Preview**, or right-click to edit it, show metadata in the right Details panel, download it or move it to Trash. Right-click a folder to pin it in the sidebar; select **Trash** to browse deleted items in the same window. Right-click empty space to create a file or folder. The left sidebar and Details panel work together; collapse the sidebar to icons when you need more room.
+3. Open **Monitor → Services**, select a service and inspect its status or related logs.
+4. Use **Terminal** when you need a command-line tool.
+
+Ordinary file and terminal work runs with your account's permissions.
+Some administrative actions ask you to confirm your password and are
+recorded in an audit trail. Access to Docker containers also requires your
+Linux account to have Docker access; Lumo does not grant it automatically.
+
+Use **⌘/Ctrl+K** to find an app, **Alt+W** to close the active window, and
+**Ctrl+Alt+←/→** to switch windows. Closing a window clears its open file or
+project, navigation, selections and filters. Reopening starts fresh, with the
+same size, position and maximized or tiled layout. Pinned folders and display
+preferences are kept. Refreshing the browser restores windows that are still
+open and their views for each account; terminal sessions and unsaved edits are
+not restored.
+
+Click a window’s yellow button to minimize it into the right side of the Dock.
+The inset divider separates apps from minimized windows; click a window tile
+to restore it. Preview’s **Open file…** button opens a compact file picker;
+choose a file to view it in the current window. Opening different files from
+Files creates separate Preview windows. Right-click Preview’s Dock icon and
+choose **New Window** to open another, or select an existing document from the
+same menu.
+
+To use **OpenCode**, install its CLI for your Linux account following the
+[official installation guide](https://opencode.ai/docs/). Open **App Library →
+OpenCode** for setup instructions. After installing, refresh App Library,
+then open OpenCode from the Dock and choose a project folder. Its Dock icon
+appears once installation is detected. The app uses a terminal connection;
+provider sign-in, model selection and permission prompts stay inside OpenCode.
+Right-click its Dock icon and choose **New Window** to open another workspace.
+OpenCode processes stop when their terminal tab or app window closes.
+
+In **App Library**, select an app to read its description and manage its
+installation. Installed apps offer **Uninstall**; open them from the Dock.
+Uninstalling Docker or Nginx stops their services but keeps data and configuration.
+Uninstalling a standalone OpenCode CLI moves its executable to Trash and keeps
+projects, conversations and settings. Copies managed by another installer must
+be removed with that installer.
+
+Open **Trash** at the right end of the Dock or from the Files sidebar. Select an
+item and choose **Restore** to return it to its original folder. Existing files
+are never overwritten. **Delete Permanently** and **Empty Trash** ask for
+confirmation; these actions cannot be undone. Lumo uses your Linux account's
+home Trash; files on other filesystems cannot currently be moved there.
+
+Files hides dot-prefixed files and folders by default. Use **View → Show Hidden Files** or **Ctrl/Cmd+Shift+H** to reveal them. Right-click a folder and choose **Open in OpenCode** to use it as a coding workspace.
+
+Package updates are in **Settings → Updates**. Monitor’s **Activity** section shows current processes; **Logs** shows server event history.
+
+## Upgrade, recover access or remove Lumo
+
+Run the install command again from an updated checkout to upgrade. The
+installer preserves your account and connection details; active terminal
+sessions are interrupted during the upgrade.
+
+From an SSH session on the server:
 
 ```sh
-npm install
-npx playwright install chromium   # one-time, for tests
-npm run dev                       # then open the printed localhost URL
+sudo lumo status
+sudo lumo reset-password
+sudo lumo uninstall
 ```
 
-Run it against a real Ubuntu host (or the Docker testbed):
+`status` shows the connection details. `reset-password` creates a new
+password for an account created by the installer. For an existing account,
+use the normal Linux password reset process.
 
-```sh
-scripts/build-with-web.sh         # builds lumiod with the UI embedded
-# on the Ubuntu host, run the three services (see server/README.md):
-#   lumiod broker & lumiod sessiond & lumiod gateway -web dist
-ssh -L 8080:127.0.0.1:8080 user@host   # from your machine, then open http://localhost:8080
-```
+Uninstall keeps Linux accounts, personal files and recovery records.
+See the [removal and recovery guide](docs/INSTALL.md#uninstall) for previews,
+optional removal of audit logs and backups, and older installations.
 
-Log in with a real Linux account on the host. `scripts/integration-test.sh`
-spins up a privileged systemd Ubuntu 24.04 container and runs the full
-REST/WebSocket assertion suite — login, per-user terminal, service
-restart via the broker, package-plan progress, protected file rollback,
-audit rows, and the failed-web-service repair exit gate.
+## Development and testing
 
-Useful shortcuts: `⌘/Ctrl+K` command center, `Alt+W` close window,
-`Ctrl+Alt+←/→` cycle windows. `npm test` runs the Playwright tests;
-`npm run build` typechecks and builds.
-
-The target experience for the first release:
-
-1. **Install** one Ubuntu package on your server.
-2. **Connect** to `https://VPS-IP:port` or a configured hostname over HTTPS
-   and log in as a real Linux user.
-3. **Land on the desktop** — check host health on Home, browse files,
-   edit and preview Markdown, open a terminal, inspect and control services,
-   stream logs.
-4. **Elevate only when needed** — privileged actions ask for
-   authorization and are recorded in an audit trail.
-5. **Uninstall cleanly** at any time without damaging the server.
-
-### Contributing / development
-
-Development is specification-driven; the product, design and security
-specifications are maintained alongside the code. See
-[AGENTS.md](AGENTS.md) for the project mission and working rules.
-
-This is an independent, clean-room implementation. Do not clone or
-inspect third-party server-management projects for implementation
-reference; build from the project's specifications and official Ubuntu,
-systemd, D-Bus, polkit and web-standards documentation.
+See the [development and testing guide](docs/TESTING.md) for the interface
+preview, visual and interaction tests, real Ubuntu Docker checks and the
+remaining VM checks. Contributors should also read [AGENTS.md](AGENTS.md)
+and the [clean-room rules](docs/CLEAN_ROOM.md).
 
 ## License
 
-Lumio OS is licensed under the GNU Affero General Public License,
+Lumo is licensed under the GNU Affero General Public License,
 version 3 only (`AGPL-3.0-only`). See [LICENSE](LICENSE).
-
-In SPDX terms, the project uses `AGPL-3.0-only` — **not**
-`AGPL-3.0-or-later`. The "or any later version" text at the bottom of
-the [LICENSE](LICENSE) file is part of the FSF's *How to Apply These
-Terms* appendix (a sample notice) and does not, by itself, make this
-project "or later". This README and the per-file SPDX headers are the
-authoritative statement of the chosen license.

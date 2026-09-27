@@ -41,12 +41,12 @@ export function LoginScreen() {
 
   return (
     <div className="login wallpaper" data-testid="login-screen">
-      <form className="login-card" onSubmit={onSubmit} aria-label="Log in to Lumio OS">
+      <form className="login-card" onSubmit={onSubmit} aria-label="Log in to Lumo">
         <div className="login-avatar" aria-hidden="true">
           <span>{initial}</span>
         </div>
-        <h1 className="login-title">Lumio OS</h1>
-        <p className="login-subtitle">{isLive ? 'Sign in with your server account' : 'atlas.lan · Ubuntu 24.04 LTS'}</p>
+        <h1 className="login-title">Lumo</h1>
+        <p className="login-subtitle">{isLive ? 'Server account' : 'atlas.lan · Ubuntu 24.04 LTS'}</p>
         <label className="login-field">
           <span>Username</span>
           <input
@@ -77,7 +77,7 @@ export function LoginScreen() {
         <button className="login-submit" data-testid="login-submit" type="submit" disabled={!canSubmit}>
           {busy ? 'Signing in…' : 'Log in'}
         </button>
-        {!isLive && <p className="login-hint">Phase 1 preview — any credentials sign you in.</p>}
+        {!isLive && <p className="login-hint">Demo · use any credentials.</p>}
       </form>
     </div>
   );

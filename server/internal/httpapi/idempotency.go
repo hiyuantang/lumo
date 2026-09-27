@@ -82,7 +82,7 @@ func validRequestID(id string) bool {
 func (s *Server) mutate(w http.ResponseWriter, requestID string, fn func(w http.ResponseWriter)) {
 	if entry, ok := s.idem.get(requestID); ok {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.Header().Set("X-Lumio-Idempotent-Replay", "true")
+		w.Header().Set("X-Lumo-Idempotent-Replay", "true")
 		w.WriteHeader(entry.status)
 		_, _ = w.Write(entry.body)
 		return

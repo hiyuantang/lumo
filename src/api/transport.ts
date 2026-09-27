@@ -18,7 +18,7 @@ export class ApiError extends Error {
 }
 
 export function csrfToken(): string | null {
-  const match = document.cookie.match(/(?:^|;\s*)lumio_csrf=([^;]+)/);
+  const match = document.cookie.match(/(?:^|;\s*)lumo_csrf=([^;]+)/);
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
@@ -66,7 +66,7 @@ async function rawRequest<T>(method: string, path: string, params?: QueryParams,
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
     const csrf = csrfToken();
-    if (csrf) headers['X-Lumio-CSRF'] = csrf;
+    if (csrf) headers['X-Lumo-CSRF'] = csrf;
   }
   let res: Response;
   try {

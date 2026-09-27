@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { formatModified } from '../utils/file-format';
+import type { TrashItem, TrashSelection } from '../api/trash';
 import type { FsEntry } from '../api/source';
 import { ApiError } from '../api/transport';
-
-export type { FsEntry } from '../api/source';
 
 const HOME: FsEntry = {
   name: 'user',
@@ -22,7 +22,7 @@ const HOME: FsEntry = {
           size: 1284,
           modified: 'Jul 16 18:02',
           content:
-            '# Atlas server notes\n\n- Host: atlas.lan (192.168.1.20)\n- Backups run nightly at 02:30 via lumio-backup.service\n- PostgreSQL data lives on /srv/postgres\n- Renew TLS certificates before Sep 4\n',
+            '# Atlas server notes\n\n- Host: atlas.lan (192.168.1.20)\n- Backups run nightly at 02:30 via lumo-backup.service\n- PostgreSQL data lives on /srv/postgres\n- Renew TLS certificates before Sep 4\n',
         },
         {
           name: 'upgrade-plan.txt',
@@ -52,7 +52,7 @@ const HOME: FsEntry = {
       modified: 'Jul 17 22:41',
       children: [
         {
-          name: 'lumio-agent',
+          name: 'lumo-agent',
           kind: 'dir',
           size: 4096,
           modified: 'Jul 17 22:41',
@@ -63,7 +63,7 @@ const HOME: FsEntry = {
               size: 930,
               modified: 'Jul 17 22:41',
               content:
-                '# lumio-agent\n\nSmall node agent that reports host metrics to the Lumio OS broker.\n\nRun with: systemctl start lumio-agent.service\n',
+                '# lumo-agent\n\nSmall node agent that reports host metrics to the Lumo broker.\n\nRun with: systemctl start lumo-agent.service\n',
             },
             {
               name: 'agent.ts',
@@ -82,7 +82,7 @@ const HOME: FsEntry = {
           size: 812,
           modified: 'Jul 14 16:20',
           content:
-            '#!/bin/sh\nset -eu\nrsync -az --delete dist/ atlas.lan:/srv/www/lumio/\nssh atlas.lan systemctl reload nginx.service\n',
+            '#!/bin/sh\nset -eu\nrsync -az --delete dist/ atlas.lan:/srv/www/lumo/\nssh atlas.lan systemctl reload nginx.service\n',
         },
       ],
     },
@@ -156,12 +156,6 @@ export function entryRevision(path: string[]): string | null {
   return revision;
 }
 
-function formatModified(date: Date): string {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${months[date.getMonth()]} ${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 export function writeEntry(
   path: string[],
   content: string,
@@ -207,21 +201,36 @@ export function deleteEntry(path: string[]): void {
   if (!parent || parent.kind !== 'dir' || !node) {
     throw new ApiError('not_found', 'No such file.');
   }
-  if (node.kind === 'dir' && (node.children?.length ?? 0) > 0) {
-    throw new ApiError('validation_failed', 'Only empty folders can be moved to trash.');
-  }
+  const id = crypto.randomUUID();
+  trashed.set(id, { entry: node, path: [...path], item: { id, revision: id, name, originalPath: '/'+path.join('/'), deletedAt: new Date().toISOString(), type: node.kind === 'dir' ? 'directory' : 'file', sizeBytes: node.size, canRestore: true } });
   parent.children?.splice(index, 1);
   revisions.delete(pathKey(path));
 }
 
-export function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ['KB', 'MB', 'GB'];
-  let value = bytes / 1024;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+export function createEntry(path: string[], kind: 'file' | 'directory'): void {
+  const name = path.at(-1) ?? '';
+  const parent = getEntry(path.slice(0, -1));
+  if (!name || name === '.' || name === '..' || /[\/\x00]/.test(name)) throw new ApiError('validation_failed', 'Choose a valid name.');
+  if (!parent || parent.kind !== 'dir') throw new ApiError('not_found', 'Folder unavailable.');
+  if (parent.children?.some((entry) => entry.name === name)) throw new ApiError('conflict', 'A file or folder with this name already exists.');
+  parent.children ??= [];
+  parent.children.push({ name, kind: kind === 'directory' ? 'dir' : 'file', size: 0, modified: formatModified(new Date().toISOString()), ...(kind === 'directory' ? { children: [] } : { content: '' }) });
+}
+
+const trashed = new Map<string, { entry: FsEntry; path: string[]; item: TrashItem }>();
+export function listTrashed(): TrashItem[] { return [...trashed.values()].map(({ item }) => ({ ...item })); }
+export function restoreTrashed(item: TrashSelection): string {
+  const value = trashed.get(item.id);
+  if (!value || value.item.revision !== item.revision) throw new ApiError('stale_revision', 'Refresh Trash and try again.');
+  const parent = getEntry(value.path.slice(0,-1));
+  if (!parent || parent.kind !== 'dir') throw new ApiError('not_found', 'Original folder unavailable.');
+  if (parent.children?.some((entry) => entry.name === value.entry.name)) throw new ApiError('conflict', 'A file or folder with this name already exists.');
+  parent.children ??= [];
+  parent.children.push(value.entry);
+  trashed.delete(item.id);
+  return value.item.originalPath;
+}
+export function removeTrashed(items: TrashSelection[]): void {
+  if (items.some((item) => trashed.get(item.id)?.item.revision !== item.revision)) throw new ApiError('stale_revision', 'Refresh Trash and try again.');
+  for (const item of items) trashed.delete(item.id);
 }

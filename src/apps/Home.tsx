@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { describeError, getDataSource, type SystemOverview } from '../api/source';
-import { useNow } from '../shell/ShellContext';
+import { formatSize } from '../utils/file-format';
 import '../styles/apps.css';
 import '../styles/home.css';
 
@@ -28,14 +28,11 @@ function Sparkline({ values }: { values: number[] }) {
   );
 }
 
-export function Home() {
+export function Home({ section = 'overview' }: { section?: 'overview' | 'cpu' | 'memory' | 'network' }) {
   const source = getDataSource();
   const [overview, setOverview] = useState<SystemOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
-  const loadedRef = useRef(false);
-  const now = useNow(1000);
-  void now;
 
   useEffect(() => {
     let alive = true;
@@ -43,11 +40,10 @@ export function Home() {
       try {
         const next = await source.getOverview();
         if (!alive) return;
-        loadedRef.current = true;
         setOverview(next);
         setError(null);
       } catch (err) {
-        if (!alive || loadedRef.current) return;
+        if (!alive) return;
         setError(describeError(err));
       }
     };
@@ -73,10 +69,7 @@ export function Home() {
                 </button>
               </>
             ) : (
-              <>
-                <h2>Connecting…</h2>
-                <p className="home-muted">Loading system state.</p>
-              </>
+              <h2>Connecting…</h2>
             )}
           </section>
         </div>
@@ -84,11 +77,25 @@ export function Home() {
     );
   }
 
-  const memPct = Math.round((overview.memoryUsedMb / overview.memoryTotalMb) * 100);
-  const diskPct = Math.round((overview.storageUsedGb / overview.storageTotalGb) * 100);
+  const memPct = overview.memoryTotalMb > 0 ? Math.round((overview.memoryUsedMb / overview.memoryTotalMb) * 100) : 0;
+  const diskPct = overview.storageTotalGb > 0 ? Math.round((overview.storageUsedGb / overview.storageTotalGb) * 100) : 0;
+
+  if (section !== 'overview') return <div className="app home monitor-detail" data-testid={`monitor-${section}`}>
+    <h2>{section === 'cpu' ? 'CPU' : section === 'memory' ? 'Memory' : 'Network'}</h2>
+    {error && <p role="alert" className="monitor-error">{error} Showing the last received sample.</p>}
+    {section === 'cpu' ? <>
+      <section className="home-card"><h3>Total CPU usage</h3><p className="home-big">{overview.cpuPercent}%</p><Sparkline values={overview.cpuHistory}/><p className="home-muted">{overview.cpuCores} logical cores · Load average {overview.cpuLoad.map((value) => value.toFixed(2)).join(' / ')} (1, 5, 15 min)</p></section>
+      <div className="monitor-core-grid">{overview.cpuPerCore.map((core) => <section className="monitor-core" key={core.id} data-testid={`cpu-core-${core.id}`}><header><span>CPU {core.id}</span><strong>{core.usagePercent === null ? '—' : `${core.usagePercent.toFixed(1)}%`}</strong></header><div className="meter" role="meter" aria-label={`CPU ${core.id} usage`} aria-valuenow={core.usagePercent ?? undefined} aria-valuemin={0} aria-valuemax={100}><div className="meter-fill" style={{ width: `${core.usagePercent ?? 0}%` }}/></div></section>)}</div>
+      {!overview.cpuPerCore.length && <p className="home-muted">Per-core metrics are unavailable from this server.</p>}
+    </> : section === 'memory' ? <section className="home-card"><h3>Memory in use</h3><p className="home-big">{memPct}%</p><div className="meter" role="meter" aria-label="Memory usage" aria-valuenow={memPct} aria-valuemin={0} aria-valuemax={100}><div className="meter-fill" style={{ width: `${memPct}%` }}/></div><p className="home-muted">{formatSize(overview.memoryUsedMb * 1048576)} used · {formatSize(Math.max(0, overview.memoryTotalMb - overview.memoryUsedMb) * 1048576)} available · {formatSize(overview.memoryTotalMb * 1048576)} total</p></section> : <>
+      {overview.network.map((item) => <section className="home-card" key={item.interface}><h3>{item.interface}</h3><div className="monitor-network"><div><p className="home-muted">Receiving</p><p className="home-big">{formatSize(item.rxBytesPerSec)}/s</p></div><div><p className="home-muted">Sending</p><p className="home-big">{formatSize(item.txBytesPerSec)}/s</p></div></div></section>)}
+      {!overview.network.length && <p className="home-muted">Waiting for network activity metrics…</p>}
+    </>}
+  </div>;
 
   return (
     <div className="app home" data-testid="app-home">
+      {error && <p role="alert" className="monitor-error">{error} Showing the last received sample.</p>}
       <div className="home-grid">
         <section className="home-card home-identity" aria-label="System">
           <h2>{overview.hostname}</h2>

@@ -28,7 +28,7 @@ const (
 	netplanRootPath       = dbus.ObjectPath("/io/netplan/Netplan")
 	netplanRootIface      = "io.netplan.Netplan"
 	netplanConfigIface    = "io.netplan.Netplan.Config"
-	netplanOriginHint     = "90-lumio"
+	netplanOriginHint     = "90-lumo"
 )
 
 var (

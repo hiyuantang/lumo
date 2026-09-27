@@ -5,10 +5,13 @@ import (
 	"net/http"
 	"strings"
 
-	"lumio-os/server/internal/journal"
-	"lumio-os/server/internal/network"
-	"lumio-os/server/internal/services"
-	"lumio-os/server/internal/system"
+	"lumo/server/internal/containers"
+	"lumo/server/internal/hostsettings"
+	"lumo/server/internal/journal"
+	"lumo/server/internal/network"
+	"lumo/server/internal/services"
+	"lumo/server/internal/system"
+	"lumo/server/internal/websites"
 )
 
 const (
@@ -23,14 +26,18 @@ type Deps struct {
 	Services     services.API
 	Journal      journal.Backend
 	Network      network.Snapshotter
+	Settings     hostsettings.Reader
+	Containers   containers.Reader
+	Websites     websites.Reader
 	WS           http.Handler
 	Static       http.Handler
 	BrokerSocket string
 }
 
 type Server struct {
-	deps Deps
-	idem *idemStore
+	deps      Deps
+	processes system.ProcessSampler
+	idem      *idemStore
 }
 
 func NewServer(deps Deps) *Server {
@@ -40,19 +47,39 @@ func NewServer(deps Deps) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/meta/version", s.handleVersion)
+	mux.HandleFunc("GET /api/v1/skills", s.handleSkills)
+	mux.HandleFunc("GET /api/v1/skills/detail", s.handleSkills)
+	mux.HandleFunc("GET /api/v1/apps", s.handleApps)
+	mux.HandleFunc("POST /api/v1/apps/plan", s.handleAppPlan)
+	mux.HandleFunc("POST /api/v1/apps/opencode/uninstall", s.handleOpenCodeUninstall)
+	mux.HandleFunc("GET /api/v1/containers", s.handleContainers)
+	mux.HandleFunc("GET /api/v1/containers/detail", s.handleContainers)
+	mux.HandleFunc("GET /api/v1/containers/logs", s.handleContainers)
+	mux.HandleFunc("POST /api/v1/containers/action", s.handleContainerAction)
+	mux.HandleFunc("GET /api/v1/websites", s.handleWebsites)
+	mux.HandleFunc("GET /api/v1/websites/logs", s.handleWebsites)
+	mux.HandleFunc("POST /api/v1/websites/save", s.handleWebsiteSave)
 	mux.HandleFunc("GET /api/v1/system/identity", s.handleIdentity)
 	mux.HandleFunc("GET /api/v1/system/overview", s.handleOverview)
 	mux.HandleFunc("GET /api/v1/system/metrics", s.handleMetrics)
+	mux.HandleFunc("GET /api/v1/system/processes", s.handleProcesses)
 	mux.HandleFunc("POST /api/v1/system/power", s.handleSystemPower)
+	mux.HandleFunc("GET /api/v1/system/settings", s.handleSystemSettings)
+	mux.HandleFunc("POST /api/v1/system/settings", s.handleSettingsApply)
+	mux.HandleFunc("GET /api/v1/system/timezones", s.handleTimezones)
 	mux.HandleFunc("GET /api/v1/network", s.handleNetworkSnapshot)
 	mux.HandleFunc("POST /api/v1/network/apply", s.handleNetworkApply)
 	mux.HandleFunc("POST /api/v1/network/confirm", s.handleNetworkConfirm)
 	mux.HandleFunc("GET /api/v1/services", s.handleServices)
 	mux.HandleFunc("GET /api/v1/services/detail", s.handleServiceDetail)
 	mux.HandleFunc("GET /api/v1/journal", s.handleJournal)
+	mux.HandleFunc("GET /api/v1/trash", s.handleTrashList)
+	mux.HandleFunc("POST /api/v1/trash/restore", s.handleTrashRestore)
+	mux.HandleFunc("POST /api/v1/trash/delete", s.handleTrashDelete)
 	mux.HandleFunc("GET /api/v1/files/list", s.handleFilesList)
 	mux.HandleFunc("GET /api/v1/files/read", s.handleFilesRead)
 	mux.HandleFunc("PUT /api/v1/files/write", s.handleFilesWrite)
+	mux.HandleFunc("POST /api/v1/files/create", s.handleFilesCreate)
 	mux.HandleFunc("POST /api/v1/files/delete", s.handleFilesDelete)
 	mux.HandleFunc("POST /api/v1/files/write-privileged", s.handleFilesWritePrivileged)
 	mux.HandleFunc("POST /api/v1/services/action", s.handleServicesAction)

@@ -21,19 +21,25 @@ import (
 	"sync"
 	"time"
 
-	"lumio-os/server/internal/ipc"
-	"lumio-os/server/internal/network"
-	"lumio-os/server/internal/privfiles"
-	"lumio-os/server/internal/strictjson"
-	"lumio-os/server/internal/updates"
+	"lumo/server/internal/containers"
+	"lumo/server/internal/hostsettings"
+	"lumo/server/internal/ipc"
+	"lumo/server/internal/network"
+	"lumo/server/internal/privfiles"
+	"lumo/server/internal/strictjson"
+	"lumo/server/internal/updates"
+	"lumo/server/internal/websites"
 )
 
 const (
-	servicesManageActionID = "os.lumio.services.manage"
-	packagesApplyActionID  = "os.lumio.packages.apply"
-	filesWriteActionID     = "os.lumio.files.write-privileged"
-	networkApplyActionID   = "os.lumio.network.apply"
-	systemPowerActionID    = "os.lumio.system.power"
+	servicesManageActionID   = "os.lumo.services.manage"
+	packagesApplyActionID    = "os.lumo.packages.apply"
+	filesWriteActionID       = "os.lumo.files.write-privileged"
+	networkApplyActionID     = "os.lumo.network.apply"
+	systemPowerActionID      = "os.lumo.system.power"
+	systemSettingsActionID   = "os.lumo.system.settings"
+	containersManageActionID = "os.lumo.containers.manage"
+	websitesManageActionID   = "os.lumo.websites.manage"
 )
 
 var unitNamePattern = regexp.MustCompile(`^[a-zA-Z0-9@:._\-]+\.service$`)
@@ -48,6 +54,7 @@ var serviceActions = map[string]bool{
 }
 
 var updateActions = map[string]bool{
+	"apps.plan":          true,
 	"updates.refresh":    true,
 	"updates.plan":       true,
 	"packages.applyPlan": true,
@@ -71,15 +78,21 @@ type ActionRequest struct {
 	RequestID string `json:"requestId"`
 	Action    string `json:"action"`
 	Arguments struct {
-		Unit              string         `json:"unit"`
-		PlanID            string         `json:"planId"`
-		Path              string         `json:"path"`
-		ContentBase64     string         `json:"contentBase64"`
-		Mode              string         `json:"mode"`
-		RestartUnit       string         `json:"restartUnit"`
-		Config            network.Config `json:"config"`
-		ConfirmTimeoutSec int            `json:"confirmTimeoutSec"`
-		Token             string         `json:"token"`
+		Unit              string              `json:"unit"`
+		PlanID            string              `json:"planId"`
+		Path              string              `json:"path"`
+		ContentBase64     string              `json:"contentBase64"`
+		Mode              string              `json:"mode"`
+		RestartUnit       string              `json:"restartUnit"`
+		Config            network.Config      `json:"config"`
+		ConfirmTimeoutSec int                 `json:"confirmTimeoutSec"`
+		Token             string              `json:"token"`
+		Change            hostsettings.Change `json:"change"`
+		ContainerID       string              `json:"containerId"`
+		SiteID            string              `json:"siteId"`
+		AppID             string              `json:"appId"`
+		Operation         string              `json:"operation"`
+		Website           websites.Definition `json:"website"`
 	} `json:"arguments"`
 	Expected *struct {
 		ActiveState string `json:"activeState"`
@@ -117,16 +130,31 @@ type networkIface interface {
 	Confirm(ctx context.Context, token string) (network.Pending, error)
 }
 
+type settingsIface interface {
+	Apply(context.Context, hostsettings.Change, string) (hostsettings.Snapshot, error)
+}
+
+type containersIface interface {
+	Act(context.Context, string, string, string, uint32) (containers.Detail, error)
+}
+
+type websitesIface interface {
+	Apply(context.Context, string, websites.Definition, string, string) (websites.Result, error)
+}
+
 type Server struct {
-	cfg      Config
-	audit    *Audit
-	authz    Authorizer
-	sys      systemdIface
-	updates  *updates.Worker
-	files    *privfiles.Writer
-	power    powerIface
-	network  networkIface
-	sessiond *http.Client
+	cfg        Config
+	audit      *Audit
+	authz      Authorizer
+	sys        systemdIface
+	updates    *updates.Worker
+	files      *privfiles.Writer
+	power      powerIface
+	network    networkIface
+	settings   settingsIface
+	containers containersIface
+	websites   websitesIface
+	sessiond   *http.Client
 
 	unitLocks sync.Map
 }
@@ -148,21 +176,27 @@ func New(cfg Config) (*Server, error) {
 	if networkErr != nil {
 		log.Printf("broker: Netplan D-Bus unavailable: %v", networkErr)
 	}
+	settingsController, settingsErr := hostsettings.NewController()
+	if settingsErr != nil {
+		log.Printf("broker: system settings D-Bus unavailable: %v", settingsErr)
+	}
 	authz := cfg.Authorizer
 	if authz == nil {
 		authz = newPolkitAuthorizer()
 	}
 	rollbackDir := cfg.RollbackDir
 	if rollbackDir == "" {
-		rollbackDir = "/var/lib/lumio/rollback/files"
+		rollbackDir = "/var/lib/lumo/rollback/files"
 	}
 	s := &Server{
-		cfg:      cfg,
-		audit:    audit,
-		authz:    authz,
-		sessiond: ipc.HTTPClient(cfg.SessiondSocket),
-		updates:  updates.NewWorker(),
-		files:    privfiles.NewWriter(rollbackDir),
+		cfg:        cfg,
+		audit:      audit,
+		authz:      authz,
+		sessiond:   ipc.HTTPClient(cfg.SessiondSocket),
+		updates:    updates.NewWorker(),
+		files:      privfiles.NewWriter(rollbackDir),
+		containers: containers.NewClient(),
+		websites:   websites.NewStore(),
 	}
 	if sysErr == nil {
 		s.sys = sys
@@ -172,6 +206,9 @@ func New(cfg Config) (*Server, error) {
 	}
 	if networkErr == nil {
 		s.network = networkController
+	}
+	if settingsErr == nil {
+		s.settings = settingsController
 	}
 	return s, nil
 }
@@ -243,15 +280,35 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		s.writeErr(w, http.StatusServiceUnavailable, &apiError{Code: "unavailable", Message: "network configuration is unavailable"})
 		return
 	}
+	if req.Action == "system.settings" {
+		if s.settings == nil {
+			s.writeErr(w, http.StatusServiceUnavailable, &apiError{Code: "unavailable", Message: "System settings are unavailable on this host."})
+			return
+		}
+		unlock := s.lockUnit("system.settings")
+		defer unlock()
+	}
+	if containerAction(req.Action) || req.Action == "websites.save" {
+		if (containerAction(req.Action) && s.containers == nil) || (req.Action == "websites.save" && s.websites == nil) {
+			s.writeErr(w, http.StatusServiceUnavailable, &apiError{Code: "unavailable", Message: "This server integration is unavailable."})
+			return
+		}
+		key := "websites"
+		if containerAction(req.Action) {
+			key = "container:" + req.Arguments.ContainerID
+		}
+		unlock := s.lockUnit(key)
+		defer unlock()
+	}
 
 	if status, body, ok := s.audit.StoredResult(req.RequestID, uid); ok {
-		w.Header().Set("X-Lumio-Idempotent-Replay", "true")
-		s.writeRaw(w, status, body)
+		w.Header().Set("X-Lumo-Idempotent-Replay", "true")
+		s.writeRaw(w, status, json.RawMessage(body))
 		return
 	}
 	if req.Action == "packages.applyPlan" {
 		if progress, ok := s.updates.Progress(req.RequestID); ok {
-			w.Header().Set("X-Lumio-Idempotent-Replay", "true")
+			w.Header().Set("X-Lumo-Idempotent-Replay", "true")
 			s.writeData(w, map[string]any{"requestId": progress.RequestID, "planId": progress.PlanID})
 			return
 		}
@@ -284,6 +341,14 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	if networkActions[req.Action] {
 		s.handleNetworkAction(w, r, req, uid, userName, polkitResult)
+		return
+	}
+	if req.Action == "system.settings" {
+		s.handleSettingsAction(w, r, req, uid, userName, polkitResult)
+		return
+	}
+	if containerAction(req.Action) || req.Action == "websites.save" {
+		s.handleServerAppAction(w, r, req, uid, userName, polkitResult)
 		return
 	}
 	s.handlePrivilegedFileAction(w, r, req, uid, userName, polkitResult)
@@ -443,6 +508,10 @@ func (s *Server) handleServiceAction(w http.ResponseWriter, r *http.Request, req
 
 func (s *Server) handleUpdateAction(w http.ResponseWriter, r *http.Request, req ActionRequest, uid uint32, userName, polkitResult string) {
 	beginID := s.audit.Begin(req, uid, userName, polkitResult)
+	if beginID == 0 {
+		s.writeErr(w, http.StatusServiceUnavailable, &apiError{Code: "unavailable", Message: "The audit log is unavailable. No package operation was started."})
+		return
+	}
 	started := time.Now()
 	switch req.Action {
 	case "updates.refresh":
@@ -456,10 +525,20 @@ func (s *Server) handleUpdateAction(w http.ResponseWriter, r *http.Request, req 
 		data := map[string]any{"refreshedAt": result.RefreshedAt}
 		s.audit.End(beginID, req, uid, userName, polkitResult, "success", "", data, time.Since(started))
 		s.writeData(w, data)
-	case "updates.plan":
+	case "updates.plan", "apps.plan":
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 		defer cancel()
-		plan, err := s.updates.CalculatePlan(ctx)
+		var plan updates.Plan
+		var err error
+		if req.Action == "apps.plan" {
+			if req.Arguments.Operation == "uninstall" {
+				plan, err = s.updates.CalculateRemovalPlan(ctx, req.Arguments.AppID)
+			} else {
+				plan, err = s.updates.CalculateInstallPlan(ctx, req.Arguments.AppID)
+			}
+		} else {
+			plan, err = s.updates.CalculatePlan(ctx)
+		}
 		if err != nil {
 			s.writeUpdateError(w, beginID, req, uid, userName, polkitResult, started, err)
 			return
@@ -553,6 +632,18 @@ func (s *Server) authorize(ctx context.Context, uid, pid uint32, req ActionReque
 		actionID = networkApplyActionID
 		details = map[string]string{"action": req.Action}
 	}
+	if req.Action == "system.settings" {
+		actionID = systemSettingsActionID
+		details = map[string]string{"action": req.Action}
+	}
+	if containerAction(req.Action) {
+		actionID = containersManageActionID
+		details = map[string]string{"containerId": req.Arguments.ContainerID}
+	}
+	if req.Action == "websites.save" {
+		actionID = websitesManageActionID
+		details = map[string]string{"siteId": req.Arguments.SiteID}
+	}
 	result, err := s.authz.Check(ctx, uid, pid, actionID, details)
 	if err != nil {
 		log.Printf("broker: authz check failed: %v", err)
@@ -619,7 +710,7 @@ func (req *ActionRequest) validate() *apiError {
 	if req.RequestID == "" || len(req.RequestID) > 128 {
 		return &apiError{Code: "validation_failed", Message: "requestId is required."}
 	}
-	if !serviceActions[req.Action] && !updateActions[req.Action] && !fileActions[req.Action] && !powerActions[req.Action] && !networkActions[req.Action] {
+	if !serviceActions[req.Action] && !updateActions[req.Action] && !fileActions[req.Action] && !powerActions[req.Action] && !networkActions[req.Action] && req.Action != "system.settings" && !containerAction(req.Action) && req.Action != "websites.save" {
 		return &apiError{Code: "validation_failed", Message: "unknown action."}
 	}
 	if serviceActions[req.Action] && !unitNamePattern.MatchString(req.Arguments.Unit) {
@@ -639,6 +730,9 @@ func (req *ActionRequest) validate() *apiError {
 		if req.Expected == nil || req.Expected.PlanID != req.Arguments.PlanID {
 			return &apiError{Code: "validation_failed", Message: "expected planId must match arguments.planId."}
 		}
+	}
+	if req.Action == "apps.plan" && ((req.Arguments.AppID != "docker" && req.Arguments.AppID != "nginx") || (req.Arguments.Operation != "" && req.Arguments.Operation != "install" && req.Arguments.Operation != "uninstall")) {
+		return &apiError{Code: "validation_failed", Message: "Choose a supported application."}
 	}
 	if req.Action == "files.writePrivileged" {
 		if req.Arguments.Path == "" || !filepath.IsAbs(req.Arguments.Path) || filepath.Clean(req.Arguments.Path) != req.Arguments.Path || !strings.HasPrefix(req.Arguments.Path, "/etc/") {
@@ -674,6 +768,27 @@ func (req *ActionRequest) validate() *apiError {
 	}
 	if req.Action == "network.confirm" && !networkTokenPattern.MatchString(req.Arguments.Token) {
 		return &apiError{Code: "validation_failed", Message: "invalid network confirmation token."}
+	}
+	if req.Action == "system.settings" {
+		if req.Expected == nil || !hostsettings.ValidRevision(req.Expected.Revision) {
+			return &apiError{Code: "validation_failed", Message: "expected revision is required."}
+		}
+		if err := req.Arguments.Change.Validate(); err != nil {
+			return &apiError{Code: "validation_failed", Message: err.Error()}
+		}
+	}
+	if containerAction(req.Action) {
+		if req.Expected == nil || containers.Validate(req.Arguments.ContainerID, strings.TrimPrefix(req.Action, "containers."), req.Expected.Revision) != nil {
+			return &apiError{Code: "validation_failed", Message: "A container ID, supported action and current revision are required."}
+		}
+	}
+	if req.Action == "websites.save" {
+		if req.Expected == nil {
+			return &apiError{Code: "validation_failed", Message: "A website revision is required."}
+		}
+		if err := websites.Validate(req.Arguments.SiteID, req.Arguments.Website, req.Expected.Revision); err != nil {
+			return &apiError{Code: "validation_failed", Message: err.Error()}
+		}
 	}
 	return nil
 }

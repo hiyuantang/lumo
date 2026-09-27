@@ -14,12 +14,9 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
-	"lumio-os/server/internal/ipc"
+	"lumo/server/internal/ipc"
 )
-
-const agentStateTimeout = 3 * time.Second
 
 type agentProc struct {
 	socketPath string

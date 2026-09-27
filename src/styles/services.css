@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 .services {
   min-height: 0;
+  container-type: inline-size;
 }
 
 .services-count {
@@ -144,7 +145,7 @@
   font-size: 12.5px;
 }
 
-@media (max-width: 700px) {
+@container (max-width: 600px) {
   .services-body {
     flex-direction: column;
   }

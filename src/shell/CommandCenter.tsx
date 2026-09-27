@@ -74,10 +74,17 @@ export function CommandCenter() {
         id: `open-${appId}`,
         title: `Open ${meta.title}`,
         group: 'Applications',
-        keywords: `open launch ${meta.title} ${appId}`,
+        keywords: `open launch ${meta.title} ${appId} ${appId === 'containers' ? 'docker' : appId === 'websites' ? 'nginx' : appId === 'library' ? 'app store install' : ''}`,
         run: () => actions.openApp(appId),
       });
     }
+    list.push({
+      id: 'open-network-settings',
+      title: 'Open Network Settings',
+      group: 'Settings',
+      keywords: 'network interfaces ip addresses dns gateway ethernet',
+      run: () => actions.openSettings('network'),
+    });
     if (source.capabilities.canServiceActions) {
       for (const svc of services) {
         list.push({
@@ -92,21 +99,21 @@ export function CommandCenter() {
     list.push(
       {
         id: 'toggle-theme',
-        title: resolvedTheme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme',
+        title: resolvedTheme === 'dark' ? 'Light Theme' : 'Dark Theme',
         group: 'Shell',
         keywords: 'theme dark light appearance',
         run: actions.toggleTheme,
       },
       {
         id: 'toggle-motion',
-        title: reducedMotion ? 'Allow Full Motion' : 'Reduce Motion',
+        title: reducedMotion ? 'Full Motion' : 'Reduced Motion',
         group: 'Shell',
         keywords: 'motion animation reduce accessibility',
         run: actions.toggleMotion,
       },
       {
         id: 'show-shortcuts',
-        title: 'Show Keyboard Shortcuts',
+        title: 'Keyboard Shortcuts',
         group: 'Shell',
         keywords: 'keyboard shortcuts help keys',
         run: () => actions.setShortcutsOpen(true),
@@ -195,7 +202,7 @@ export function CommandCenter() {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type a command or search…"
+            placeholder="Search…"
             aria-label="Search actions"
             role="combobox"
             aria-expanded="true"

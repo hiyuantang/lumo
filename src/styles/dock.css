@@ -15,19 +15,45 @@
   display: flex;
   align-items: flex-end;
   gap: 14px;
+  max-width: calc(100vw - 24px);
   padding: 9px 16px 5px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid transparent;
   border-radius: 26px;
-  box-shadow: var(--shadow-dock);
   pointer-events: auto;
 }
 
-.dock-tray::before {
-  content: '';
+.dock-apps, .dock-windows {
+  display: flex;
+  align-items: flex-end;
+  gap: inherit;
+  position: relative;
+}
+
+.dock-apps { flex-shrink: 0; }
+.dock-windows {
+  min-width: 0;
+  max-width: 286px;
+  padding-top: 8px;
+  margin-top: -8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dock-windows::-webkit-scrollbar { display: none; }
+.dock-window { flex-shrink: 0; }
+.dock-divider {
+  position: relative;
+  align-self: stretch;
+  flex: 0 0 1px;
+  margin: 11px 0 16px;
+  background: var(--glass-border);
+}
+
+.dock-surface {
   position: absolute;
-  inset: 0;
+  inset: -1px;
+  border: 1px solid var(--glass-border);
   border-radius: inherit;
-  clip-path: inset(0 round 26px);
+  box-shadow: var(--shadow-dock);
   background: var(--surface-chrome);
   backdrop-filter: blur(28px) saturate(1.4);
   -webkit-backdrop-filter: blur(28px) saturate(1.4);
@@ -43,6 +69,8 @@
   padding: 4px;
   border-radius: 14px;
 }
+
+.dock-app, .dock-divider { transform-origin: top left; }
 
 .dock-icon {
   display: grid;
@@ -72,7 +100,6 @@
   transform: translateY(-2px) scale(0.97);
 }
 
-.dock-app[data-app='services'] .dock-icon,
 .dock-app[data-app='updates'] .dock-icon {
   background: linear-gradient(145deg, #efb841, #c8851d);
 }
@@ -89,14 +116,14 @@
   background: linear-gradient(145deg, #56636c, #26343c);
 }
 
-.dock-app[data-app='logs'] .dock-icon {
-  background: linear-gradient(145deg, #fffdf6, #e6d8ba);
-  color: #536772;
-}
 
 .dock-app[data-app='settings'] .dock-icon {
   background: linear-gradient(145deg, #c5cdd0, #7e8d96);
 }
+
+.dock-app[data-app='containers'] .dock-icon { background: linear-gradient(145deg,#62a9d4,#327491); }
+.dock-app[data-app='websites'] .dock-icon { background: linear-gradient(145deg,#82b899,#387467); }
+.dock-app[data-app='library'] .dock-icon { background: linear-gradient(145deg,#928dcc,#5c588e); }
 
 .dock-dot {
   width: 5px;
@@ -117,25 +144,49 @@
   border-color: var(--accent);
 }
 
-.dock-dot.on.minimized {
-  background: transparent;
+.dock-icon.dock-window-preview {
+  position: relative;
+  width: 78px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
-
-.dock-minimized-badge {
+.dock-window-canvas {
   position: absolute;
-  right: 0;
-  bottom: 12px;
+  inset: 0 5px 5px 0;
   display: grid;
   place-items: center;
-  width: 21px;
-  height: 18px;
-  border: 1px solid var(--glass-border);
-  border-radius: 5px;
-  background: var(--surface-raised);
-  color: var(--text);
-  box-shadow: 0 2px 5px rgba(12, 36, 42, 0.2);
   pointer-events: none;
 }
+.dock-window-snapshot {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 3px;
+  box-shadow: 0 2px 5px #0005, 0 0 0 1px var(--glass-border);
+  pointer-events: none;
+  animation: dock-snapshot-arrive 420ms var(--ease-out) both;
+}
+.dock-window-badge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border: 1px solid var(--glass-border);
+  border-radius: 7px;
+  background: linear-gradient(155deg, #3ba2a5, #05747d);
+  color: white;
+  box-shadow: 0 1px 3px #0004;
+}
+@keyframes dock-snapshot-arrive {
+  0%, 65% { opacity: 0; }
+  100% { opacity: 1; }
+}
+.motion-reduced .dock-window-snapshot { animation: none; }
 
 .dock-label {
   position: absolute;
@@ -160,13 +211,14 @@
   transform: none;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 850px) {
   .dock {
     bottom: 8px;
   }
 
   .dock-tray {
     max-width: calc(100vw - 16px);
+    min-height: calc(clamp(20px, calc((100vw - 32px) / var(--dock-app-count) - 7px), 38px) + 27px);
     gap: 1px;
     padding: 6px 5px 3px;
     border-radius: 20px;
@@ -176,18 +228,28 @@
     padding: 3px;
   }
 
-  .dock-tray::before {
-    clip-path: inset(0 round 20px);
-  }
-
   .dock-icon {
-    width: clamp(29px, 8vw, 38px);
-    height: clamp(29px, 8vw, 38px);
+    width: clamp(20px, calc((100vw - 40px) / var(--dock-count) - 7px), 38px);
+    height: clamp(20px, calc((100vw - 40px) / var(--dock-count) - 7px), 38px);
     border-radius: 11px;
   }
 
+  .dock-divider { margin: 9px 3px 14px; }
+  .dock-windows { max-width: 132px; }
+  .dock-icon.dock-window-preview { width: clamp(30px, calc((100vw - 40px) / var(--dock-count) - 7px), 54px); }
+  .dock-window-badge { width: 16px; height: 16px; border-radius: 5px; }
   .dock-icon svg {
-    width: 24px;
-    height: 24px;
+    width: 75%;
+    height: 75%;
   }
 }
+
+.dock-app[data-reorder-dragging] { z-index: 5; filter: drop-shadow(0 3px 5px #0003); }
+
+.dock-app[data-app='opencode'] .dock-icon { background: linear-gradient(145deg, #7270ad, #393854); }
+
+.dock-app[data-app='trash'] .dock-icon { background: linear-gradient(145deg,#91a7ad,#53686f); }
+
+.dock-app[data-app='skills'] .dock-icon { background: linear-gradient(145deg, #c69b64, #8c6844); }
+
+.dock-app { touch-action: none; user-select: none; }

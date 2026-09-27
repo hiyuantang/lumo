@@ -100,7 +100,7 @@ func Write(p string, content []byte, expectedRevision string) (WriteResult, erro
 		}
 	}
 
-	tmp, err := os.CreateTemp(realDir, ".lumio-write-*")
+	tmp, err := os.CreateTemp(realDir, ".lumo-write-*")
 	if err != nil {
 		return WriteResult{}, err
 	}

@@ -6,7 +6,7 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"lumio-os/server/internal/ipc"
+	"lumo/server/internal/ipc"
 )
 
 type Result int

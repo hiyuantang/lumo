@@ -44,12 +44,6 @@
   will-change: transform, opacity;
 }
 
-.window.maximized {
-  border-radius: 0;
-  border-left: none;
-  border-right: none;
-}
-
 .window.dragging .window-titlebar {
   cursor: grabbing;
 }
@@ -81,11 +75,11 @@
 
 .window-titlebar {
   position: relative;
-  flex: 0 0 50px;
+  flex: 0 0 36px;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0 var(--space-5);
+  padding: 0 var(--space-3);
   background: var(--surface-chrome);
   backdrop-filter: blur(28px) saturate(1.2);
   -webkit-backdrop-filter: blur(28px) saturate(1.2);
@@ -244,9 +238,8 @@
   top: var(--menubar-h) !important;
   width: 100% !important;
   height: calc(100% - var(--menubar-h) - var(--dock-space)) !important;
-  border-radius: 0;
-  border: none;
-  border-top: 1px solid var(--border);
+  border-radius: var(--radius-window);
+  border: 1px solid var(--border);
 }
 
 .narrow .window:not(.focused):not(.minimizing) {

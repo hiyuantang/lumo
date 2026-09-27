@@ -1,19 +1,19 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# lumiod — Lumio OS Phase 5 server stack
+# lumod — Lumo Phase 5 server stack
 
-`lumiod` is a single Go binary implementing the Lumio OS server stack from
+`lumod` is a single Go binary implementing the Lumo server stack from
 [../docs/PROTOCOL.md](../docs/PROTOCOL.md). It uses the documented
 multi-process architecture via subcommands:
 
 ```
-lumiod gateway    HTTP/WS + auth + CSRF, unprivileged user (lumio-gw)
-lumiod sessiond   root: PAM login, session store, spawns per-user agents
-lumiod agent      the logged-in user: metrics, services, journal, files, PTY
-lumiod broker     root: typed privileged actions (polkit + audit)
-lumiod version    JSON build information, including PAM and embedded UI support
+lumod gateway    HTTP/WS + auth + CSRF, unprivileged user (lumo-gw)
+lumod sessiond   root: PAM login, session store, spawns per-user agents
+lumod agent      the logged-in user: metrics, services, journal, files, PTY
+lumod broker     root: typed privileged actions (polkit + audit)
+lumod version    JSON build information, including PAM and embedded UI support
 ```
 
-Processes talk over Unix sockets under `/run/lumio` (see
+Processes talk over Unix sockets under `/run/lumo` (see
 [../docs/PRIVILEGE_MODEL.md](../docs/PRIVILEGE_MODEL.md) §As built).
 There is no legacy unauthenticated single-process subcommand. Internal
 packages follow the same boundaries (`httpapi`, `wsapi`, `system`,
@@ -35,7 +35,7 @@ Build the binary:
 
 ```sh
 cd server
-go build -o lumiod ./cmd/lumiod
+go build -o lumod ./cmd/lumod
 ```
 
 Full multi-process dev stack with dev auth (login as your macOS user
@@ -43,9 +43,9 @@ with any password; loud startup warning; **never** for production and
 never settable via config file or environment in packaged units):
 
 ```sh
-./lumiod sessiond -run-dir /tmp/lumio -insecure-dev-auth "$USER" &
-./lumiod broker -run-dir /tmp/lumio -db /tmp/lumio/audit.db &
-./lumiod gateway -run-dir /tmp/lumio -addr 127.0.0.1:8080
+./lumod sessiond -run-dir /tmp/lumo -insecure-dev-auth "$USER" &
+./lumod broker -run-dir /tmp/lumo -db /tmp/lumo/audit.db &
+./lumod gateway -run-dir /tmp/lumo -addr 127.0.0.1:8080
 ```
 
 systemd/journal/polkit do not exist on macOS: services, journal and
@@ -57,23 +57,27 @@ and PTYs work.
 Use `sudo bash scripts/install.sh` from the repository root for account
 creation, a random port, HTTPS, polkit configuration and startup services.
 See [VPS installation](../docs/INSTALL.md) for its verification status and
-setup options. Running `lumiod` without a subcommand prints usage and exits.
+setup options. Running `lumod` without a subcommand prints usage and exits.
+
+`sudo lumo uninstall` removes the installed stack while preserving Linux
+accounts, personal files and recovery records. `--purge` additionally removes
+Lumo audit logs and rollback backups; `--dry-run` previews either mode.
 
 For a manually managed stack restricted to an SSH tunnel:
 
 ```sh
-lumiod broker &     # root
-lumiod sessiond &   # root
-lumiod gateway &    # user lumio-gw, -addr 127.0.0.1:8080
+lumod broker &     # root
+lumod sessiond &   # root
+lumod gateway &    # user lumo-gw, -addr 127.0.0.1:8080
 ```
 
-PAM service file `/etc/pam.d/lumiod` (see `docker/pam.d-lumiod`),
-polkit action file `/usr/share/polkit-1/actions/os.lumio.policy`
-(see `docker/os.lumio.policy`). Reach this loopback gateway through an SSH
+PAM service file `/etc/pam.d/lumod` (see `docker/pam.d-lumod`),
+polkit action file `/usr/share/polkit-1/actions/os.lumo.policy`
+(see `docker/os.lumo.policy`). Reach this loopback gateway through an SSH
 tunnel. A public listener requires `-tls-cert /path/to/fullchain.pem` and
 `-tls-key /path/to/key.pem`; `SIGHUP` reloads the pair and retains the working
-certificate if loading fails. The installer applies `deploy/os.lumio.rules`
-and restricts PAM login to the `lumio-users` group.
+certificate if loading fails. The installer applies `deploy/os.lumo.rules`
+and restricts PAM login to the `lumo-users` group.
 
 ## Build with the embedded frontend
 
@@ -81,7 +85,7 @@ and restricts PAM login to the `lumio-users` group.
 scripts/build-with-web.sh   # npm build -> copy dist -> go build -tags webdist
 ```
 
-produces `server/bin/lumiod` with `dist/` embedded via `go:embed`
+produces `server/bin/lumod` with `dist/` embedded via `go:embed`
 (`internal/static`).
 
 ## Integration test (Docker, the real gate)
@@ -137,13 +141,13 @@ rather than 404, per PROTOCOL.md's capability table.
 
 ### Container binding
 
-`docker/lumiod-gateway.service` explicitly uses `-insecure-http` and binds
+`docker/lumod-gateway.service` explicitly uses `-insecure-http` and binds
 0.0.0.0:8080 so the Docker port forward used by the isolated integration
 test can reach the gateway. Production units never use that flag. The default
 remains `127.0.0.1:8080` everywhere else. The container runs the full
-Phase 5 process set (gateway as `lumio-gw`, sessiond and broker as root)
+Phase 5 process set (gateway as `lumo-gw`, sessiond and broker as root)
 with a test user `alice` and a testbed-only polkit rules file
-(`docker/os.lumio-testbed.rules`) that makes authorization deterministic:
+(`docker/os.lumo-testbed.rules`) that makes authorization deterministic:
 `alice` may manage services, `ssh.service` requires `auth_admin` (the
 reauth path), and `nginx.service` is denied outright (the audit-denial
 path). A production host must not ship that rules file.
@@ -161,7 +165,7 @@ path). A production host must not ship that rules file.
   detail key so `.rules` can match per-unit without multiplying action
   ids (the testbed rules use this).
 - **Audit.** SQLite via `modernc.org/sqlite` (pure Go) at
-  `/var/lib/lumio/audit.db`, WAL mode. Kinds: `begin`/`end` pairs, and
+  `/var/lib/lumo/audit.db`, WAL mode. Kinds: `begin`/`end` pairs, and
   `deny` for polkit denials and unmet reauth demands. Precondition
   conflicts write no rows (documented pipeline order). Idempotent
   replays are served from the audit table itself, so dedup survives
@@ -222,9 +226,8 @@ log will persist it.
 ## Layout
 
 ```
-cmd/lumiod/      subcommand dispatch: gateway | sessiond | agent | broker | version
+cmd/lumod/      subcommand dispatch: gateway | sessiond | agent | broker | version
 cmd/wscheck/     WS assertion client used by the integration test
-internal/config/ unused legacy flag parsing
 internal/auth/   PAM behind the `pam` build tag + nopam fallback
 internal/ipc/    unix-socket HTTP helpers, SO_PEERCRED, /proc start times
 internal/gateway/ cookies, CSRF, login rate limiting, REST proxy, WS splice

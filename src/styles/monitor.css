@@ -1,0 +1,31 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.monitor { flex-direction: row; min-width: 0; container-type: inline-size; }
+.monitor-sidebar { flex: 0 0 160px; padding: 14px 10px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; overflow-y: auto; }
+.monitor-sidebar button { display: flex; align-items: center; gap: 10px; text-align: left; padding: 12px; border-radius: var(--radius-m); font-size: 13px; color: var(--text-muted); transition: background 160ms, color 160ms; }
+.monitor-sidebar button:hover { background: var(--surface-raised); }
+.monitor-sidebar button.active { color: var(--accent); background: var(--accent-soft); }
+.monitor-sidebar svg { flex-shrink: 0; }
+.monitor-content { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+.monitor-content > .app { min-width: 0; }
+.monitor-process-scroll { overflow: auto; flex: 1; min-height: 0; }
+.monitor-processes { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 12px; }
+.monitor-processes th { position: sticky; top: 0; background: var(--surface-raised); color: var(--text-muted); text-align: left; }
+.monitor-processes th, .monitor-processes td { padding: 12px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.monitor-processes th button { font-weight: 600; }
+.monitor-processes td:first-child { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.monitor-processes tr:hover { background: var(--accent-soft); }
+.monitor-note { margin: 0; padding: 12px 16px; color: var(--text-muted); font-size: 11px; border-top: 1px solid var(--border); }
+.monitor-error { color: var(--danger); padding: 12px 16px; }
+.monitor-core-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); gap: 12px; }
+.monitor-core { padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface); }
+.monitor-core header { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 12px; }
+.monitor-detail { display: flex; flex-direction: column; gap: 16px; }
+.monitor-detail h2 { margin: 0; font-size: 20px; }
+.monitor-detail > .home-card { flex-shrink: 0; }
+.monitor-network { display: flex; flex-wrap: wrap; gap: 24px; }
+@container (max-width: 680px) {
+  .monitor-sidebar { flex-basis: 60px; padding: 10px 5px; }
+  .monitor-sidebar span { display: none; }
+  .monitor-sidebar button { justify-content: center; padding: 13px 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .monitor-sidebar button { transition: none; } }

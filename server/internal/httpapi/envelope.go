@@ -11,10 +11,10 @@ import (
 	"os"
 	"syscall"
 
-	"lumio-os/server/internal/files"
-	"lumio-os/server/internal/journal"
-	"lumio-os/server/internal/services"
-	"lumio-os/server/internal/terminal"
+	"lumo/server/internal/files"
+	"lumo/server/internal/journal"
+	"lumo/server/internal/services"
+	"lumo/server/internal/terminal"
 )
 
 const (
@@ -112,6 +112,8 @@ func MapError(err error) *Error {
 			errors.Is(err, syscall.EPERM),
 			errors.Is(err, syscall.EBUSY):
 			return &Error{Code: CodeForbidden, Message: "Permission denied.", Details: details}
+		case errors.Is(err, fs.ErrExist):
+			return &Error{Code: CodeConflict, Message: "A file or folder with this name already exists.", Details: details}
 		case errors.Is(err, fs.ErrNotExist):
 			return &Error{Code: CodeNotFound, Message: "The path does not exist.", Details: details}
 		}

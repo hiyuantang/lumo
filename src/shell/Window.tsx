@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useContextMenu, windowContextActions } from './ContextMenu';
 import { APP_COMPONENTS } from '../apps';
+import { WindowContext, windowTitle } from './WindowContext';
 import { APPS } from '../apps/registry';
 import { IconMinus, IconX, IconZoom } from './icons';
 import { useShell, type WindowState } from './ShellContext';
+import { useWindowPlacement } from './useWindowPlacement';
 import { useWindowMinimize } from './useWindowMinimize';
 import { clampRect, COMPACT_WIDTH, resizeRect, snapRect, snapTargetAt, type ResizeDirection, type SnapTarget } from './windowGeometry';
 import '../styles/window.css';
@@ -12,12 +15,14 @@ const RESIZE_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
 const SNAP_LABELS: Record<SnapTarget, string> = { left: 'Tile left', right: 'Tile right', maximize: 'Maximize' };
 
 export function Window({ win }: { win: WindowState }) {
+  const openContextMenu = useContextMenu();
   const { state, actions, reducedMotion } = useShell();
   const meta = APPS[win.appId];
   const Body = APP_COMPONENTS[win.appId];
-  const focused = state.focused === win.appId;
+  const focused = state.focused === win.id;
   const minimize = useWindowMinimize(win, state.viewport, reducedMotion);
   const [interacting, setInteracting] = useState<'drag' | 'resize' | null>(null);
+  useWindowPlacement(minimize.ref, win, interacting !== null, reducedMotion);
   const [snapTarget, setSnapTarget] = useState<SnapTarget | null>(null);
   const gestureCleanup = useRef<(() => void) | null>(null);
 
@@ -103,7 +108,7 @@ export function Window({ win }: { win: WindowState }) {
     const placed = win.maximized || Boolean(win.snapped);
     const floating = clampRect(placed ? (win.restore ?? { ...win, ...meta.defaultSize }) : win, state.viewport);
     const offsetX = placed ? ((startX - win.x) / win.w) * floating.w : startX - win.x;
-    const offsetY = Math.min(startY - win.y, 49);
+    const offsetY = Math.min(startY - win.y, e.currentTarget.clientHeight - 1);
     let moved = false;
     let target: SnapTarget | null = null;
     trackPointer(e, {
@@ -113,15 +118,15 @@ export function Window({ win }: { win: WindowState }) {
           moved = true;
           setInteracting('drag');
         }
-        actions.updateRect(win.appId, { ...floating, x: event.clientX - offsetX, y: event.clientY - offsetY });
+        actions.updateRect(win.id, { ...floating, x: event.clientX - offsetX, y: event.clientY - offsetY });
         target = snapTargetAt(event.clientX, event.clientY, state.viewport, meta.minSize);
         setSnapTarget(target);
       },
       finish: () => {
-        if (moved && target) actions.snapWindow(win.appId, target, floating);
+        if (moved && target) actions.snapWindow(win.id, target, floating);
       },
       cancel: () => {
-        if (moved) actions.cancelWindowGesture(win.appId, win);
+        if (moved) actions.cancelWindowGesture(win.id, win);
       },
     });
   }
@@ -141,10 +146,10 @@ export function Window({ win }: { win: WindowState }) {
           moved = true;
           setInteracting('resize');
         }
-        actions.updateRect(win.appId, resizeRect(win, direction, dx, dy, meta.minSize, state.viewport));
+        actions.updateRect(win.id, resizeRect(win, direction, dx, dy, meta.minSize, state.viewport));
       },
       cancel: () => {
-        if (moved) actions.cancelWindowGesture(win.appId, win);
+        if (moved) actions.cancelWindowGesture(win.id, win);
       },
     });
   }
@@ -181,62 +186,63 @@ export function Window({ win }: { win: WindowState }) {
         className={className}
         role="dialog"
         tabIndex={-1}
-        aria-label={meta.title}
-        data-testid={`window-${win.appId}`}
+        aria-label={windowTitle(win)}
+        data-testid={`window-${win.id}`} data-window-id={win.id} data-app-id={win.appId}
         data-window-placement={win.maximized ? 'maximized' : (win.snapped ?? 'floating')}
         data-window-visibility={minimize.phase}
         hidden={minimize.hidden}
         style={{ left: win.x, top: win.y, width: win.w, height: win.h, zIndex: win.z }}
         onFocusCapture={minimize.rememberFocus}
         onPointerDownCapture={() => {
-          if (!focused) actions.focusApp(win.appId);
+          if (!focused) actions.focusApp(win.id);
         }}
       >
         <header
           className="window-titlebar"
-          data-testid={`window-titlebar-${win.appId}`}
+          data-testid={`window-titlebar-${win.id}`}
+          onContextMenu={(event) => openContextMenu(event, windowContextActions(win, state.viewport, actions))}
           onPointerDown={onTitlePointerDown}
           onDoubleClick={(e) => {
-            if (state.viewport.w > COMPACT_WIDTH && !(e.target as HTMLElement).closest('.window-controls')) actions.toggleMaximize(win.appId);
+            if (state.viewport.w > COMPACT_WIDTH && !(e.target as HTMLElement).closest('.window-controls')) actions.toggleMaximize(win.id);
           }}
         >
           <div className="window-controls">
             <button
               type="button"
               className="wc wc-close"
-              data-testid={`window-close-${win.appId}`}
+              data-testid={`window-close-${win.id}`}
               aria-label={`Close ${meta.title}`}
               title="Close"
-              onClick={() => actions.closeApp(win.appId)}
+              onClick={() => actions.closeApp(win.id)}
             >
               <IconX size={10} />
             </button>
-            <button type="button" className="wc wc-min" data-testid={`window-minimize-${win.appId}`} aria-label={`Minimize ${meta.title}`} title="Minimize to Dock" onClick={() => actions.minimizeApp(win.appId)}>
+            <button type="button" className="wc wc-min" data-testid={`window-minimize-${win.id}`} aria-label={`Minimize ${meta.title}`} title="Minimize to Dock" onClick={() => actions.minimizeApp(win.id)}>
               <IconMinus size={10} />
             </button>
             <button
               type="button"
               className="wc wc-zoom"
-              data-testid={`window-maximize-${win.appId}`}
+              data-testid={`window-maximize-${win.id}`}
               aria-label={win.maximized ? `Restore ${meta.title}` : `Maximize ${meta.title}`}
               title={win.maximized ? 'Restore' : 'Maximize'}
               disabled={state.viewport.w <= COMPACT_WIDTH}
-              onClick={() => actions.toggleMaximize(win.appId)}
+              onClick={() => actions.toggleMaximize(win.id)}
             >
               <IconZoom size={10} />
             </button>
           </div>
           <span className="window-title">
             <Icon size={13} />
-            {meta.title}
+            {windowTitle(win)}
           </span>
         </header>
         <div className="window-body">
-          <Body />
+          <WindowContext.Provider value={win}><Body /></WindowContext.Provider>
         </div>
         {!win.maximized &&
           RESIZE_DIRS.map((dir) => (
-            <div key={dir} className={`resize-handle rh-${dir}`} data-testid={`window-resize-${win.appId}-${dir}`} aria-hidden="true" onPointerDown={(e) => onResizePointerDown(e, dir)} />
+            <div key={dir} className={`resize-handle rh-${dir}`} data-testid={`window-resize-${win.id}-${dir}`} aria-hidden="true" onPointerDown={(e) => onResizePointerDown(e, dir)} />
           ))}
       </section>
     </>

@@ -1,55 +1,35 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { getDataSource, type LoadSample } from '../api/source';
+import { useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { APPS } from '../apps/registry';
-import { IconBell, IconChip, IconNetwork, IconUser } from './icons';
-import { MENUBAR_H, useNow, useShell } from './ShellContext';
-import { canSnap, COMPACT_WIDTH } from './windowGeometry';
+import { useNow, useShell } from './ShellContext';
+import { canSnap, COMPACT_WIDTH, MENUBAR_H } from './windowGeometry';
 import '../styles/menubar.css';
 
-type MenuId = 'file' | 'view' | 'user';
+type MenuId = 'file' | 'view';
 
 interface MenuItemDef {
   id: string;
   label: string;
   hint?: string;
   disabled?: boolean;
-  danger?: boolean;
   separatorAbove?: boolean;
   run: () => void;
 }
 
 export function MenuBar() {
   const { state, actions, resolvedTheme, reducedMotion } = useShell();
-  const source = getDataSource();
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
-  const [load, setLoad] = useState<LoadSample>(() => source.sampleLoad());
-  const [hostname, setHostname] = useState<string | null>(null);
   const now = useNow(1000);
-  const barRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLElement>(null);
 
-  useEffect(() => source.subscribeMetrics(setLoad), [source]);
-
-  useEffect(() => {
-    let alive = true;
-    source
-      .getIdentity()
-      .then((identity) => {
-        if (alive) setHostname(identity.hostname);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [source]);
-
-  const focusedTitle = state.focused ? APPS[state.focused].title : null;
   const focusedWindow = state.focused ? state.windows[state.focused] : null;
 
   const menus: Record<MenuId, { label: string; items: MenuItemDef[] }> = {
     file: {
       label: 'File',
       items: [
+        ...(focusedWindow?.appId === 'opencode' ? [{ id: 'new-opencode', label: 'New Window', run: actions.newOpenCodeWindow }] : []),
+        ...(focusedWindow?.appId === 'preview' ? [{ id: 'new-preview', label: 'New Window', run: actions.newPreviewWindow }] : []),
         {
           id: 'command-center',
           label: 'Command Center',
@@ -70,12 +50,12 @@ export function MenuBar() {
       items: [
         {
           id: 'toggle-theme',
-          label: resolvedTheme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme',
+          label: resolvedTheme === 'dark' ? 'Light Theme' : 'Dark Theme',
           run: actions.toggleTheme,
         },
         {
           id: 'toggle-motion',
-          label: reducedMotion ? 'Allow Full Motion' : 'Reduce Motion',
+          label: reducedMotion ? 'Full Motion' : 'Reduced Motion',
           run: actions.toggleMotion,
         },
         {
@@ -88,55 +68,29 @@ export function MenuBar() {
           label: 'Maximize Window',
           separatorAbove: true,
           disabled: !focusedWindow || focusedWindow.maximized || state.viewport.w <= COMPACT_WIDTH,
-          run: () => focusedWindow && actions.toggleMaximize(focusedWindow.appId),
+          run: () => focusedWindow && actions.toggleMaximize(focusedWindow.id),
         },
         {
           id: 'restore-window',
           label: 'Restore Window',
           disabled: !focusedWindow || (!focusedWindow.maximized && !focusedWindow.snapped) || state.viewport.w <= COMPACT_WIDTH,
-          run: () => focusedWindow && actions.updateRect(focusedWindow.appId, focusedWindow.restore ?? focusedWindow),
+          run: () => focusedWindow && actions.updateRect(focusedWindow.id, focusedWindow.restore ?? focusedWindow),
         },
         {
           id: 'tile-left',
           label: 'Tile Window Left',
           disabled: !focusedWindow || !canSnap('left', state.viewport, APPS[focusedWindow.appId].minSize),
-          run: () => focusedWindow && actions.snapWindow(focusedWindow.appId, 'left'),
+          run: () => focusedWindow && actions.snapWindow(focusedWindow.id, 'left'),
         },
         {
           id: 'tile-right',
           label: 'Tile Window Right',
           disabled: !focusedWindow || !canSnap('right', state.viewport, APPS[focusedWindow.appId].minSize),
-          run: () => focusedWindow && actions.snapWindow(focusedWindow.appId, 'right'),
+          run: () => focusedWindow && actions.snapWindow(focusedWindow.id, 'right'),
         },
       ],
     },
-    user: {
-      label: state.user ?? 'user',
-      items: [
-        {
-          id: 'user-shortcuts',
-          label: 'Keyboard Shortcuts',
-          run: () => actions.setShortcutsOpen(true),
-        },
-        {
-          id: 'user-theme',
-          label: resolvedTheme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme',
-          run: actions.toggleTheme,
-        },
-        {
-          id: 'user-motion',
-          label: reducedMotion ? 'Allow Full Motion' : 'Reduce Motion',
-          run: actions.toggleMotion,
-        },
-        {
-          id: 'logout',
-          label: 'Log Out',
-          danger: true,
-          separatorAbove: true,
-          run: actions.logout,
-        },
-      ],
-    },
+
   };
 
   function focusTopButton(menuId: MenuId) {
@@ -145,7 +99,7 @@ export function MenuBar() {
   }
 
   function siblingMenu(menuId: MenuId, dir: 1 | -1): MenuId {
-    const order: MenuId[] = ['file', 'view', 'user'];
+    const order: MenuId[] = ['file', 'view'];
     const idx = order.indexOf(menuId);
     return order[(idx + dir + order.length) % order.length];
   }
@@ -213,7 +167,6 @@ export function MenuBar() {
             if (openMenu && openMenu !== menuId) setOpenMenu(menuId);
           }}
         >
-          {menuId === 'user' && <IconUser size={14} />}
           {menu.label}
         </button>
         {isOpen && (
@@ -224,8 +177,7 @@ export function MenuBar() {
                 type="button"
                 role="menuitem"
                 data-menu-item
-                data-testid={item.id === 'logout' ? 'logout-button' : undefined}
-                className={`menubar-item${item.danger ? ' danger' : ''}${item.separatorAbove ? ' separator-above' : ''}`}
+                className={`menubar-item${item.separatorAbove ? ' separator-above' : ''}`}
                 disabled={item.disabled}
                 onClick={() => {
                   setOpenMenu(null);
@@ -243,48 +195,34 @@ export function MenuBar() {
   }
 
   return (
-    <header className="menubar" data-testid="menu-bar" style={{ height: MENUBAR_H }}>
+    <header ref={barRef} className="menubar" data-testid="menu-bar" style={{ height: MENUBAR_H }}>
       {openMenu && <div className="menubar-backdrop" onClick={() => setOpenMenu(null)} />}
       <div className="menubar-left">
-        <span className="menubar-brand">Lumio OS</span>
-        {hostname && <span className="menubar-host">{hostname}</span>}
+        <span className="menubar-brand">Lumo</span>
         <nav className="menubar-menus" role="menubar" aria-label="Application menus">
           {renderMenu('file')}
           {renderMenu('view')}
         </nav>
-        {focusedTitle && <span className="menubar-focused">{focusedTitle}</span>}
       </div>
       <div className="menubar-right">
-        <span className="menubar-indicator" title={source.capabilities.isLive ? 'CPU load' : 'CPU load (mock)'}>
-          <IconChip size={13} />
-          {load.cpuPercent}%
-        </span>
-        <span className="menubar-indicator" title={source.capabilities.isLive ? 'Network throughput' : 'Network throughput (mock)'}>
-          <IconNetwork size={13} />
-          {load.netDownKbps >= 1024 ? `${(load.netDownKbps / 1024).toFixed(1)} MB/s` : `${load.netDownKbps} KB/s`}
-        </span>
-        <time className="menubar-clock" dateTime={new Date(now).toISOString()}>
-          {new Date(now).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
-          {new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </time>
         <button
           type="button"
-          className="menubar-icon-button"
+          className="menubar-button menubar-clock"
           data-testid="notifications-button"
           aria-label={state.unread > 0 ? `Notifications, ${state.unread} unread` : 'Notifications'}
           aria-expanded={state.notifOpen}
           onClick={() => actions.setNotifOpen(!state.notifOpen)}
         >
-          <IconBell size={15} />
+<time dateTime={new Date(now).toISOString()}>
+          {new Date(now).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+          {new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </time>
           {state.unread > 0 && (
-            <span className="menubar-badge" data-testid="notifications-badge">
+            <span className="menubar-badge" aria-hidden="true" data-testid="notifications-badge">
               {state.unread}
             </span>
           )}
         </button>
-        <nav className="menubar-menus" role="menubar" aria-label="User menu">
-          {renderMenu('user')}
-        </nav>
       </div>
     </header>
   );

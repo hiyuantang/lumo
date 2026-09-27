@@ -17,16 +17,6 @@ export interface WireError {
   details: Record<string, unknown>;
 }
 
-export interface SuccessEnvelope<T> {
-  ok: true;
-  data: T;
-}
-
-export interface ErrorEnvelope {
-  ok: false;
-  error: WireError;
-}
-
 export interface WireIdentity {
   hostname: string;
   os: {
@@ -65,6 +55,7 @@ export interface WireMetricsSample {
     load5: number;
     load15: number;
     cores: number;
+    perCore?: { id: number; usagePercent: number | null }[];
   };
   memory: {
     totalBytes: number;

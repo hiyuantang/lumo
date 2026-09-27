@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	"lumio-os/server/internal/httpapi"
-	"lumio-os/server/internal/ipc"
-	"lumio-os/server/internal/strictjson"
+	"lumo/server/internal/httpapi"
+	"lumo/server/internal/ipc"
+	"lumo/server/internal/strictjson"
 )
 
 const (
@@ -246,7 +246,7 @@ func (g *Gateway) handleAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (g *Gateway) requireSession(r *http.Request) (*sessionInfo, *httpapi.Error) {
-	cookie, err := r.Cookie("lumio_session")
+	cookie, err := r.Cookie("lumo_session")
 	if err != nil || cookie.Value == "" {
 		return nil, httpapi.NewError(httpapi.CodeUnauthorized, "No session.")
 	}
@@ -267,11 +267,11 @@ func (g *Gateway) requireSession(r *http.Request) (*sessionInfo, *httpapi.Error)
 }
 
 func (g *Gateway) checkCSRF(r *http.Request, sess *sessionInfo) *httpapi.Error {
-	header := r.Header.Get("X-Lumio-CSRF")
+	header := r.Header.Get("X-Lumo-CSRF")
 	if header == "" || header != sess.CSRF {
 		return httpapi.NewError(httpapi.CodeForbidden, "CSRF check failed.")
 	}
-	cookie, err := r.Cookie("lumio_csrf")
+	cookie, err := r.Cookie("lumo_csrf")
 	if err != nil || cookie.Value != sess.CSRF {
 		return httpapi.NewError(httpapi.CodeForbidden, "CSRF check failed.")
 	}
@@ -281,7 +281,7 @@ func (g *Gateway) checkCSRF(r *http.Request, sess *sessionInfo) *httpapi.Error {
 func (g *Gateway) setSessionCookies(w http.ResponseWriter, r *http.Request, token, csrf string) {
 	secure := r.TLS != nil
 	http.SetCookie(w, &http.Cookie{
-		Name:     "lumio_session",
+		Name:     "lumo_session",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
@@ -289,7 +289,7 @@ func (g *Gateway) setSessionCookies(w http.ResponseWriter, r *http.Request, toke
 		SameSite: http.SameSiteStrictMode,
 	})
 	http.SetCookie(w, &http.Cookie{
-		Name:     "lumio_csrf",
+		Name:     "lumo_csrf",
 		Value:    csrf,
 		Path:     "/",
 		Secure:   secure,
@@ -299,13 +299,13 @@ func (g *Gateway) setSessionCookies(w http.ResponseWriter, r *http.Request, toke
 
 func (g *Gateway) clearSessionCookies(w http.ResponseWriter, r *http.Request) {
 	secure := r.TLS != nil
-	for _, name := range []string{"lumio_session", "lumio_csrf"} {
+	for _, name := range []string{"lumo_session", "lumo_csrf"} {
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
 			Value:    "",
 			Path:     "/",
 			MaxAge:   -1,
-			HttpOnly: name == "lumio_session",
+			HttpOnly: name == "lumo_session",
 			Secure:   secure,
 			SameSite: http.SameSiteStrictMode,
 		})
@@ -354,7 +354,7 @@ func (g *Gateway) proxyREST(w http.ResponseWriter, r *http.Request, sess *sessio
 	req2.URL.Host = "agent"
 	req2.RequestURI = ""
 	req2.Header = r.Header.Clone()
-	req2.Header.Set("X-Lumio-Session", sess.Token)
+	req2.Header.Set("X-Lumo-Session", sess.Token)
 	resp, err := g.agentClient(sess.AgentSocket).Do(req2)
 	if err != nil {
 		httpapi.WriteError(w, httpapi.NewError(httpapi.CodeUnavailable, "The session agent is unavailable."))

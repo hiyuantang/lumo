@@ -1,20 +1,34 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useReorder } from '../shell/useReorder';
+import { copyText, readClipboard } from '../utils/clipboard';
 import { useEffect, useRef, useState } from 'react';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal as XTerm, type ITheme } from '@xterm/xterm';
 import { describeError, getDataSource } from '../api/source';
+import { useContextMenu } from '../shell/ContextMenu';
+import { useCurrentWindow } from '../shell/WindowContext';
 import { useShell } from '../shell/ShellContext';
 import '@xterm/xterm/css/xterm.css';
 import '../styles/terminal.css';
 
 interface TabState {
   id: number;
+  name: string;
   epoch: number;
   exitCode: number | null;
   error: string | null;
 }
 
 let nextTabId = 1;
+const TAB_NAMES = ['Cookie', 'Chocolate', 'Cocoa', 'Mochi', 'Waffle', 'Truffle', 'Biscuit', 'Caramel', 'Maple', 'Brownie', 'Cinnamon', 'Hazelnut', 'Toffee', 'Pudding', 'Macaron', 'Vanilla'];
+function newTab(tabs: TabState[]): TabState {
+  let names = TAB_NAMES.filter((name) => !tabs.some((tab) => tab.name === name));
+  for (let batch = 0; names.length === 0; batch++) {
+    const prefix = ['Golden', 'Velvet', 'Sweet', 'Little'][batch % 4];
+    names = TAB_NAMES.map((name) => `${prefix} ${name}${batch < 4 ? '' : ` ${Math.floor(batch / 4) + 1}`}`).filter((name) => !tabs.some((tab) => tab.name === name));
+  }
+  return { id: nextTabId++, name: names[Math.floor(Math.random() * names.length)], epoch: 0, exitCode: null, error: null };
+}
 
 function readTheme(): ITheme {
   const styles = getComputedStyle(document.documentElement);
@@ -27,64 +41,75 @@ function readTheme(): ITheme {
   };
 }
 
-export function Terminal() {
+export function Terminal() { return <TerminalWorkspace />; }
+
+export function TerminalWorkspace({ program, directory }: { program?: 'opencode'; directory?: string }) {
   const { capabilities } = getDataSource();
   if (!capabilities.canTerminal) {
     return (
       <div className="app terminal" data-testid="app-terminal">
         <div className="terminal-placeholder">
           <p className="terminal-placeholder-title">Terminal</p>
-          <p>Terminal is not available from this server.</p>
+          <p>Terminal unavailable.</p>
         </div>
       </div>
     );
   }
-  return <TerminalTabs />;
+  return <TerminalTabs program={program} directory={directory} />;
 }
 
-function TerminalTabs() {
+function TerminalTabs({ program, directory }: { program?: 'opencode'; directory?: string }) {
+  const win = useCurrentWindow();
   const { state, actions } = useShell();
   const user = state.user ?? 'user';
-  const [tabs, setTabs] = useState<TabState[]>(() => [{ id: nextTabId++, epoch: 0, exitCode: null, error: null }]);
+  const [tabs, setTabs] = useState<TabState[]>(() => [newTab([])]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const effectiveActive = tabs.some((tab) => tab.id === activeId) ? activeId : (tabs[0]?.id ?? null);
+
+  const reorder = useReorder(tabs, setTabs, (tab) => tab.id, 'horizontal');
 
   function updateTab(id: number, patch: Partial<TabState>) {
     setTabs((prev) => prev.map((tab) => (tab.id === id ? { ...tab, ...patch } : tab)));
   }
 
   function addTab() {
-    const id = nextTabId++;
-    setTabs((prev) => [...prev, { id, epoch: 0, exitCode: null, error: null }]);
-    setActiveId(id);
+    const tab = newTab(tabs);
+    setTabs((prev) => [...prev, tab]);
+    setActiveId(tab.id);
   }
 
   function closeTab(id: number) {
     if (tabs.length === 1 && tabs[0].id === id) {
-      actions.closeApp('terminal');
+      actions.closeApp(win.id);
       return;
+    }
+    if (effectiveActive === id) {
+      const index = tabs.findIndex((tab) => tab.id === id);
+      setActiveId(tabs[index + 1]?.id ?? tabs[index - 1]?.id ?? null);
     }
     setTabs((prev) => prev.filter((tab) => tab.id !== id));
   }
 
   return (
-    <div className="app terminal" data-testid="app-terminal">
+    <div className="app terminal" data-testid={program ? 'opencode-terminal' : 'app-terminal'}>
       <div className="terminal-tabs" role="tablist" aria-label="Terminal tabs">
-        {tabs.map((tab, index) => (
+        {tabs.map((tab) => (
           <div
             key={tab.id}
+            {...reorder.bind(tab)}
             className={`terminal-tab${tab.id === effectiveActive ? ' active' : ''}`}
             role="tab"
             aria-selected={tab.id === effectiveActive}
+            aria-label={`${tab.name}${tab.exitCode !== null ? ", exited" : ""}`}
             data-testid={`terminal-tab-${tab.id}`}
           >
-            <button type="button" className="terminal-tab-label" onClick={() => setActiveId(tab.id)}>
-              {tab.exitCode !== null ? 'exited' : 'shell'} {index + 1}
+            <button type="button" className="terminal-tab-label" title="Drag to reorder · Alt + Left/Right" aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight" onClick={() => setActiveId(tab.id)}>
+              {tab.name}{tab.exitCode !== null && <span className="terminal-tab-status">Exited</span>}
             </button>
             <button
               type="button"
               className="terminal-tab-close"
-              aria-label={`Close tab ${index + 1}`}
+              aria-label={`Close ${tab.name}`}
               data-testid={`terminal-close-tab-${tab.id}`}
               onClick={() => closeTab(tab.id)}
             >
@@ -102,6 +127,8 @@ function TerminalTabs() {
             key={`${tab.id}:${tab.epoch}`}
             tab={tab}
             user={user}
+            program={program}
+            directory={directory}
             visible={tab.id === effectiveActive}
             onExit={(code) => updateTab(tab.id, { exitCode: code })}
             onError={(message) => updateTab(tab.id, { error: message })}
@@ -114,6 +141,8 @@ function TerminalTabs() {
 }
 
 interface PaneProps {
+  program?: 'opencode';
+  directory?: string;
   tab: TabState;
   user: string;
   visible: boolean;
@@ -122,12 +151,13 @@ interface PaneProps {
   onRestart: () => void;
 }
 
-function TerminalPane({ tab, user, visible, onExit, onError, onRestart }: PaneProps) {
+function TerminalPane({ tab, user, program, directory, visible, onExit, onError, onRestart }: PaneProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const callbacksRef = useRef({ onExit, onError });
   callbacksRef.current = { onExit, onError };
-  const { resolvedTheme } = useShell();
+  const { resolvedTheme, actions } = useShell();
+  const openContextMenu = useContextMenu();
 
   useEffect(() => {
     const host = hostRef.current;
@@ -150,7 +180,7 @@ function TerminalPane({ tab, user, visible, onExit, onError, onRestart }: PanePr
     term.focus();
 
     const session = getDataSource().openTerminal(
-      { cols: term.cols, rows: term.rows, user },
+      { cols: term.cols, rows: term.rows, user, program, directory },
       {
         onData: (data) => term.write(data),
         onExit: (code) => callbacksRef.current.onExit(code),
@@ -170,7 +200,7 @@ function TerminalPane({ tab, user, visible, onExit, onError, onRestart }: PanePr
       term.dispose();
       termRef.current = null;
     };
-  }, [user]);
+  }, [user, program, directory]);
 
   useEffect(() => {
     const term = termRef.current;
@@ -180,15 +210,26 @@ function TerminalPane({ tab, user, visible, onExit, onError, onRestart }: PanePr
   useEffect(() => {
     const textarea = hostRef.current?.querySelector('textarea');
     if (textarea) {
-      if (visible) textarea.setAttribute('data-testid', 'terminal-input');
+      if (visible) textarea.setAttribute('data-testid', program ? 'opencode-input' : 'terminal-input');
       else textarea.removeAttribute('data-testid');
     }
     if (visible) termRef.current?.focus();
-  }, [visible]);
+  }, [visible, program]);
 
   return (
     <div className={`terminal-pane${visible ? '' : ' hidden'}`}>
-      <div className="terminal-host" ref={hostRef} />
+      <div className="terminal-host" ref={hostRef} onContextMenu={(event) => {
+        const term = termRef.current;
+        if (!term) { event.preventDefault(); event.stopPropagation(); return; }
+        const selection = term.getSelection();
+        const error = () => actions.notify('Clipboard unavailable', 'Use the keyboard shortcut to copy or paste.');
+        openContextMenu(event, [
+          { label: 'Copy', disabled: !selection, run: () => { void copyText(selection).catch(error); } },
+          { label: 'Paste', disabled: tab.exitCode !== null, run: () => { void readClipboard().then((text) => { term.focus(); term.paste(text); }).catch(error); } },
+          { label: 'Select All', run: () => { term.selectAll(); term.focus(); } },
+          { label: 'Clear Display', separator: true, run: () => { term.clear(); term.focus(); } },
+        ]);
+      }} />
       {tab.error && (
         <div className="terminal-error" data-testid="terminal-error" role="alert">
           {tab.error}

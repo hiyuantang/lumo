@@ -1,4 +1,4 @@
-# Lumio OS — Privilege Model
+# Lumo — Privilege Model
 
 Who may do what, and how elevation works. Wire shapes are defined in
 [PROTOCOL.md](PROTOCOL.md); the threats this model defends against are
@@ -20,7 +20,7 @@ in [THREAT_MODEL.md](THREAT_MODEL.md); failure handling in
 
 | Process | Identity | Role |
 |---|---|---|
-| Web gateway | Dedicated unprivileged user (`lumio-gw`) | TLS, static assets, cookies, CSRF, WS routing |
+| Web gateway | Dedicated unprivileged user (`lumo-gw`) | TLS, static assets, cookies, CSRF, WS routing |
 | sessiond | Root, minimal | PAM authentication; launches per-user agents |
 | Session agent | The real UID/GID of the logged-in user | PTY, files, journal, metrics, D-Bus reads |
 | Privileged broker | Root, tiny API surface | Typed privileged actions, polkit checks, audit |
@@ -45,6 +45,10 @@ could do over SSH — no more.
 | `users.addSshKey` | Broker | Writes another user's authorisation material |
 | `system.reboot`, `system.poweroff` | Broker | Highest-risk power actions |
 | `updates.refresh`, `updates.plan` | Agent → broker's package worker | Read-only against the package cache, but serialised |
+| Containers and Websites reads | Agent | Existing Docker socket and Nginx file permissions |
+| `containers.start`, `containers.stop`, `containers.restart` | Broker | Typed lifecycle operation, current revision and existing requester Docker access |
+| `websites.save` | Broker | Validated site definition, backup, full configuration check and reload |
+| `apps.plan` | Agent → broker's package worker | Fixed Docker or Nginx installation plan, serialized with updates |
 
 Reads never go through the broker. The broker exists only for
 mutations that need privilege.
@@ -53,20 +57,28 @@ mutations that need privilege.
 
 ### Action ids
 
-All Lumio OS actions live under `os.lumio.*`:
+All Lumo actions live under `os.lumo.*`:
 
 | Action id | Covers | Authorisation |
 |---|---|---|
-| `os.lumio.services.manage` | restart, start, stop, reload, enable, disable | Active session |
-| `os.lumio.packages.apply` | apply a previously computed plan | Active session |
-| `os.lumio.files.write-privileged` | write root-owned files | Active session |
-| `os.lumio.network.apply` | Netplan apply with rollback | Reauthentication |
-| `os.lumio.firewall.apply` | firewall apply with rollback | Reauthentication |
-| `os.lumio.users.manage` | add/remove SSH keys, user changes | Reauthentication |
-| `os.lumio.system.power` | reboot, poweroff | Reauthentication |
+| `os.lumo.services.manage` | restart, start, stop, reload, enable, disable | Active session |
+| `os.lumo.packages.apply` | apply a previously computed plan | Active session |
+| `os.lumo.files.write-privileged` | write root-owned files | Active session |
+| `os.lumo.network.apply` | Netplan apply with rollback | Reauthentication |
+| `os.lumo.firewall.apply` | firewall apply with rollback | Reauthentication |
+| `os.lumo.users.manage` | add/remove SSH keys, user changes | Reauthentication |
+| `os.lumo.system.power` | reboot, poweroff | Reauthentication |
+| `os.lumo.containers.manage` | start, stop, restart existing Docker containers | Reauthentication under the installed Lumo policy |
+| `os.lumo.websites.manage` | save a supported Nginx site and reload | Reauthentication under the installed Lumo policy |
+
+The installed `deploy/os.lumo.rules` requires membership in `lumo-admin`
+and a fresh password confirmation for its action groups, including
+`os.lumo.packages.apply` for App Library plans and installation. It does not
+add Docker socket access. Server app and package operations refuse to start
+if the audit-begin record cannot be written.
 
 1. "Active session" maps to polkit `allow_active`: an authenticated,
-   active Lumio OS session is sufficient.
+   active Lumo session is sufficient.
 2. "Reauthentication" maps to polkit `auth_admin`: the user proves
    their password again for that action group. The session agent
    registers a polkit authentication agent for the user's session, so
@@ -126,8 +138,28 @@ live unit state via D-Bus immediately before the call.
 ```
 
 The plan must exist, be unexpired, and have been computed by
-`updates.plan` on this host. Applying a stale plan fails with
+`updates.plan` or `apps.plan` on this host. Applying a stale plan fails with
 `conflict`.
+
+### Server applications
+
+`apps.plan` accepts only `arguments.appId` equal to `docker` or `nginx`.
+The package worker selects fixed package names from this catalog. Applying
+an app plan pins the reviewed versions, rechecks dependencies and refuses
+package removals. No caller-supplied package name or command is accepted.
+
+`containers.start`, `containers.stop` and `containers.restart` require a full
+64-character container ID and `expected.revision`. The broker checks the
+requesting UID's existing access to the root-owned system Docker socket,
+then compares the live container revision before the fixed Engine request.
+Operations on the same container are serialized.
+
+`websites.save` accepts `siteId`, a typed `website` definition and
+`expected.revision` (`absent` when creating). All site writes are serialized.
+Only matching Lumo-format files in the real, root-owned
+`/etc/nginx/conf.d` directory are eligible. Backups live under
+`/var/lib/lumo/rollback/websites`; failed validation or reload restores the
+previous file. No caller-supplied Nginx directive or command is executed.
 
 ### `files.writePrivileged` (Phase 5)
 
@@ -193,7 +225,7 @@ Key format validated against sshd's accepted types; the target user's
 }
 ```
 
-Always requires reauthentication (`os.lumio.system.power`).
+Always requires reauthentication (`os.lumo.system.power`).
 
 ### Forbidden list
 
@@ -248,22 +280,22 @@ fallback.
 Process map (one binary, four subcommands):
 
 ```text
-lumiod gateway   (user lumio-gw)  HTTP/WS, cookies, CSRF, proxies to agents
-lumiod sessiond  (root)           PAM auth, session store, spawns agents
-lumiod agent     (real UID/GID)   Phase 2/3 capabilities per user
-lumiod broker    (root)           typed actions, polkit, audit
+lumod gateway   (user lumo-gw)  HTTP/WS, cookies, CSRF, proxies to agents
+lumod sessiond  (root)           PAM auth, session store, spawns agents
+lumod agent     (real UID/GID)   Phase 2/3 capabilities per user
+lumod broker    (root)           typed actions, polkit, audit
 ```
 
 Sockets:
 
 | Path | Owner | Mode | Purpose |
 |---|---|---|---|
-| `/run/lumio/sessiond.sock` | root:lumio-gw | 0660 | login, logout, validate, reauth, session check |
-| `/run/lumio/users/<uid>.sock` | uid:lumio-gw | 0660 | per-user agent API (created by sessiond, fd-inherited by the agent) |
-| `/run/lumio/broker.sock` | root:root | 0666 | broker actions; authorisation via SO_PEERCRED + polkit, not file permissions |
+| `/run/lumo/sessiond.sock` | root:lumo-gw | 0660 | login, logout, validate, reauth, session check |
+| `/run/lumo/users/<uid>.sock` | uid:lumo-gw | 0660 | per-user agent API (created by sessiond, fd-inherited by the agent) |
+| `/run/lumo/broker.sock` | root:root | 0666 | broker actions; authorisation via SO_PEERCRED + polkit, not file permissions |
 
-`/run/lumio` itself is 0755 so agents can reach the broker; the
-`users/` subdirectory stays 0750 root:lumio-gw so only the gateway (and
+`/run/lumo` itself is 0755 so agents can reach the broker; the
+`users/` subdirectory stays 0750 root:lumo-gw so only the gateway (and
 each agent's owner via the sessiond-created socket) can reach agents.
 
 Notes on the as-built mapping to this document:

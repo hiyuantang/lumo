@@ -8,10 +8,6 @@ import (
 	"os"
 )
 
-func chmodSocket(path string, mode uint32) error {
-	return os.Chmod(path, os.FileMode(mode))
-}
-
 func PeerCreds(conn net.Conn) (uid, pid uint32, err error) {
 	return uint32(os.Getuid()), uint32(os.Getpid()), nil
 }

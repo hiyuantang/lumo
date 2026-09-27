@@ -1,8 +1,8 @@
-# Lumio OS — Clean-Room Policy
+# Lumo — Clean-Room Policy
 
 ## Policy
 
-1. Lumio OS is an **independent, clean-room, behavioral
+1. Lumo is an **independent, clean-room, behavioral
    reimplementation** of a Linux server-management desktop.
 2. Cockpit is a **benchmark and research reference only**. It is never
    an implementation source.
@@ -24,7 +24,7 @@
 
 The flow is: Cockpit repository → reference analyst → behavioral
 documents only → independent specification repository → implementation
-agent → the Lumio OS repository.
+agent → the Lumo repository.
 
 **Current status (decision recorded 2026-07-18):** the analyst stage is
 **deferred**. Implementation proceeds from the product specifications in

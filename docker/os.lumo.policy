@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Lumo</vendor>
+  <vendor_url>https://lumo.local/</vendor_url>
+
+  <action id="os.lumo.services.manage">
+    <description>Manage systemd services through Lumo</description>
+    <message>Authentication is required to manage services</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="os.lumo.packages.apply">
+    <description>Refresh, plan and install software updates through Lumo</description>
+    <message>Authentication is required to manage software updates</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="os.lumo.files.write-privileged">
+    <description>Edit protected configuration files through Lumo</description>
+    <message>Authentication is required to edit protected configuration files</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="os.lumo.system.power">
+    <description>Reboot or power off the system through Lumo</description>
+    <message>Authentication is required to reboot or power off</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="os.lumo.network.apply">
+    <description>Apply network configuration through Lumo</description>
+    <message>Authentication is required to change network configuration</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="os.lumo.system.settings">
+    <description>Change time settings through Lumo</description>
+    <message>Authentication is required to change system settings</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="os.lumo.containers.manage">
+    <description>Manage existing Docker containers through Lumo</description>
+    <message>Authentication is required to manage containers</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="os.lumo.websites.manage">
+    <description>Configure Nginx websites through Lumo</description>
+    <message>Authentication is required to change websites</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

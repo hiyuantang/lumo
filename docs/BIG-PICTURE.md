@@ -672,7 +672,7 @@ text editor; its behavior and acceptance checks are in
 Command-line applications are accessible through Terminal. Applications
 with their own web interface can be used separately; integrating them is
 a separate feature with its own trust boundaries. Other software can run
-on the VPS without Lumio providing a custom graphical interface.
+on the VPS without Lumo providing a custom graphical interface.
 
 Native graphical applications, full remote desktops and custom web ports
 of arbitrary desktop applications are outside scope.

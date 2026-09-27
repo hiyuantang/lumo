@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { CORE_APP_COUNT } from '../apps/registry';
+
 export interface Rect {
   x: number;
   y: number;
@@ -20,7 +22,7 @@ const SNAP_DISTANCE = 20;
 const TILE_GAP = 8;
 
 export function dockSpace(viewport: Viewport): number {
-  return viewport.w <= COMPACT_WIDTH ? Math.min(38, Math.max(29, viewport.w * 0.08)) + 35 : 112;
+  return viewport.w <= 850 ? Math.min(38, Math.max(20, (viewport.w - 32) / CORE_APP_COUNT - 7)) + 35 : 112;
 }
 
 export function workArea(viewport: Viewport): Rect {

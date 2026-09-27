@@ -98,3 +98,10 @@ tmpfs /run tmpfs rw 0 0
 		t.Errorf("mounts = %v", mounts)
 	}
 }
+
+func TestSparseCoreTimesExcludeGuestTicks(t *testing.T) {
+	cores := parseCoreTimes("cpu 100 20 30 400 10 2 3 4 80 10\ncpu0 60 10 20 200 5 1 2 3 50 5\ncpu7 40 10 10 200 5 1 1 1 30 5\ncpu9 bad data\n")
+	if len(cores) != 2 || cores[0].total != 301 || cores[7].total != 268 || cores[0].idle != 205 {
+		t.Fatalf("unexpected core counters: %+v", cores)
+	}
+}

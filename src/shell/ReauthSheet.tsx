@@ -100,15 +100,11 @@ export function ReauthProvider({ children }: { children: ReactNode }) {
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="reauth-title"
-            aria-describedby="reauth-desc"
             data-testid="reauth-sheet"
           >
             <h2 id="reauth-title" className="reauth-title">
-              Confirm it’s you
+              Confirm password
             </h2>
-            <p id="reauth-desc" className="reauth-desc">
-              The server needs your password again before it will run this action.
-            </p>
             <form onSubmit={onSubmit}>
               <input
                 ref={inputRef}

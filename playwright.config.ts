@@ -2,7 +2,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: './tests/ui',
   timeout: 30_000,
   fullyParallel: false,
   workers: 1,
@@ -10,18 +10,21 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5199',
     trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    locale: 'en-US',
+    timezoneId: 'UTC',
   },
   webServer: [
     {
-      command: 'npm run dev -- --port 5199 --strictPort',
+      command: 'VITE_LUMO_LIVE=0 npm run dev -- --port 5199 --strictPort',
       url: 'http://localhost:5199',
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 60_000,
     },
     {
-      command: 'npm run dev:live -- --port 5200 --strictPort',
+      command: process.env.LUMO_UI_PRODUCTION ? 'npm run preview -- --port 5200 --strictPort' : 'npm run dev:live -- --port 5200 --strictPort',
       url: 'http://localhost:5200',
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 60_000,
     },
   ],

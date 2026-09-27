@@ -1,6 +1,6 @@
-# Lumio OS — Threat Model
+# Lumo — Threat Model
 
-Scope: the Lumio OS server stack as described in BIG-PICTURE, from the
+Scope: the Lumo server stack as described in BIG-PICTURE, from the
 browser down to the host system APIs. Protocol details referenced here
 are defined in [PROTOCOL.md](PROTOCOL.md); privilege enforcement in
 [PRIVILEGE_MODEL.md](PRIVILEGE_MODEL.md); failure handling in
@@ -14,7 +14,7 @@ are defined in [PROTOCOL.md](PROTOCOL.md); privilege enforcement in
 └─────────────────────────┬────────────────────────────────┘
                 B1 │ HTTPS (REST + WebSocket)
 ┌──────────────────▼───────────────────────────────────────┐
-│ Web gateway — dedicated unprivileged user (lumio-gw)     │
+│ Web gateway — dedicated unprivileged user (lumo-gw)     │
 └──────┬───────────────────────────────┬───────────────────┘
   B2   │ Unix socket                   │ Unix socket
        │ SO_PEERCRED                   │ SO_PEERCRED
@@ -81,7 +81,7 @@ applicable.
    ([PROTOCOL.md](PROTOCOL.md) idempotency). Owner: agent and broker.
 5. **CSRF** (B1). A third-party site triggers a mutating request
    riding the session cookie. Mitigation: `SameSite=Strict` cookie
-   plus the `X-Lumio-CSRF` double-submit header required on every
+   plus the `X-Lumo-CSRF` double-submit header required on every
    non-GET call. Owner: gateway.
 6. **Cross-site WebSocket** (B1). A third-party page opens the WS from
    another origin. Mitigation: `Origin` allowlist check at upgrade,

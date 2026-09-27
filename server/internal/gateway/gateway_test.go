@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"lumio-os/server/internal/ipc"
+	"lumo/server/internal/ipc"
 )
 
 const testToken = "session-token-1"
@@ -85,7 +85,7 @@ func stubAgent(t *testing.T) string {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok":   true,
 			"path": r.URL.Path,
-			"auth": r.Header.Get("X-Lumio-Session"),
+			"auth": r.Header.Get("X-Lumo-Session"),
 		})
 	}))
 	return agentSock
@@ -116,18 +116,18 @@ func loginCookies(t *testing.T, srv *httptest.Server) []*http.Cookie {
 	}
 	var sessionCookie *http.Cookie
 	for _, c := range resp.Cookies() {
-		if c.Name == "lumio_session" {
+		if c.Name == "lumo_session" {
 			sessionCookie = c
 			if !c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.Path != "/" {
 				t.Errorf("session cookie attributes: %+v", c)
 			}
 		}
-		if c.Name == "lumio_csrf" && c.HttpOnly {
+		if c.Name == "lumo_csrf" && c.HttpOnly {
 			t.Error("csrf cookie must be readable")
 		}
 	}
 	if sessionCookie == nil {
-		t.Fatal("no lumio_session cookie")
+		t.Fatal("no lumo_session cookie")
 	}
 	return resp.Cookies()
 }
@@ -222,7 +222,7 @@ func TestCSRFRequired(t *testing.T) {
 			req.AddCookie(c)
 		}
 		if withHeader {
-			req.Header.Set("X-Lumio-CSRF", testCSRF)
+			req.Header.Set("X-Lumo-CSRF", testCSRF)
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -252,7 +252,7 @@ func TestLogoutRequiresSessionAndCSRF(t *testing.T) {
 			}
 		}
 		if withCSRF {
-			req.Header.Set("X-Lumio-CSRF", testCSRF)
+			req.Header.Set("X-Lumo-CSRF", testCSRF)
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -287,7 +287,7 @@ func TestLogoutRequiresSessionAndCSRF(t *testing.T) {
 			cleared[cookie.Name] = true
 		}
 	}
-	if !cleared["lumio_session"] || !cleared["lumio_csrf"] {
+	if !cleared["lumo_session"] || !cleared["lumo_csrf"] {
 		t.Fatalf("logout cookies were not cleared: %v", cleared)
 	}
 }

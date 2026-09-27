@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"lumio-os/server/internal/httpapi"
+	"lumo/server/internal/httpapi"
 )
 
 func (g *Gateway) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -20,7 +20,7 @@ func (g *Gateway) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	csrf := r.URL.Query().Get("csrf")
 	if csrf == "" {
-		csrf = r.Header.Get("X-Lumio-CSRF")
+		csrf = r.Header.Get("X-Lumo-CSRF")
 	}
 	if csrf == "" || csrf != sess.CSRF {
 		httpapi.WriteError(w, httpapi.NewError(httpapi.CodeForbidden, "CSRF check failed."))
@@ -46,7 +46,7 @@ func (g *Gateway) handleWS(w http.ResponseWriter, r *http.Request) {
 	upstream.RequestURI = ""
 	upstream.URL = &url.URL{Scheme: "http", Host: "agent", Path: r.URL.Path, RawQuery: r.URL.RawQuery}
 	upstream.Header = r.Header.Clone()
-	upstream.Header.Set("X-Lumio-Session", sess.Token)
+	upstream.Header.Set("X-Lumo-Session", sess.Token)
 	if err := upstream.Write(agentConn); err != nil {
 		_ = agentConn.Close()
 		httpapi.WriteError(w, httpapi.NewError(httpapi.CodeUnavailable, "The session agent is unavailable."))

@@ -28,9 +28,9 @@ export function NotificationCenter() {
             Clear all
           </button>
         </header>
-        <div className="notifications-list">
+        <div className="notifications-list" tabIndex={0} role="region" aria-label="Notifications">
           {state.notifications.length === 0 && (
-            <p className="notifications-empty">No notifications yet. Service actions will appear here.</p>
+            <p className="notifications-empty">No notifications.</p>
           )}
           {state.notifications.map((n) => (
             <article key={n.id} className="notification" data-testid="notification-item">
@@ -40,7 +40,7 @@ export function NotificationCenter() {
                   {new Date(n.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </time>
               </header>
-              <p>{n.body}</p>
+              {n.body && <p>{n.body}</p>}
             </article>
           ))}
         </div>
@@ -64,12 +64,12 @@ export function ShortcutsDialog() {
   if (!state.shortcutsOpen) return null;
 
   const rows: [string, string][] = [
-    ['Ctrl / ⌘ K', 'Open the Command Center'],
-    ['Alt W', 'Close the active window'],
-    ['Ctrl Alt → / ←', 'Cycle through open windows'],
-    ['Esc', 'Close menus, panels and dialogs'],
-    ['↑ ↓ Enter', 'Navigate menus, the dock and lists'],
-    ['Space', 'Quick Look the selected file in Files'],
+    ['Ctrl / ⌘ K', 'Command Center'],
+    ['Alt W', 'Close window'],
+    ['Ctrl Alt → / ←', 'Switch windows'],
+    ['Esc', 'Dismiss'],
+    ['↑ ↓ Enter', 'Navigate and select'],
+    ['Space', 'Show Details in Files'],
   ];
 
   return (

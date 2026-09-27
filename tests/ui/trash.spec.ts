@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+import { expect, test } from '@playwright/test';
+
+test('Trash opens from Files, restores items and confirms permanent deletion', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/');
+  await page.getByTestId('login-username').fill('demo');
+  await page.getByTestId('login-password').fill('demo');
+  await page.getByTestId('login-submit').click();
+  await page.getByTestId('dock-app-trash').click();
+  await expect(page.getByTestId('trash-empty-state')).toBeVisible();
+  await expect(page.getByTestId('trash-empty')).toBeDisabled();
+  await page.getByTestId('window-close-trash').click();
+  await page.getByTestId('dock-app-files').click();
+  await page.getByTestId('files-new').click();
+  await page.getByRole('menuitem', { name: 'New File', exact: true }).click();
+  await page.getByTestId('files-create-name').fill('trash-ui.txt');
+  await page.getByTestId('files-create-submit').click();
+  await page.getByTestId('file-row-trash-ui.txt').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move to Trash', exact: true }).click();
+  await page.getByTestId('delete-confirm-button').click();
+  await expect(page.getByTestId('file-row-trash-ui.txt')).toHaveCount(0);
+  await page.getByTestId('files-location-trash').click();
+  await expect(page.getByTestId('window-trash')).toHaveCount(0);
+  await expect(page.getByTestId('app-files').getByTestId('app-trash')).toBeVisible();
+  const row = page.getByRole('option').filter({ hasText: 'trash-ui.txt' });
+  await expect(row).toBeVisible();
+  await row.click();
+  await page.getByTestId('trash-empty').click();
+  await expect(page.getByTestId('server-app-confirm')).toContainText('cannot be undone');
+  await page.getByTestId('server-app-confirm').getByRole('button', { name: 'Cancel' }).click();
+  await expect(row).toBeVisible();
+  await page.screenshot({ path: '/tmp/lumo-trash-desktop.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByTestId('trash-restore')).toBeVisible();
+  await page.screenshot({ path: '/tmp/lumo-trash-compact.png' });
+  await page.getByTestId('trash-restore').click();
+  await expect(page.getByTestId('trash-empty-state')).toBeVisible();
+  expect(errors).toEqual([]);
+});

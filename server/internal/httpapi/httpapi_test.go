@@ -14,11 +14,11 @@ import (
 	"syscall"
 	"testing"
 
-	"lumio-os/server/internal/journal"
-	"lumio-os/server/internal/network"
-	"lumio-os/server/internal/services"
-	"lumio-os/server/internal/static"
-	"lumio-os/server/internal/system"
+	"lumo/server/internal/journal"
+	"lumo/server/internal/network"
+	"lumo/server/internal/services"
+	"lumo/server/internal/static"
+	"lumo/server/internal/system"
 )
 
 type fakeServices struct {
@@ -401,7 +401,7 @@ func TestFilesWriteHandler(t *testing.T) {
 	}
 
 	status, headers, env2 := put(`{"path":"` + path + `","content":"` + base64.StdEncoding.EncodeToString([]byte("v1")) + `","requestId":"req-1"}`)
-	if status != 200 || headers["X-Lumio-Idempotent-Replay"] != "true" {
+	if status != 200 || headers["X-Lumo-Idempotent-Replay"] != "true" {
 		t.Errorf("replay: status=%d headers=%v", status, headers)
 	}
 	if string(env2.Data) != string(env.Data) {
@@ -529,5 +529,36 @@ func TestMapError(t *testing.T) {
 		if got := MapError(tc.err); got.Code != tc.code {
 			t.Errorf("MapError(%v) = %s, want %s", tc.err, got.Code, tc.code)
 		}
+	}
+}
+
+func TestFilesCreateHandler(t *testing.T) {
+	dir := t.TempDir()
+	ts := testServer(fakeServices{}, fakeJournal{})
+	defer ts.Close()
+	post := func(body string) (int, testEnvelope) {
+		res, err := http.Post(ts.URL+"/api/v1/files/create", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var env testEnvelope
+		_ = json.NewDecoder(res.Body).Decode(&env)
+		return res.StatusCode, env
+	}
+	body := `{"path":` + jsonString(dir+"/new") + `,"kind":"directory","requestId":"create-one"}`
+	for i := 0; i < 2; i++ {
+		status, env := post(body)
+		if status != 200 || !env.OK {
+			t.Fatalf("create/replay: %d %+v", status, env)
+		}
+	}
+	status, env := post(strings.Replace(body, "create-one", "create-two", 1))
+	if status != 409 || env.Error.Code != CodeConflict {
+		t.Fatalf("duplicate: %d %+v", status, env)
+	}
+	status, _ = post(`{"path":` + jsonString(dir+"/other") + `,"kind":"file"}`)
+	if status != 400 {
+		t.Fatalf("request ID required: %d", status)
 	}
 }

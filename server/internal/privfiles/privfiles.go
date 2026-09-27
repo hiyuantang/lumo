@@ -101,7 +101,7 @@ func (w *Writer) Write(ctx context.Context, path string, content []byte, expecte
 		return Result{}, err
 	}
 	dir := filepath.Dir(clean)
-	tmp, err := os.CreateTemp(dir, ".lumio-privileged-*")
+	tmp, err := os.CreateTemp(dir, ".lumo-privileged-*")
 	if err != nil {
 		return Result{}, err
 	}

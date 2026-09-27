@@ -13,12 +13,18 @@ import (
 	"time"
 )
 
+type CoreUsage struct {
+	ID           int      `json:"id"`
+	UsagePercent *float64 `json:"usagePercent"`
+}
+
 type CPUUsage struct {
-	UsagePercent float64 `json:"usagePercent"`
-	Load1        float64 `json:"load1"`
-	Load5        float64 `json:"load5"`
-	Load15       float64 `json:"load15"`
-	Cores        int     `json:"cores"`
+	PerCore      []CoreUsage `json:"perCore"`
+	UsagePercent float64     `json:"usagePercent"`
+	Load1        float64     `json:"load1"`
+	Load5        float64     `json:"load5"`
+	Load15       float64     `json:"load15"`
+	Cores        int         `json:"cores"`
 }
 
 type MemoryUsage struct {
@@ -60,6 +66,7 @@ type netTimes struct {
 type Sampler struct {
 	mu        sync.Mutex
 	prevCPU   cpuTimes
+	prevCores map[int]cpuTimes
 	hasCPU    bool
 	prevNet   map[string]netTimes
 	prevNetAt time.Time
@@ -82,12 +89,34 @@ func (s *Sampler) Sample() Sample {
 	if l1, l5, l15, ok := readLoadavg(); ok {
 		out.CPU.Load1, out.CPU.Load5, out.CPU.Load15 = l1, l5, l15
 	}
-	if cur, ok := readCPUTimes(); ok {
-		if s.hasCPU {
-			out.CPU.UsagePercent = cpuUsagePercent(s.prevCPU, cur)
+	out.CPU.PerCore = []CoreUsage{}
+	if data, err := os.ReadFile("/proc/stat"); err == nil {
+		cur, ok := parseCPUTimes(string(data))
+		if ok {
+			if s.hasCPU {
+				out.CPU.UsagePercent = cpuUsagePercent(s.prevCPU, cur)
+			}
+			s.prevCPU = cur
+			s.hasCPU = true
 		}
-		s.prevCPU = cur
-		s.hasCPU = true
+		cores := parseCoreTimes(string(data))
+		ids := make([]int, 0, len(cores))
+		for id := range cores {
+			ids = append(ids, id)
+		}
+		sort.Ints(ids)
+		for _, id := range ids {
+			core := CoreUsage{ID: id}
+			if prev, ok := s.prevCores[id]; ok {
+				value := cpuUsagePercent(prev, cores[id])
+				core.UsagePercent = &value
+			}
+			out.CPU.PerCore = append(out.CPU.PerCore, core)
+		}
+		if len(cores) > 0 {
+			out.CPU.Cores = len(cores)
+		}
+		s.prevCores = cores
 	}
 	if total, available, ok := readMeminfo(); ok {
 		out.Memory.TotalBytes = total
@@ -165,29 +194,53 @@ func readCPUTimes() (cpuTimes, bool) {
 	return parseCPUTimes(string(data))
 }
 
-func parseCPUTimes(content string) (cpuTimes, bool) {
-	for _, line := range strings.Split(content, "\n") {
-		if !strings.HasPrefix(line, "cpu ") {
-			continue
+func parseCPUFields(fields []string) (cpuTimes, bool) {
+	if len(fields) < 5 {
+		return cpuTimes{}, false
+	}
+	var t cpuTimes
+	for i, f := range fields[1:] {
+		if i >= 8 {
+			break
 		}
-		fields := strings.Fields(line)
-		if len(fields) < 5 {
+		v, err := strconv.ParseUint(f, 10, 64)
+		if err != nil {
 			return cpuTimes{}, false
 		}
-		var t cpuTimes
-		for i, f := range fields[1:] {
-			v, err := strconv.ParseUint(f, 10, 64)
-			if err != nil {
-				return cpuTimes{}, false
-			}
-			t.total += v
-			if i == 3 || i == 4 {
-				t.idle += v
-			}
+		t.total += v
+		if i == 3 || i == 4 {
+			t.idle += v
 		}
-		return t, true
+	}
+	return t, true
+}
+
+func parseCPUTimes(content string) (cpuTimes, bool) {
+	for _, line := range strings.Split(content, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 0 && fields[0] == "cpu" {
+			return parseCPUFields(fields)
+		}
 	}
 	return cpuTimes{}, false
+}
+
+func parseCoreTimes(content string) map[int]cpuTimes {
+	cores := map[int]cpuTimes{}
+	for _, line := range strings.Split(content, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 || !strings.HasPrefix(fields[0], "cpu") {
+			continue
+		}
+		id, err := strconv.Atoi(strings.TrimPrefix(fields[0], "cpu"))
+		if err != nil || id < 0 {
+			continue
+		}
+		if times, ok := parseCPUFields(fields); ok {
+			cores[id] = times
+		}
+	}
+	return cores
 }
 
 func readLoadavg() (float64, float64, float64, bool) {

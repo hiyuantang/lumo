@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useAppState } from '../shell/useAppState';
 import { useEffect, useMemo, useState } from 'react';
 import {
   describeError,
@@ -58,8 +59,8 @@ export function Services() {
   const [services, setServices] = useState<ServiceUnit[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
-  const [query, setQuery] = useState('');
-  const [selectedName, setSelectedName] = useState<string | null>(null);
+  const [query, setQuery] = useAppState<string>('services', 'query', '');
+  const [selectedName, setSelectedName] = useAppState<string | null>('services', 'selection', null);
   const [detail, setDetail] = useState<ServiceDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -91,7 +92,7 @@ export function Services() {
     if (state.navigation?.target === 'services') {
       setSelectedName(state.navigation.unit);
     }
-  }, [state.navigation?.nonce, state.navigation?.target, state.navigation?.unit]);
+  }, [state.navigation]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -156,7 +157,7 @@ export function Services() {
             .listServices()
             .then((units) => setServices(units))
             .catch(() => {});
-          actions.notify('Service state changed', `${unit.name} was refreshed from the live system.`);
+          actions.notify('Service state changed', `${unit.name} refreshed.`);
           return;
         }
         actions.notify('Service action failed', describeError(err));
@@ -212,7 +213,7 @@ export function Services() {
               </button>
             </p>
           )}
-          {!loadError && filtered.length === 0 && <p className="services-empty">No units match this filter.</p>}
+          {!loadError && filtered.length === 0 && <p className="services-empty">No matching services.</p>}
         </div>
         <aside className="services-detail" aria-label="Service detail">
           {selected ? (
@@ -248,7 +249,7 @@ export function Services() {
                     className={`btn${action === 'restart' ? ' btn-primary' : ''}`}
                     data-testid={`service-action-${action}`}
                     disabled={!canAct || busyAction !== null || !actionAvailable(selected, action)}
-                    title={canAct ? undefined : 'Service actions are not available on this host'}
+                    title={canAct ? undefined : 'Service controls unavailable'}
                     onClick={() => request(selected, action)}
                   >
                     {busyAction === action ? <span className="spinner" aria-hidden="true" /> : null}
@@ -266,7 +267,7 @@ export function Services() {
               </div>
               {!canAct && (
                 <p className="services-actions-note" data-testid="services-actions-note">
-                  Service actions are not available on this host.
+                  Service controls unavailable.
                 </p>
               )}
               <section className="services-section" aria-labelledby="service-dependencies-heading">
@@ -274,7 +275,7 @@ export function Services() {
                 {detailLoading && <p className="services-section-empty">Loading dependencies…</p>}
                 {!detailLoading && detailError && <p className="services-section-empty">{detailError}</p>}
                 {!detailLoading && !detailError && detail?.dependencies.length === 0 && (
-                  <p className="services-section-empty">No direct dependencies reported.</p>
+                  <p className="services-section-empty">No dependencies.</p>
                 )}
                 {detail && detail.dependencies.length > 0 && (
                   <div className="services-dependency-graph" data-testid="service-dependencies">
@@ -299,7 +300,7 @@ export function Services() {
               <section className="services-section" aria-labelledby="service-files-heading">
                 <h3 id="service-files-heading">Unit files and overrides</h3>
                 {!detailLoading && !detailError && detail?.files.length === 0 && (
-                  <p className="services-section-empty">This unit has no file on disk.</p>
+                  <p className="services-section-empty">No unit file.</p>
                 )}
                 <div className="services-unit-files" data-testid="service-unit-files">
                   {detail?.files.map((file) => (
@@ -315,7 +316,7 @@ export function Services() {
               </section>
             </>
           ) : (
-            <p className="services-empty">Select a service to see details.</p>
+            <p className="services-empty">Select a service.</p>
           )}
         </aside>
       </div>

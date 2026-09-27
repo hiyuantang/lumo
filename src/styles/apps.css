@@ -163,6 +163,17 @@
   background: rgba(9, 27, 34, 0.18);
 }
 
+.window .quicklook-overlay {
+  position: absolute;
+  inset: 50px 0 0;
+  padding: 12px;
+}
+
+.window .quicklook-overlay > * {
+  max-width: 100%;
+  max-height: 100%;
+}
+
 .file-confirm {
   width: min(360px, calc(100vw - 48px));
   display: flex;
@@ -175,11 +186,16 @@
   border-radius: var(--radius-l);
   box-shadow: var(--shadow-window);
   font-size: 13px;
-  animation: quicklook-in var(--dur-med) var(--ease-out);
+  animation: dialog-in var(--dur-med) var(--ease-out);
 }
 
 .file-confirm-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
+}
+
+@keyframes dialog-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: none; }
 }

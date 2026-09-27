@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"lumio-os/server/internal/ipc"
-	"lumio-os/server/internal/updates"
+	"lumo/server/internal/ipc"
+	"lumo/server/internal/updates"
 )
 
 func CallAction(ctx context.Context, socketPath string, payload []byte) (int, http.Header, []byte, error) {

@@ -47,14 +47,12 @@
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
-  --space-6: 24px;
 
   --dur-fast: 120ms;
   --dur-med: 180ms;
   --ease-out: cubic-bezier(0.22, 0.8, 0.32, 1);
 
   --menubar-h: 32px;
-  --dock-h: 96px;
 }
 
 [data-theme='dark'] {

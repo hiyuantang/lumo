@@ -53,7 +53,7 @@ func main() {
 	flag.StringVar(&o.expect, "expect", "", "expected activeState value in services mode (empty: any change)")
 	flag.StringVar(&o.match, "match", "", "substring expected in the observed payload")
 	flag.StringVar(&o.cmd, "cmd", "", "shell input to send in terminal mode")
-	flag.StringVar(&o.cookie, "cookie", "", "Cookie header value (e.g. lumio_session=...)")
+	flag.StringVar(&o.cookie, "cookie", "", "Cookie header value (e.g. lumo_session=...)")
 	flag.StringVar(&o.csrf, "csrf", "", "CSRF token appended as ?csrf= to the URL")
 	flag.DurationVar(&o.timeout, "timeout", 10*time.Second, "overall timeout")
 	flag.Parse()

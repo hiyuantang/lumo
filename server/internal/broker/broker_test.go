@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"lumio-os/server/internal/ipc"
-	"lumio-os/server/internal/network"
+	"lumo/server/internal/ipc"
+	"lumo/server/internal/network"
 )
 
 func TestValidate(t *testing.T) {
@@ -508,7 +508,7 @@ func TestActionIdempotentReplay(t *testing.T) {
 	if status != 200 {
 		t.Fatalf("replay: %d", status)
 	}
-	if headers.Get("X-Lumio-Idempotent-Replay") != "true" {
+	if headers.Get("X-Lumo-Idempotent-Replay") != "true" {
 		t.Error("missing replay header")
 	}
 	if len(sys.calls) != 1 {

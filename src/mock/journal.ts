@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { LogLine, LogPriority } from '../api/source';
 
-export type { LogLine, LogPriority } from '../api/source';
-
 const PRIORITY_CODE: Record<LogPriority, 3 | 4 | 6 | 7> = {
   err: 3,
   warning: 4,
@@ -21,7 +19,7 @@ const TEMPLATES: { unit: string; priority: LogPriority; message: string }[] = [
   { unit: 'redis-server.service', priority: 'info', message: 'Background saving terminated with success' },
   { unit: 'fail2ban.service', priority: 'warning', message: 'Ban 203.0.113.44 (sshd jail) after 5 attempts' },
   { unit: 'systemd-resolved.service', priority: 'debug', message: 'Cache miss for atlas.lan IN A' },
-  { unit: 'lumio-backup.service', priority: 'err', message: 'snapshot upload failed: endpoint unreachable (retry 3 of 3)' },
+  { unit: 'lumo-backup.service', priority: 'err', message: 'snapshot upload failed: endpoint unreachable (retry 3 of 3)' },
   { unit: 'kernel', priority: 'info', message: 'EXT4-fs (sda1): mounted filesystem with ordered data mode' },
   { unit: 'kernel', priority: 'debug', message: 'TCP: request_sock_TCP: Possible SYN flooding on port 443' },
 ];

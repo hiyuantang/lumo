@@ -106,3 +106,145 @@ func TestTrashUnreadableTarget(t *testing.T) {
 		t.Errorf("expected permission error, got %v", err)
 	}
 }
+
+func selection(item TrashItem) TrashSelection {
+	return TrashSelection{ID: item.ID, Revision: item.Revision}
+}
+
+func TestTrashRestoreConflictAndMetadata(t *testing.T) {
+	home := setupTrashHome(t)
+	path := filepath.Join(home, "notes % and spaces\n.md")
+	if err := os.WriteFile(path, []byte("original"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Trash(path); err != nil {
+		t.Fatal(err)
+	}
+	items, err := ListTrash()
+	if err != nil || len(items) != 1 || !items[0].CanRestore || items[0].Name != filepath.Base(path) || items[0].DeletedAt == "" {
+		t.Fatalf("items=%+v err=%v", items, err)
+	}
+	if err := os.WriteFile(path, []byte("new file"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RestoreTrash(selection(items[0])); !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("expected conflict: %v", err)
+	}
+	data, _ := os.ReadFile(path)
+	if string(data) != "new file" {
+		t.Fatal("restore overwrote existing file")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RestoreTrash(selection(items[0])); err != nil {
+		t.Fatal(err)
+	}
+	data, _ = os.ReadFile(path)
+	if string(data) != "original" {
+		t.Fatal("content was not restored")
+	}
+	items, err = ListTrash()
+	if err != nil || len(items) != 0 {
+		t.Fatalf("items=%v err=%v", items, err)
+	}
+}
+
+func TestTrashSymlinkAndDirectory(t *testing.T) {
+	home := setupTrashHome(t)
+	target := filepath.Join(home, "target")
+	os.WriteFile(target, []byte("keep"), 0o644)
+	link := filepath.Join(home, "shortcut")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Trash(link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(target); err != nil {
+		t.Fatal("shortcut target moved", err)
+	}
+	items, _ := ListTrash()
+	if _, err := RestoreTrash(selection(items[0])); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.Readlink(link); err != nil || got != target {
+		t.Fatal("shortcut not preserved", got, err)
+	}
+	folder := filepath.Join(home, "folder")
+	os.Mkdir(folder, 0o755)
+	os.WriteFile(filepath.Join(folder, "child"), []byte("nested"), 0o600)
+	os.Symlink(target, filepath.Join(folder, "link"))
+	if _, err := Trash(folder); err != nil {
+		t.Fatal(err)
+	}
+	items, _ = ListTrash()
+	if _, err := RestoreTrash(selection(items[0])); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(folder, "child")); err != nil || string(data) != "nested" {
+		t.Fatal("nested file not restored")
+	}
+	Trash(folder)
+	items, _ = ListTrash()
+	if err := DeleteTrash([]TrashSelection{selection(items[0])}); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(target); err != nil || string(data) != "keep" {
+		t.Fatal("deletion followed a symlink")
+	}
+}
+
+func TestTrashDeletionSnapshotAndStaleRevision(t *testing.T) {
+	home := setupTrashHome(t)
+	first := filepath.Join(home, "first")
+	os.WriteFile(first, []byte("one"), 0o600)
+	Trash(first)
+	items, _ := ListTrash()
+	later := filepath.Join(home, "later")
+	os.WriteFile(later, []byte("two"), 0o600)
+	Trash(later)
+	if err := DeleteTrash([]TrashSelection{{ID: items[0].ID, Revision: "old"}}); !errors.Is(err, ErrStaleRevision) {
+		t.Fatalf("stale revision accepted: %v", err)
+	}
+	if err := DeleteTrash([]TrashSelection{selection(items[0])}); err != nil {
+		t.Fatal(err)
+	}
+	remaining, _ := ListTrash()
+	if len(remaining) != 1 || remaining[0].Name != "later" {
+		t.Fatalf("new arrivals removed: %+v", remaining)
+	}
+	for _, id := range []string{"../later", "/etc/passwd", ".", "..", ""} {
+		if err := DeleteTrash([]TrashSelection{{ID: id, Revision: "x"}}); !errors.Is(err, ErrValidation) {
+			t.Fatalf("invalid id %q accepted: %v", id, err)
+		}
+	}
+}
+
+func TestTrashMissingMetadataAndStorageFailure(t *testing.T) {
+	home := setupTrashHome(t)
+	path := filepath.Join(home, "orphan")
+	os.WriteFile(path, []byte("keep"), 0o600)
+	Trash(path)
+	dir, _ := trashDir()
+	os.Remove(filepath.Join(dir, "info", "orphan.trashinfo"))
+	items, err := ListTrash()
+	if err != nil || len(items) != 1 || items[0].CanRestore {
+		t.Fatalf("missing metadata not exposed: %+v %v", items, err)
+	}
+	if _, err := RestoreTrash(selection(items[0])); !errors.Is(err, ErrValidation) {
+		t.Fatal(err)
+	}
+	if err := DeleteTrash([]TrashSelection{selection(items[0])}); err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(filepath.Join(dir, "info"))
+	os.WriteFile(filepath.Join(dir, "info"), []byte("blocked"), 0o600)
+	os.WriteFile(path, []byte("still here"), 0o600)
+	if _, err := Trash(path); err == nil {
+		t.Fatal("invalid metadata storage accepted")
+	}
+	if data, _ := os.ReadFile(path); string(data) != "still here" {
+		t.Fatal("file lost on metadata failure")
+	}
+}

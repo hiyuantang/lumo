@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAppState } from '../shell/useAppState';
+import { Select } from '../shell/Select';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   describeError,
   getDataSource,
@@ -33,7 +35,7 @@ interface SavedSearch {
   search: string;
 }
 
-const SAVED_SEARCHES_KEY = 'lumio-os.logs.saved.v1';
+const SAVED_SEARCHES_KEY = 'lumo.logs.saved.v1';
 const SAVED_PRIORITIES = new Set(['all', 'err', 'warning', 'info', 'debug']);
 const SAVED_BOOTS = new Set(['all', 'current', 'previous']);
 const SAVED_TIME_RANGES = new Set(['all', '15m', '1h', '24h']);
@@ -96,7 +98,7 @@ function exportLines(lines: LogLine[]) {
   const url = URL.createObjectURL(new Blob([body + (body ? '\n' : '')], { type: 'application/x-ndjson' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = `lumio-journal-${new Date().toISOString().replaceAll(':', '-')}.jsonl`;
+  link.download = `lumo-journal-${new Date().toISOString().replaceAll(':', '-')}.jsonl`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -110,21 +112,33 @@ export function Logs() {
   const [streamError, setStreamError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
   const [paused, setPaused] = useState(false);
-  const [priority, setPriority] = useState<'all' | LogPriority>('all');
-  const [unit, setUnit] = useState('all');
-  const [boot, setBoot] = useState<BootFilter>('current');
-  const [timeRange, setTimeRange] = useState<TimeRange>('1h');
-  const [search, setSearch] = useState('');
+  const [priority, setPriority] = useAppState<'all' | LogPriority>('logs', 'priority', 'all', ['all', 'err', 'warning', 'info', 'debug']);
+  const [unit, setUnit] = useAppState<string>('logs', 'unit', 'all');
+  const [boot, setBoot] = useAppState<BootFilter>('logs', 'boot', 'current', ['all', 'current', 'previous']);
+  const [timeRange, setTimeRange] = useAppState<TimeRange>('logs', 'range', '1h', ['all', '15m', '1h', '24h']);
+  const [search, setSearch] = useAppState<string>('logs', 'search', '');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>(loadSavedSearches);
   const [selectedSavedId, setSelectedSavedId] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollAnchor = useRef<{ id: string; offset: number } | null>(null);
+
+  function rememberScrollPosition() {
+    const el = scrollRef.current;
+    if (!el || el.scrollTop <= 1) {
+      scrollAnchor.current = null;
+      return;
+    }
+    const top = el.getBoundingClientRect().top;
+    const row = [...el.querySelectorAll<HTMLElement>('[data-log-id]')].find((item) => item.getBoundingClientRect().bottom > top);
+    scrollAnchor.current = row ? { id: row.dataset.logId!, offset: row.getBoundingClientRect().top - top } : null;
+  }
 
   useEffect(() => {
     if (state.navigation?.target === 'logs') {
       setUnit(state.navigation.unit);
     }
-  }, [state.navigation?.nonce, state.navigation?.target, state.navigation?.unit]);
+  }, [state.navigation]);
 
   useEffect(() => {
     try {
@@ -159,6 +173,7 @@ export function Logs() {
       })
       .then((page) => {
         if (!alive) return;
+        scrollAnchor.current = null;
         setLines(page.entries);
         setSelectedId(null);
         setLoadError(null);
@@ -201,13 +216,18 @@ export function Logs() {
           line.message.toLowerCase().includes(q) ||
           line.unit.toLowerCase().includes(q) ||
           Object.values(line.fields).some((value) => value.toLowerCase().includes(q))),
-    );
+    ).sort((a, b) => b.timestamp - a.timestamp || b.id - a.id);
   }, [lines, priority, unit, timeRange, search]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (el && !paused) el.scrollTop = el.scrollHeight;
-  }, [filtered.length, paused]);
+    if (!el) return;
+    const anchor = scrollAnchor.current;
+    const row = anchor && el.querySelector<HTMLElement>(`[data-log-id="${anchor.id}"]`);
+    if (row) el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - anchor.offset;
+    else el.scrollTop = 0;
+    rememberScrollPosition();
+  }, [filtered]);
 
   const selected = lines.find((line) => line.id === selectedId) ?? null;
   const selectedFields = selected ? Object.entries(selected.fields).sort(([a], [b]) => a.localeCompare(b)) : [];
@@ -263,26 +283,12 @@ export function Logs() {
             </button>
           ))}
         </div>
-        <select className="logs-select" value={unit} onChange={(event) => setUnit(event.target.value)} aria-label="Filter by unit">
-          <option value="all">All units</option>
-          {unitOptions.map((name) => (
-            <option key={name} value={name}>{name}</option>
-          ))}
-        </select>
-        <select className="logs-select" value={boot} onChange={(event) => setBoot(event.target.value as BootFilter)} aria-label="Filter by boot">
-          <option value="all">All boots</option>
-          <option value="current">Current boot</option>
-          <option value="previous">Previous boot</option>
-        </select>
-        <select className="logs-select" value={timeRange} onChange={(event) => setTimeRange(event.target.value as TimeRange)} aria-label="Filter by time">
-          <option value="15m">Last 15 minutes</option>
-          <option value="1h">Last hour</option>
-          <option value="24h">Last 24 hours</option>
-          <option value="all">Any time</option>
-        </select>
+        <Select className="logs-select" value={unit} onChange={setUnit} aria-label="Filter by unit" options={[{ value: 'all', label: 'All units' }, ...unitOptions.map((name) => ({ value: name, label: name }))]} />
+        <Select className="logs-select" value={boot} onChange={(value) => setBoot(value as BootFilter)} aria-label="Filter by boot" options={[{ value: 'all', label: 'All boots' }, { value: 'current', label: 'Current boot' }, { value: 'previous', label: 'Previous boot' }]} />
+        <Select className="logs-select" value={timeRange} onChange={(value) => setTimeRange(value as TimeRange)} aria-label="Filter by time" options={[{ value: '15m', label: 'Last 15 minutes' }, { value: '1h', label: 'Last hour' }, { value: '24h', label: 'Last 24 hours' }, { value: 'all', label: 'Any time' }]} />
         <label className="app-search">
           <IconSearch size={13} />
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search fields and messages" aria-label="Search logs" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search logs" aria-label="Search logs" />
         </label>
         <button type="button" className="btn" data-testid="logs-pause" aria-pressed={paused} onClick={() => setPaused((value) => !value)}>
           {paused ? <IconPlay size={12} /> : <IconPause size={12} />}
@@ -291,10 +297,7 @@ export function Logs() {
       </div>
 
       <div className="logs-saved-bar">
-        <select value={selectedSavedId} onChange={(event) => applySavedSearch(event.target.value)} aria-label="Saved searches">
-          <option value="">Saved searches</option>
-          {savedSearches.map((saved) => <option key={saved.id} value={saved.id}>{saved.label}</option>)}
-        </select>
+        <Select value={selectedSavedId} onChange={applySavedSearch} aria-label="Saved searches" options={[{ value: '', label: 'Saved searches' }, ...savedSearches.map((saved) => ({ value: saved.id, label: saved.label }))]} />
         <button type="button" className="btn" data-testid="logs-save-search" onClick={saveCurrentSearch}>Save search</button>
         <button
           type="button"
@@ -308,15 +311,15 @@ export function Logs() {
         >
           Delete
         </button>
-        <span>{filtered.length} entries</span>
+        <span>{filtered.length} entries · Newest first</span>
         <button type="button" className="btn" data-testid="logs-export" disabled={filtered.length === 0} onClick={() => exportLines(filtered)}>Export JSONL</button>
       </div>
 
       {streamError && <p className="logs-banner" data-testid="logs-stream-error">{streamError}</p>}
 
-      <div className="logs-list" ref={scrollRef} role="log" aria-label="Journal stream" data-testid="logs-list">
+      <div className="logs-list" ref={scrollRef} onScroll={rememberScrollPosition} role="log" aria-label="Journal stream" data-testid="logs-list">
         {filtered.map((line) => (
-          <button key={line.id} type="button" className={`logs-row${selectedId === line.id ? ' selected' : ''}`} data-testid="logs-row" onClick={() => setSelectedId(line.id)}>
+          <button key={line.id} type="button" className={`logs-row${selectedId === line.id ? ' selected' : ''}`} data-log-id={line.id} data-testid="logs-row" onClick={() => setSelectedId(line.id)}>
             <span className="logs-time mono">{new Date(line.timestamp).toLocaleTimeString([], { hour12: false })}</span>
             <span className={`logs-prio prio-${line.priority}`}>{line.priority}</span>
             <span className="logs-unit-name mono">{line.unit}</span>
@@ -329,13 +332,13 @@ export function Logs() {
             <button type="button" className="btn" data-testid="logs-retry" onClick={() => setRetryNonce((value) => value + 1)}>Retry</button>
           </p>
         )}
-        {!loadError && filtered.length === 0 && <p className="logs-empty">No log lines match the current filters.</p>}
+        {!loadError && filtered.length === 0 && <p className="logs-empty">No matching entries.</p>}
       </div>
 
       {selected && (
         <div className="logs-detail" data-testid="logs-detail" aria-label="Log entry detail">
           <header>
-            <h2>Structured fields</h2>
+            <h2>Fields</h2>
             {selected.unit.endsWith('.service') && (
               <button type="button" className="btn" data-testid="logs-open-service" onClick={() => actions.openService(selected.unit)}>Open service</button>
             )}

@@ -6,7 +6,7 @@ import type { Viewport } from './windowGeometry';
 const DURATION = 420;
 
 export function useWindowMinimize(win: WindowState, viewport: Viewport, reducedMotion: boolean) {
-  const { appId, minimized, x, y, w, h } = win;
+  const { id, appId, minimized, x, y, w, h } = win;
   const ref = useRef<HTMLElement>(null);
   const animation = useRef<Animation | null>(null);
   const previous = useRef(minimized);
@@ -20,7 +20,9 @@ export function useWindowMinimize(win: WindowState, viewport: Viewport, reducedM
     if (!element) return;
     const changed = previous.current !== minimized;
     previous.current = minimized;
-    const dock = document.querySelector<HTMLButtonElement>(`[data-testid="dock-app-${appId}"]`);
+    const app = document.querySelector<HTMLButtonElement>(`[data-testid="dock-app-${appId}"]`);
+    const dock = document.querySelector<HTMLButtonElement>(`[data-testid="dock-minimized-${id}"]`) ?? app;
+    if (changed && minimized) dock?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 
     if (changed && minimized && element.contains(document.activeElement)) {
       const next = document.querySelector<HTMLElement>('.window.focused:not([hidden])');
@@ -40,7 +42,7 @@ export function useWindowMinimize(win: WindowState, viewport: Viewport, reducedM
       setVisible(!minimized);
       setMotion('settled');
       if (!minimized && element.classList.contains('focused') &&
-        (document.activeElement === dock || document.activeElement === document.body || element.contains(document.activeElement))) {
+        (document.activeElement === dock || document.activeElement === app || document.activeElement === document.body || element.contains(document.activeElement))) {
         const target = lastFocus.current;
         (target?.isConnected && element.contains(target) ? target : element).focus({ preventScroll: true });
         if (!element.contains(document.activeElement)) element.focus({ preventScroll: true });
@@ -57,7 +59,7 @@ export function useWindowMinimize(win: WindowState, viewport: Viewport, reducedM
       return;
     }
 
-    const icon = dock?.querySelector<HTMLElement>('.dock-icon');
+    const icon = dock?.querySelector<HTMLElement>('.dock-window-canvas') ?? dock?.querySelector<HTMLElement>('.dock-icon');
     const bounds = element.getBoundingClientRect();
     const target = icon?.getBoundingClientRect();
     if (!target || !bounds.width || !bounds.height) {
@@ -66,11 +68,11 @@ export function useWindowMinimize(win: WindowState, viewport: Viewport, reducedM
     }
     const dx = target.x + target.width / 2 - bounds.x - bounds.width / 2;
     const dy = target.y + target.height / 2 - bounds.y - bounds.height / 2;
-    const scale = Math.min(target.width / bounds.width, target.height / bounds.height) * 0.8;
+    const scale = Math.min(target.width / bounds.width, target.height / bounds.height);
     const effect = element.animate([
       { transform: 'none', opacity: 1, offset: 0 },
       { transform: `translate(${dx * 0.8}px, ${dy * 0.6}px) scale(0.38)`, opacity: 1, offset: 0.65 },
-      { transform: `translate(${dx}px, ${dy}px) scale(${scale})`, opacity: 0, offset: 1 },
+      { transform: `translate(${dx}px, ${dy}px) scale(${scale})`, opacity: 1, offset: 1 },
     ], { duration: DURATION, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'both' });
     animation.current = effect;
     element.inert = true;
@@ -80,7 +82,7 @@ export function useWindowMinimize(win: WindowState, viewport: Viewport, reducedM
       effect.reverse();
     }
     effect.onfinish = settle;
-  }, [appId, minimized, reducedMotion, x, y, w, h, viewport.w, viewport.h]);
+  }, [id, appId, minimized, reducedMotion, x, y, w, h, viewport.w, viewport.h]);
 
   useLayoutEffect(() => () => {
     if (animation.current) {

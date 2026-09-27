@@ -56,7 +56,7 @@ function evaluate(raw: string, ctx: { user: string }): { out: string[]; clear?: 
     case 'exit':
       return { out: [], exit: true };
     default:
-      return { out: [`lumio-sh: command not found: ${cmd}`] };
+      return { out: [`lumo-sh: command not found: ${cmd}`] };
   }
 }
 
@@ -73,7 +73,7 @@ export class MockTerminalSession implements TerminalSession {
   ) {
     queueMicrotask(() => {
       if (this.closed) return;
-      this.emit("Lumio OS mock shell — no commands leave this window. Type 'help'.\r\n");
+      this.emit("Demo terminal · type 'help'.\r\n");
       this.emit(PROMPT);
     });
   }

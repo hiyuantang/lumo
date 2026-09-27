@@ -22,7 +22,7 @@ function socketUrl(): string {
   return `${scheme}://${window.location.host}${API_BASE}/ws${suffix}`;
 }
 
-export class LumioSocket {
+export class LumoSocket {
   private ws: WebSocket | null = null;
   private open = false;
   private nextChannel = 1;

@@ -1,0 +1,53 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.app-library { min-width: 0; overflow: hidden; container-type: inline-size; }
+.app-library-body { display: grid; grid-template-columns: 190px minmax(0,1fr); flex: 1; min-height: 0; }
+.app-library-sidebar { display: flex; flex-direction: column; padding: 22px 12px; gap: 10px; background: var(--surface-sidebar); border-right: 1px solid var(--border); }
+.library-sidebar-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px 8px; color: var(--text-muted); font-size: 12px; }
+.library-refresh { display: grid; place-items: center; padding: 7px; min-width: 30px; }
+.library-item { display: flex; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 12px; padding: 10px 8px; text-align: left; }
+.library-item.selected { background: var(--accent-soft); border-color: var(--border-strong); }
+.library-item strong { font-size: 12px; display: block; }
+.library-item small { font-size: 10px; color: var(--text-muted); display: block; margin-top: 4px; }
+.library-icon { width: 40px; height: 40px; flex-shrink: 0; border-radius: 11px; display: grid; place-items: center; color: white; box-shadow: inset 0 1px 1px #ffffff70,0 3px 5px #1232; }
+.library-icon.docker { background: linear-gradient(145deg,#62a9d4,#327491); }
+.library-icon.opencode { background: linear-gradient(145deg,#9b87c8,#655486); }
+.library-icon.nginx { background: linear-gradient(145deg,#82b899,#387467); }
+.app-library-detail { overflow: auto; min-width: 0; padding: 34px; display: flex; flex-direction: column; gap: 24px; }
+.library-hero { display: flex; align-items: center; gap: 18px; }
+.library-hero > div { flex: 1; min-width: 0; }
+.library-hero-icon { width: 76px; height: 76px; border-radius: 21px; }
+.library-hero h1 { font-size: 28px; margin: 5px 0; }
+.library-hero p { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+.library-hero > .btn { min-width: 86px; }
+.library-information { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 22px; padding: 22px 0; border-block: 1px solid var(--border); }
+.library-information span { color: var(--text-muted); font-size: 11px; display: block; margin-bottom: 7px; }
+.library-information strong { font-size: 12px; font-weight: 550; }
+.library-description { margin: 0; font-size: 13px; line-height: 1.7; color: var(--text-muted); }
+.library-plan,.library-progress { display: grid; gap: 14px; padding: 20px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface); }
+.library-plan h2 { font-size: 16px; }
+.library-packages { max-height: 230px; overflow: auto; }
+.library-packages > div { display: flex; justify-content: space-between; gap: 15px; padding: 10px 0; font-size: 11px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.library-footer { margin-top: auto; display: flex; align-items: center; gap: 20px; padding-top: 14px; }
+@container (max-width: 670px) {
+  .app-library-body { grid-template-columns: 145px minmax(0,1fr); }
+  .app-library-sidebar { padding: 18px 8px; }
+  .app-library-detail { padding: 22px; gap: 20px; }
+  .library-hero { flex-wrap: wrap; gap: 12px; }
+  .library-hero-icon { width: 52px; height: 52px; border-radius: 14px; }
+  .library-hero-icon svg { width: 30px; }
+  .library-hero > .btn { margin-left: 64px; }
+  .library-hero h1 { font-size: 24px; }
+  .library-footer { flex-direction: column; align-items: flex-start; }
+}
+@container (max-width: 480px) {
+  .app-library-body { display: flex; flex-direction: column; }
+  .app-library-sidebar { flex-direction: row; padding: 10px; border-bottom: 1px solid var(--border); border-right: 0; }
+  .library-sidebar-heading { padding: 0; }
+  .library-sidebar-heading > strong { display: none; }
+  .library-item { flex: 1; padding: 7px; }
+  .app-library-detail { flex: 1; min-height: 0; padding: 20px; }
+  .library-hero > .btn { margin-left: 0; }
+  .library-item { min-width: 0; gap: 6px; }
+  .library-item .library-icon { width: 28px; height: 28px; }
+  .library-hero h1 { font-size: 22px; }
+}

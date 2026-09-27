@@ -1,0 +1,26 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.trash { min-width: 0; container-type: inline-size; }
+.trash-intro { flex: 1; font-size: 12px; color: var(--text-muted); }
+.trash-scroll { flex: 1; min-height: 0; overflow: auto; }
+.trash-columns,.trash-row { display: grid; grid-template-columns: minmax(260px,1fr) 115px 70px; gap: 16px; padding: 14px 20px; min-width: 520px; }
+.trash-columns { color: var(--text-muted); font-size: 11px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface-raised); }
+.trash-row { width: 100%; text-align: left; align-items: center; font-size: 12px; border-bottom: 1px solid var(--border); }
+.trash-row:hover { background: var(--surface); }
+.trash-row.selected { background: var(--accent-soft); }
+.trash-name { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.trash-name svg { flex-shrink: 0; color: var(--text-muted); }
+.trash-name > span { min-width: 0; }
+.trash-name strong { display: block; overflow-wrap: anywhere; font-weight: 550; }
+.trash-name small { display: block; color: var(--text-muted); margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trash-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted); padding: 30px; text-align: center; }
+.trash-empty h2,.trash-empty p { margin: 0; }
+.trash-empty h2 { color: var(--text); font-size: 20px; }
+.trash-empty p { font-size: 13px; }
+.trash-error { margin: 0; padding: 12px 20px; color: var(--danger); font-size: 13px; }
+.trash-footer { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); }
+.trash-footer > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trash-footer .btn { font-size: 11px; }
+@container (max-width: 600px) {
+  .trash .app-toolbar { flex-wrap: wrap; }
+  .trash-intro { flex-basis: 100%; }
+}

@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { mockSkills } from './skills';
+import type { SkillCatalog, SkillDetail } from '../api/skills';
+import type { TrashItem, TrashSelection } from '../api/trash';
 import { base64ToText, textToBase64 } from '../api/encoding';
 import type {
   DataSource,
@@ -22,6 +25,8 @@ import type {
   SessionUser,
   SourceCapabilities,
   SystemIdentity,
+  SystemSettings,
+  SystemSettingsChange,
   SystemOverview,
   TerminalHandlers,
   TerminalOpenOptions,
@@ -31,11 +36,14 @@ import type {
   UpdateProgress,
 } from '../api/source';
 import { ApiError } from '../api/transport';
+import { MockServerApps } from './server-apps';
+import type { AppCatalog, ContainerAction, ServerAppID, WebsiteDefinition } from '../api/server-apps';
 import {
-  deleteEntry,
+  deleteEntry, listTrashed, restoreTrashed, removeTrashed,
   entryRevision,
   getEntry,
   homePath as mockHomePath,
+  createEntry as mockCreateEntry,
   listDir as mockListDir,
   writeEntry,
 } from './filesystem';
@@ -61,13 +69,29 @@ import {
 const TICK_MS = 2000;
 
 export class MockDataSource implements DataSource {
+  async getAppCatalog(): Promise<AppCatalog> { return { canInstall: true, apps: [{ id: 'docker', installed: true }, { id: 'nginx', installed: true }] }; }
+  async uninstallOpenCode(): Promise<void> {}
+  async planAppInstall(id: ServerAppID, operation: 'install' | 'uninstall' = 'install'): Promise<UpdatePlan> {
+    return { ...await calculateUpdatePlan(), appId: id, operation, packages: [] };
+  }
+  private serverApps = new MockServerApps();
+  getContainers() { return this.serverApps.getContainers(); }
+  getContainer(id: string) { return this.serverApps.getContainer(id); }
+  getContainerLogs(id: string) { return this.serverApps.getContainerLogs(id); }
+  runContainerAction(id: string, action: ContainerAction, revision: string) { return this.serverApps.runContainerAction(id, action, revision); }
+  getWebsites() { return this.serverApps.getWebsites(); }
+  getWebsiteLogs(kind: 'access' | 'error') { return this.serverApps.getWebsiteLogs(kind); }
+  saveWebsite(id: string, definition: WebsiteDefinition, revision: string) { return this.serverApps.saveWebsite(id, definition, revision); }
+  private settings: SystemSettings = {
+    hostname: 'atlas', runtimeHostname: 'atlas.lan', timezone: 'Etc/UTC',
+    ntp: true, canNtp: true, ntpSynchronized: true, serverTime: '', revision: 'mock-0',
+  };
+  private settingsRevision = 0;
   readonly kind = 'mock' as const;
   readonly capabilities: SourceCapabilities = {
     isLive: false,
     canServiceActions: true,
     canTerminal: true,
-    canWriteFiles: true,
-    canManageUpdates: true,
     canPowerControl: true,
     canConfigureNetwork: true,
   };
@@ -91,7 +115,7 @@ export class MockDataSource implements DataSource {
   async getIdentity(): Promise<SystemIdentity> {
     const overview = getOverview();
     return {
-      hostname: overview.hostname,
+      hostname: this.settings.runtimeHostname,
       os: overview.os,
       kernel: overview.kernel,
       architecture: 'x86_64',
@@ -100,8 +124,37 @@ export class MockDataSource implements DataSource {
     };
   }
 
+  async listProcesses() {
+    return [
+      { pid: 1, name: 'systemd', user: 'root', state: 'S', cpuPercent: 0.1, memoryBytes: 12582912 },
+      { pid: 482, name: 'lumod', user: 'demo', state: 'R', cpuPercent: 2.4, memoryBytes: 48234496 },
+      { pid: 719, name: 'nginx', user: 'www-data', state: 'S', cpuPercent: 0.8, memoryBytes: 24117248 },
+    ];
+  }
+
   async getOverview(): Promise<SystemOverview> {
-    return getOverview();
+    return { ...getOverview(), hostname: this.settings.runtimeHostname };
+  }
+
+  async getSystemSettings(): Promise<SystemSettings> {
+    return { ...this.settings, serverTime: new Date().toISOString() };
+  }
+
+  async getTimezones(): Promise<string[]> {
+    return ['Etc/UTC', ...Intl.supportedValuesOf('timeZone')];
+  }
+
+  async updateSystemSettings(change: SystemSettingsChange, expectedRevision: string): Promise<SystemSettings> {
+    if (expectedRevision !== this.settings.revision) {
+      throw new ApiError('stale_revision', 'The system settings changed.', {});
+    }
+    this.settings = { ...this.settings, ...change, revision: `mock-${++this.settingsRevision}` };
+    if ('ntp' in change) this.settings.ntpSynchronized = change.ntp;
+    return this.getSystemSettings();
+  }
+
+  onIdentityChanged(): Unsubscribe {
+    return () => {};
   }
 
   async runPowerAction(action: PowerAction): Promise<PowerSchedule> {
@@ -198,6 +251,13 @@ export class MockDataSource implements DataSource {
     return [...LOG_UNITS];
   }
 
+  async listSkills(): Promise<SkillCatalog> { return { path: '/home/user/.agents/skills', skills: mockSkills, limited: false }; }
+  async readSkill(id: string): Promise<SkillDetail> {
+    const skill = mockSkills.find((item) => item.id === id);
+    if (!skill) throw new Error('Skill no longer exists. Refresh the list.');
+    return skill;
+  }
+
   homePath(): string[] {
     return mockHomePath();
   }
@@ -205,6 +265,10 @@ export class MockDataSource implements DataSource {
   async listDir(path: string[]): Promise<FsEntry[]> {
     return mockListDir(path);
   }
+
+  absolutePath(path: string[]): string { return `/home/${path.join('/')}`; }
+
+  async createEntry(path: string[], kind: 'file' | 'directory'): Promise<void> { mockCreateEntry(path, kind); }
 
   async readFile(path: string[]): Promise<FileRead> {
     const entry = getEntry(path);
@@ -237,6 +301,9 @@ export class MockDataSource implements DataSource {
     return writePrivilegedFile(path, contentBase64, expectedRevision, restartUnit);
   }
 
+  async listTrash(): Promise<TrashItem[]> { return listTrashed(); }
+  async restoreTrash(item: TrashSelection): Promise<string> { return restoreTrashed(item); }
+  async deleteTrash(items: TrashSelection[]): Promise<void> { removeTrashed(items); }
   async deleteFile(path: string[]): Promise<void> {
     deleteEntry(path);
   }

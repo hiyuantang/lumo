@@ -185,3 +185,35 @@ export function IconNetwork(p: IconProps) {
     </>,
   );
 }
+
+export function IconBoxes(p: IconProps) {
+  return base(p, <><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9M8 5.3l8 4.5"/></>);
+}
+
+export function IconGrid(p: IconProps) {
+  return base(p, <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>);
+}
+
+export function IconGlobe(p: IconProps) {
+  return base(p, <><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5.2 6.5h13.6M5.2 17.5h13.6"/></>);
+}
+
+export function IconCode(p: IconProps) {
+  return base(p, <><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m9 9-3 3 3 3m6-6 3 3-3 3"/></>);
+}
+
+export function IconTrash(p: IconProps) {
+  return base(p, <><path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7" /></>);
+}
+
+export function IconMonitor(p: IconProps) {
+  return base(p, <><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 12h3l2-5 2 8 2-3h2M8 21h8M12 18v3"/></>);
+}
+
+export function IconRefresh(p: IconProps) {
+  return base(p, <><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9"/></>);
+}
+
+export function IconSkills(p: IconProps) {
+  return base(p, <><path d="M4 5.5C7 4 9.5 4.5 12 6c2.5-1.5 5-2 8-.5v14c-3-1.5-5.5-1-8 .5-2.5-1.5-5-2-8-.5zM12 6v14M7 9h2M7 12h2M15 9h2M15 12h2"/></>);
+}

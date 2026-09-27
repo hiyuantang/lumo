@@ -15,6 +15,6 @@ rm -rf server/internal/static/dist
 cp -R dist server/internal/static/dist
 
 mkdir -p server/bin
-(cd server && "$GO" build -tags webdist -o bin/lumiod ./cmd/lumiod)
+(cd server && "$GO" build -tags webdist -o bin/lumod ./cmd/lumod)
 
-echo "built server/bin/lumiod with embedded frontend"
+echo "built server/bin/lumod with embedded frontend"

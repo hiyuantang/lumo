@@ -9,10 +9,10 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"lumio-os/server/internal/journal"
-	"lumio-os/server/internal/services"
-	"lumio-os/server/internal/system"
-	"lumio-os/server/internal/terminal"
+	"lumo/server/internal/journal"
+	"lumo/server/internal/services"
+	"lumo/server/internal/system"
+	"lumo/server/internal/terminal"
 )
 
 const (

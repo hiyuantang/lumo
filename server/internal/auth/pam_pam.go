@@ -12,7 +12,7 @@ import (
 const Available = true
 
 func Authenticate(username, password string) error {
-	tx, err := pam.StartFunc("lumiod", username, func(style pam.Style, msg string) (string, error) {
+	tx, err := pam.StartFunc("lumod", username, func(style pam.Style, msg string) (string, error) {
 		if style == pam.PromptEchoOff {
 			return password, nil
 		}
