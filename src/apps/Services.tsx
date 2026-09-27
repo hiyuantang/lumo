@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useAppMenus } from '../shell/appMenus';
+import { useContextMenu } from '../shell/ContextMenu';
 import { useAppState } from '../shell/useAppState';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -52,6 +54,7 @@ function actionAvailable(unit: ServiceUnit, action: ServiceAction): boolean {
 }
 
 export function Services() {
+  const openContextMenu = useContextMenu();
   const { actions, state } = useShell();
   const source = getDataSource();
   const requireReauth = useReauth();
@@ -93,6 +96,8 @@ export function Services() {
       setSelectedName(state.navigation.unit);
     }
   }, [state.navigation]);
+
+  useAppMenus({ view: [{ id: 'refresh', label: 'Refresh', run: () => setRetryNonce((value) => value + 1) }] });
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -196,6 +201,16 @@ export function Services() {
               data-testid={`service-row-${unit.name}`}
               className={`service-row${selected?.name === unit.name ? ' selected' : ''}${unit.state === 'failed' ? ' failed' : ''}`}
               onClick={() => setSelectedName(unit.name)}
+              onContextMenu={(event) => {
+                setSelectedName(unit.name);
+                openContextMenu(event, [
+                  { label: 'Open Logs', run: () => actions.openLogs(unit.name) },
+                  ...(canAct ? (Object.keys(ACTION_LABEL) as ServiceAction[]).filter((action) => actionAvailable(unit, action)).map((action, index) => ({
+                    label: ACTION_LABEL[action], separator: index === 0, disabled: busyAction !== null,
+                    danger: action === 'stop' || action === 'disable', run: () => request(unit, action),
+                  })) : []),
+                ]);
+              }}
             >
               <span className={`service-dot state-${unit.state}`} aria-hidden="true" />
               <span className="service-names">
@@ -242,7 +257,8 @@ export function Services() {
                 </div>
               </dl>
               <div className="services-actions">
-                {(Object.keys(ACTION_LABEL) as ServiceAction[]).map((action) => (
+                <button type="button" className="btn" data-testid="service-open-logs" onClick={() => actions.openLogs(selected.name)}>Open logs</button>
+                {(['enable', 'disable', 'reload', 'start', 'restart', 'stop'] as ServiceAction[]).map((action) => (
                   <button
                     key={action}
                     type="button"
@@ -256,14 +272,6 @@ export function Services() {
                     {busyAction === action ? 'Working…' : ACTION_LABEL[action]}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  className="btn"
-                  data-testid="service-open-logs"
-                  onClick={() => actions.openLogs(selected.name)}
-                >
-                  Open logs
-                </button>
               </div>
               {!canAct && (
                 <p className="services-actions-note" data-testid="services-actions-note">

@@ -66,6 +66,9 @@ type Route struct {
 }
 
 type Interface struct {
+	Index        int      `json:"-"`
+	Gateways     []string `json:"gateways"`
+	DNSServers   []string `json:"dnsServers"`
 	Name         string   `json:"name"`
 	HardwareAddr string   `json:"hardwareAddress,omitempty"`
 	Addresses    []string `json:"addresses"`
@@ -74,7 +77,9 @@ type Interface struct {
 }
 
 type Snapshot struct {
-	Revision   string      `json:"revision"`
+	DNSServers []string    `json:"dnsServers"`
+	DNSSource  string      `json:"dnsSource,omitempty"`
+	Revision   string      `json:"revision,omitempty"`
 	Interfaces []Interface `json:"interfaces"`
 }
 
@@ -162,40 +167,36 @@ func boolCall(ctx context.Context, object dbus.BusObject, method string, args ..
 	return nil
 }
 
-type Reader struct {
-	backend backend
-}
+type Reader struct{}
 
-func NewReader() *Reader {
-	backend, err := newDBusBackend()
-	if err != nil {
-		return &Reader{}
-	}
-	return &Reader{backend: backend}
-}
+func NewReader() *Reader { return &Reader{} }
 
-func (r *Reader) Available() bool {
-	return r != nil && r.backend != nil
-}
+func (r *Reader) Available() bool { return r != nil }
 
 func (r *Reader) Snapshot(ctx context.Context) (Snapshot, error) {
-	if !r.Available() {
-		return Snapshot{}, errors.New("Netplan D-Bus is unavailable")
-	}
-	path, merged, err := r.backend.create(ctx)
-	if err != nil {
+	if err := ctx.Err(); err != nil {
 		return Snapshot{}, err
 	}
-	defer func() {
-		cancelCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		_ = r.backend.cancel(cancelCtx, path)
-	}()
 	interfaces, err := liveInterfaces()
 	if err != nil {
 		return Snapshot{}, err
 	}
-	return Snapshot{Revision: Revision(merged), Interfaces: interfaces}, nil
+	gateways, _ := defaultGateways()
+	dns, source := readDNS(ctx)
+	for i := range interfaces {
+		item := &interfaces[i]
+		if gateways != nil {
+			item.Gateways = scopedAddresses(gateways[item.Index], item.Name)
+		}
+		if dns != nil && source == "resolved" {
+			item.DNSServers = scopedAddresses(dns[item.Index], item.Name)
+		}
+	}
+	var globalDNS []string
+	if dns != nil {
+		globalDNS = scopedAddresses(dns[0], "")
+	}
+	return Snapshot{Interfaces: interfaces, DNSServers: globalDNS, DNSSource: source}, nil
 }
 
 type Controller struct {
@@ -459,6 +460,7 @@ func liveInterfaces() ([]Interface, error) {
 		}
 		sort.Strings(formatted)
 		result = append(result, Interface{
+			Index:        value.Index,
 			Name:         value.Name,
 			HardwareAddr: value.HardwareAddr.String(),
 			Addresses:    formatted,

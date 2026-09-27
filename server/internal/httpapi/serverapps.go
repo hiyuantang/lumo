@@ -112,3 +112,32 @@ func writeServerAppError(w http.ResponseWriter, err error) {
 	}
 	WriteError(w, NewError(code, err.Error()))
 }
+
+func (s *Server) handleDockerResources(w http.ResponseWriter, r *http.Request) {
+	reader, ok := s.deps.Containers.(interface {
+		Resources(context.Context) (containers.Resources, error)
+	})
+	if !ok {
+		s.handleUnavailable(w, r)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 40*time.Second)
+	defer cancel()
+	data, err := reader.Resources(ctx)
+	if err != nil {
+		writeServerAppError(w, err)
+		return
+	}
+	WriteData(w, data)
+}
+func (s *Server) handleDockerResourceAction(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		containers.ResourceRequest
+	}
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil || !validRequestID(req.RequestID) || containers.ValidateResource(req.ResourceRequest) != nil {
+		WriteError(w, NewError(CodeValidationFailed, "Choose a supported Docker resource and current revision."))
+		return
+	}
+	s.forwardBrokerAction(w, r, brokerAction{RequestID: req.RequestID, Action: "docker.resource", Arguments: map[string]any{"resource": req.ResourceRequest}}, 50*time.Second)
+}

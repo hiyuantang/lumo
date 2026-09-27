@@ -18,6 +18,16 @@
   flex-wrap: wrap;
 }
 
+.app-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  max-width: 100%;
+  margin-left: auto;
+}
+
 .app-search {
   display: flex;
   align-items: center;
@@ -48,15 +58,16 @@
   padding: 0 var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
-  background: var(--surface);
-  font-size: 12.5px;
-  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
-  box-shadow: inset 0 1px var(--glass-highlight), 0 1px 2px rgba(9, 35, 45, 0.04);
+  background: var(--button-fill);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  box-shadow: var(--button-shadow);
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--accent-soft);
-  border-color: var(--accent);
+  background: var(--button-hover);
+  border-color: var(--border-strong);
 }
 
 .btn:disabled {
@@ -65,14 +76,20 @@
 }
 
 .btn-primary {
-  background: var(--accent);
-  border-color: transparent;
-  color: var(--accent-contrast);
+  background: var(--button-primary);
+  border-color: var(--button-primary-border);
+  color: var(--button-primary-text);
+  font-weight: 600;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: transparent;
+  background: var(--button-primary-hover);
+  border-color: var(--button-primary-border);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
 }
 
 .btn.active {
@@ -145,7 +162,7 @@
 .btn-danger {
   background: var(--danger);
   border-color: transparent;
-  color: #fff;
+  color: var(--danger-contrast);
 }
 
 .btn-danger:hover:not(:disabled) {
@@ -160,7 +177,7 @@
   z-index: 3500;
   display: grid;
   place-items: center;
-  background: rgba(9, 27, 34, 0.18);
+  background: rgba(0, 0, 0, 0.24);
 }
 
 .window .quicklook-overlay {

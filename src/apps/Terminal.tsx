@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useAppMenus } from '../shell/appMenus';
 import { useReorder } from '../shell/useReorder';
 import { copyText, readClipboard } from '../utils/clipboard';
 import { useEffect, useRef, useState } from 'react';
@@ -34,10 +35,10 @@ function readTheme(): ITheme {
   const styles = getComputedStyle(document.documentElement);
   const v = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
   return {
-    background: v('--surface-sunken', '#161513'),
-    foreground: v('--text', '#f0ede7'),
-    cursor: v('--accent', '#2fbfae'),
-    selectionBackground: v('--accent-soft', 'rgba(47, 191, 174, 0.16)'),
+    background: v('--surface-sunken', '#101010'),
+    foreground: v('--text', '#f5f5f5'),
+    cursor: v('--accent', '#eeeeee'),
+    selectionBackground: v('--accent-soft', 'rgba(255, 255, 255, 0.12)'),
   };
 }
 
@@ -60,6 +61,7 @@ export function TerminalWorkspace({ program, directory }: { program?: 'opencode'
 
 function TerminalTabs({ program, directory }: { program?: 'opencode'; directory?: string }) {
   const win = useCurrentWindow();
+  const openContextMenu = useContextMenu();
   const { state, actions } = useShell();
   const user = state.user ?? 'user';
   const [tabs, setTabs] = useState<TabState[]>(() => [newTab([])]);
@@ -90,6 +92,11 @@ function TerminalTabs({ program, directory }: { program?: 'opencode'; directory?
     setTabs((prev) => prev.filter((tab) => tab.id !== id));
   }
 
+  useAppMenus({ file: [
+    { id: 'new-tab', label: 'New Tab', run: addTab },
+    { id: 'close-tab', label: 'Close Tab', disabled: effectiveActive === null, run: () => { if (effectiveActive !== null) closeTab(effectiveActive); } },
+  ] });
+
   return (
     <div className="app terminal" data-testid={program ? 'opencode-terminal' : 'app-terminal'}>
       <div className="terminal-tabs" role="tablist" aria-label="Terminal tabs">
@@ -102,6 +109,11 @@ function TerminalTabs({ program, directory }: { program?: 'opencode'; directory?
             aria-selected={tab.id === effectiveActive}
             aria-label={`${tab.name}${tab.exitCode !== null ? ", exited" : ""}`}
             data-testid={`terminal-tab-${tab.id}`}
+            onContextMenu={(event) => openContextMenu(event, [
+              { label: 'New Tab', run: addTab },
+              ...(tab.exitCode !== null ? [{ label: 'Restart Tab', run: () => updateTab(tab.id, { epoch: tab.epoch + 1, exitCode: null, error: null }) }] : []),
+              { label: 'Close Tab', separator: true, run: () => closeTab(tab.id) },
+            ])}
           >
             <button type="button" className="terminal-tab-label" title="Drag to reorder · Alt + Left/Right" aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight" onClick={() => setActiveId(tab.id)}>
               {tab.name}{tab.exitCode !== null && <span className="terminal-tab-status">Exited</span>}

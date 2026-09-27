@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useAppMenus } from '../shell/appMenus';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api/transport';
 import { describeError, getDataSource } from '../api/source';
@@ -73,13 +74,18 @@ export function Trash({ embedded = false }: { embedded?: boolean }) {
     finally { setConfirm(null); await refresh(); setBusy(false); }
   }
 
+  useAppMenus({
+    file: [{ id: 'empty-trash', label: 'Empty Trash…', disabled: busy || !items.length, run: () => setConfirm(items) }],
+    view: [{ id: 'refresh', label: 'Refresh', disabled: busy, run: () => { void refresh(); } }],
+  });
+
   return <div className="app trash" data-testid="app-trash">
     <div className="app-toolbar">
       <span className="trash-intro">Deleted items stay here until you empty Trash.</span>
-      <button className="btn" type="button" data-testid="trash-refresh" disabled={busy} onClick={() => { setError(null); void refresh(); }}>Refresh</button>
+      <div className="app-toolbar-actions"><button className="btn" type="button" data-testid="trash-refresh" disabled={busy} onClick={() => { setError(null); void refresh(); }}>Refresh</button>
       <button className="btn" type="button" data-testid="trash-restore" disabled={busy || !item?.canRestore} onClick={() => item && void restore(item)}>Restore</button>
       <button className="btn btn-danger" type="button" data-testid="trash-empty" disabled={busy || !items.length} onClick={() => setConfirm([...items])}>Empty Trash…</button>
-    </div>
+    </div></div>
     {error && <p className="trash-error" role="alert">{error}</p>}
     {loading ? <div className="trash-empty">Loading Trash…</div> : items.length === 0 ? <div className="trash-empty" data-testid="trash-empty-state"><IconTrash size={48}/><h2>Trash is empty</h2><p>Items you move to Trash will appear here.</p></div> : <div className="trash-scroll">
       <div className="trash-columns" aria-hidden="true"><span>Name and original location</span><span>Deleted</span><span>Size</span></div>

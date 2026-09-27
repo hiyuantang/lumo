@@ -15,10 +15,10 @@ export function useAppState<T extends ViewValue>(app: string, name: string, init
 export function useAppPreference<T extends ViewValue>(app: string, name: string, initial: T | (() => T), choices?: readonly T[]) {
   const { state } = useShell();
   const key = `lumo.view.v1:${encodeURIComponent(state.user ?? '')}:${app}:${name}`;
-  return useStoredState(key, initial, choices);
+  return useStoredState(key, initial, choices, true);
 }
 
-function useStoredState<T extends ViewValue>(key: string, initial: T | (() => T), choices?: readonly T[]) {
+function useStoredState<T extends ViewValue>(key: string, initial: T | (() => T), choices?: readonly T[], shared = false) {
   const [value, setValue] = useState<T>(() => {
     const fallback = typeof initial === 'function' ? initial() : initial;
     try {
@@ -30,7 +30,22 @@ function useStoredState<T extends ViewValue>(key: string, initial: T | (() => T)
     } catch { return fallback; }
   });
   useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
-  }, [key, value]);
+    try {
+      const raw = JSON.stringify(value);
+      if (localStorage.getItem(key) !== raw) {
+        localStorage.setItem(key, raw);
+        if (shared) window.dispatchEvent(new CustomEvent('lumo-preference', { detail: { key, raw } }));
+      }
+    } catch {}
+  }, [key, value, shared]);
+  useEffect(() => {
+    if (!shared) return;
+    const change = (event: Event) => {
+      const detail = (event as CustomEvent<{ key: string; raw: string }>).detail;
+      if (detail.key === key) setValue(JSON.parse(detail.raw) as T);
+    };
+    window.addEventListener('lumo-preference', change);
+    return () => window.removeEventListener('lumo-preference', change);
+  }, [key, shared]);
   return [value, setValue] as const;
 }

@@ -50,15 +50,13 @@ button {
 }
 
 .wallpaper {
-  background-color: #075c65;
-  background-image: url('../assets/lumo-tidal.webp');
+  background-color: var(--wallpaper-tone);
+  background-image: url('../assets/lumo-silver.webp');
   background-position: center;
   background-size: cover;
+  background-blend-mode: multiply;
 }
 
-[data-theme='dark'] .wallpaper {
-  background-image: linear-gradient(rgba(4, 21, 29, 0.55), rgba(4, 21, 29, 0.55)), url('../assets/lumo-tidal.webp');
-}
 
 .desktop-root {
   height: 100%;
@@ -70,10 +68,14 @@ button {
   overflow: hidden;
 }
 
-:root { color-scheme: light; --scroll-thumb: #9cadb3; --scroll-track: #e7edef; }
-:root[data-theme='dark'] { color-scheme: dark; --scroll-thumb: #536a74; --scroll-track: #1d292f; }
+:root { color-scheme: light; --scroll-thumb: #a3a3a3; --scroll-track: #ededed; }
+:root[data-theme='dark'] { color-scheme: dark; --scroll-thumb: #666666; --scroll-track: #202020; }
 * { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) var(--scroll-track); }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: var(--scroll-track); }
 ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border: 2px solid var(--scroll-track); border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+:where(.files-location, .file-row, .settings-nav-item, .menubar-button, .menubar-item, .palette-item, .library-item) {
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}

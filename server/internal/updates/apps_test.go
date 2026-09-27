@@ -133,3 +133,47 @@ func TestAppRemovalReviewsDependenciesAndRechecksBeforeApply(t *testing.T) {
 		})
 	}
 }
+
+func TestAppUpdatesUseInstalledPackageFamilyOnly(t *testing.T) {
+	for _, engine := range []string{"docker.io", "docker-ce"} {
+		runner := &installRunner{fakeRunner: fakeRunner{outputs: map[string]string{
+			"dpkg-query -W -f=${db:Status-Status} " + engine:                                   "installed",
+			"apt-get -s -V --no-remove --only-upgrade -o Dpkg::Use-Pty=0 install -- " + engine: "Inst " + engine + " [27.5.1] (27.5.2 Ubuntu:24.04/noble [arm64])\n",
+		}}}
+		worker := installWorker(runner)
+		plan, err := worker.CalculateAppUpdatePlan(context.Background(), "docker")
+		if err != nil || plan.Operation != "update" || len(plan.Packages) != 1 || plan.Packages[0].Name != engine || plan.Packages[0].FromVersion != "27.5.1" {
+			t.Fatalf("plan=%+v err=%v", plan, err)
+		}
+		for _, call := range runner.calls {
+			if strings.HasPrefix(call, "apt-get") && call != "apt-get -s -V --no-remove --only-upgrade -o Dpkg::Use-Pty=0 install -- "+engine {
+				t.Fatalf("changed package family: %s", call)
+			}
+		}
+	}
+	runner := &installRunner{fakeRunner: fakeRunner{outputs: map[string]string{}}}
+	if _, err := installWorker(runner).CalculateAppUpdatePlan(context.Background(), "docker"); err == nil {
+		t.Fatal("unmanaged engine updated")
+	}
+}
+
+func TestAppUpdateRefusesReinstallAfterEngineRemoved(t *testing.T) {
+	runner := &installRunner{fakeRunner: fakeRunner{outputs: map[string]string{
+		"apt-get -s -V --no-remove -o Dpkg::Use-Pty=0 install -- docker.io=27.5.2": "Inst docker.io (27.5.2 Ubuntu:24.04/noble [arm64])\n",
+	}}}
+	worker := installWorker(runner)
+	plan := Plan{ID: "pln_000000000000000000000001", AppID: "docker", Operation: "update", ExpiresAt: time.Now().Add(time.Minute), Packages: []Package{{Name: "docker.io", FromVersion: "27.5.1", ToVersion: "27.5.2"}}}
+	worker.plans[plan.ID] = plan
+	done := make(chan Progress, 1)
+	if _, _, err := worker.StartApply(plan.ID, plan.ID, "update", func(p Progress) { done <- p }); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case p := <-done:
+		if p.Success || len(runner.streams) != 0 {
+			t.Fatal("removed engine was reinstalled")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("update did not finish")
+	}
+}

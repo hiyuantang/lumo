@@ -39,7 +39,7 @@ test('closing Preview clears its document and mode while retaining window placem
   await expect(page.getByTestId('window-preview')).toHaveCount(0);
   await page.getByTestId('dock-app-preview').click();
   await expect(page.getByTestId('app-preview')).toContainText('Choose a file to preview');
-  await expect(page.getByTestId('preview-raw')).toHaveCount(0);
+  await expect(page.getByTestId('editor-input')).toHaveCount(0);
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-server-notes.md').dblclick();
   await expect(page.getByTestId('preview-mode-rendered')).toHaveAttribute('aria-pressed', 'true');
@@ -66,7 +66,8 @@ test('closing apps resets their views and keeps account preferences separate', a
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-Documents').dblclick();
   await page.getByTestId('file-row-server-notes.md').click();
-  await page.getByTestId('quick-look-button').click();
+  await page.getByTestId('files-view').click();
+  await page.getByRole('menuitem', { name: 'Show Details', exact: true }).click();
   await page.getByTestId('window-close-files').click();
   await page.getByTestId('dock-app-files').click();
   await expect(page.getByTestId('files-details')).toHaveCount(0);

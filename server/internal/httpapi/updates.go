@@ -2,6 +2,8 @@
 package httpapi
 
 import (
+	"context"
+	"lumo/server/internal/broker"
 	"net/http"
 	"regexp"
 	"time"
@@ -85,4 +87,19 @@ func decodeUpdateRequest(w http.ResponseWriter, r *http.Request) (string, bool) 
 		return "", false
 	}
 	return req.RequestID, true
+}
+
+func (s *Server) handleAppUpdateHistory(w http.ResponseWriter, r *http.Request) {
+	if s.deps.BrokerSocket == "" {
+		s.handleUnavailable(w, r)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	entries, err := broker.AppUpdateHistory(ctx, s.deps.BrokerSocket)
+	if err != nil {
+		WriteError(w, NewError(CodeUnavailable, "Update history is unavailable."))
+		return
+	}
+	WriteData(w, map[string]any{"entries": entries})
 }

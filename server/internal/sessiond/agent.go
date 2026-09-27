@@ -43,6 +43,8 @@ func agentSocketPath(runDir string, uid uint32) string {
 }
 
 func (d *Daemon) ensureAgent(uid uint32) (string, error) {
+	d.agentMu.Lock()
+	defer d.agentMu.Unlock()
 	d.mu.Lock()
 	proc, ok := d.agents[uid]
 	d.mu.Unlock()

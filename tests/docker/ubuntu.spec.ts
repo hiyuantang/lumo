@@ -55,15 +55,15 @@ test('browser saves a real file and preserves an external edit on conflict', asy
   await login(page);
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-browser-notes.txt').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Open in Preview', exact: true }).click();
   await page.getByTestId('editor-input').fill('Saved through the browser\n');
   await page.getByTestId('editor-input').press('ControlOrMeta+s');
-  await expect(page.getByTestId('file-editor')).toHaveCount(0);
+  await expect(page.getByTestId('editor-save')).toBeDisabled();
   expect(ubuntu('cat', path)).toBe('Saved through the browser');
   await page.getByTestId('dock-app-files').click();
 
   await page.getByTestId('file-row-browser-notes.txt').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Open in Preview', exact: true }).click();
   await expect(page.getByTestId('editor-input')).toHaveValue('Saved through the browser\n');
   ubuntu('runuser', '-u', 'alice', '--', 'sh', '-c', 'printf "Changed outside Lumo\n" > "$1"', 'fixture', path);
   await page.getByTestId('editor-input').fill('Conflicting draft');
@@ -71,8 +71,9 @@ test('browser saves a real file and preserves an external edit on conflict', asy
   await expect(page.getByTestId('editor-conflict')).toBeVisible();
   expect(ubuntu('cat', path)).toBe('Changed outside Lumo');
   await page.getByTestId('editor-reload').click();
+  await page.getByTestId('preview-unsaved-dialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
   await expect(page.getByTestId('editor-input')).toHaveValue('Changed outside Lumo\n');
-  await page.getByTestId('editor-close').click();
+  await page.getByTestId('preview-refresh').click();
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-browser-notes.txt').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Move to Trash', exact: true }).click();
@@ -126,6 +127,7 @@ test('time zone selection updates Ubuntu and uninstalled apps stay out of the do
   const timezone = original === 'America/New_York' ? 'Europe/London' : 'America/New_York';
   await login(page);
   await page.getByTestId('dock-app-library').click();
+  await page.getByTestId('library-docker').click();
   await expect(page.getByTestId('library-primary')).toHaveText('Install…');
   await expect(page.getByTestId('dock-app-containers')).toHaveCount(0);
   await expect(page.getByTestId('dock-app-websites')).toHaveCount(0);
@@ -162,7 +164,8 @@ test('Files creates real folders and Markdown files and opens Preview independen
   await page.getByTestId('files-create-submit').click();
   const row = page.getByTestId('file-row-notes.md');
   await row.click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Open in Preview', exact: true }).click();
+  await page.getByTestId('preview-mode-raw').click();
   await page.getByTestId('editor-input').fill('# Ubuntu Preview\n\nA **real** file.\n');
   await page.getByTestId('editor-save').click();
   expect(ubuntu('cat', '/home/alice/Preview test/notes.md')).toContain('# Ubuntu Preview');
@@ -173,9 +176,10 @@ test('Files creates real folders and Markdown files and opens Preview independen
   await expect(page.getByTestId('files-details')).toContainText('/home/alice/Preview test/notes.md');
   await expect(page.getByTestId('files-details')).not.toContainText('Ubuntu Preview');
   await row.dblclick();
+  await page.getByTestId('preview-mode-rendered').click();
   await expect(page.getByTestId('preview-rendered').getByRole('heading', { name: 'Ubuntu Preview' })).toBeVisible();
   await page.getByTestId('preview-mode-raw').click();
-  await expect(page.getByTestId('preview-raw')).toContainText('**real**');
+  await expect(page.getByTestId('editor-input')).toHaveValue(/\*\*real\*\*/);
   await page.getByTestId('window-close-preview').click();
   await page.getByTestId('files-new').click();
   await page.getByRole('menuitem', { name: 'New File', exact: true }).click();
@@ -368,4 +372,28 @@ test('reordering terminal tabs preserves the real shell process and its state', 
   await page.getByTestId('terminal-input').fill("printf 'TAB_%s\\n' \"$LUMO_TAB_MARKER\"");
   await page.getByTestId('terminal-input').press('Enter');
   await expect(app.locator('.terminal-pane:not(.hidden)')).toContainText('TAB_SURVIVES');
+});
+
+test('idle worker exit recovers files in the same signed-in browser session', async ({ page, context }) => {
+  const path = '/home/alice/idle-recovery.txt';
+  ubuntu('runuser', '-u', 'alice', '--', 'sh', '-c', 'printf "Before worker exit" > "$1"', 'fixture', path);
+  await login(page);
+  await page.getByTestId('dock-app-files').click();
+  await page.getByTestId('file-row-idle-recovery.txt').dblclick();
+  await expect(page.getByTestId('editor-input')).toHaveValue('Before worker exit');
+  const before = (await context.cookies()).find((cookie) => cookie.name === 'lumo_session')?.value;
+  expect(before).toBeTruthy();
+  const stopped = ubuntu('python3', '-c', 'import os, pathlib, pwd, signal\nuid = pwd.getpwnam("alice").pw_uid\nfor entry in pathlib.Path("/proc").iterdir():\n if not entry.name.isdigit(): continue\n try:\n  cmd = (entry / "cmdline").read_bytes().split(b"\\0")\n  if entry.stat().st_uid == uid and len(cmd) > 1 and cmd[1] == b"agent":\n   os.kill(int(entry.name), signal.SIGTERM)\n   print(entry.name)\n except (FileNotFoundError, ProcessLookupError): pass');
+  expect(stopped).toMatch(/^\d+$/);
+  ubuntu('runuser', '-u', 'alice', '--', 'sh', '-c', 'printf "Recovered after worker exit" > "$1"', 'fixture', path);
+  await page.getByTestId('preview-refresh').click();
+  await expect(page.getByTestId('editor-input')).toHaveValue('Recovered after worker exit');
+  await expect(page.getByTestId('login-screen')).toHaveCount(0);
+  expect((await context.cookies()).find((cookie) => cookie.name === 'lumo_session')?.value).toBe(before);
+  const responses = await Promise.all([
+    page.request.get('/api/v1/files/list', { params: { path: '/home/alice' } }),
+    page.request.get('/api/v1/skills'),
+    page.request.get('/api/v1/system/identity'),
+  ]);
+  expect(responses.map((response) => response.status())).toEqual([200, 200, 200]);
 });

@@ -15,7 +15,8 @@ test('Files separates metadata, Preview and management actions', async ({ page }
   const file = page.getByTestId('file-row-notes.txt');
   await file.click();
   await expect(page.getByTestId('files-absolute-path')).toHaveText('/home/user/notes.txt');
-  await page.getByTestId('quick-look-button').click();
+  await page.getByTestId('files-view').click();
+  await page.getByRole('menuitem', { name: 'Show Details', exact: true }).click();
   const details = page.getByTestId('files-details');
   await expect(details).toContainText('notes.txt');
   await expect(details).not.toContainText('Remember to rotate');
@@ -26,14 +27,14 @@ test('Files separates metadata, Preview and management actions', async ({ page }
   await expect(page.getByTestId('files-sidebar')).toBeVisible();
   await file.dblclick();
   await expect(page.getByTestId('window-preview')).toBeVisible();
-  await expect(page.getByTestId('preview-raw')).toContainText('Remember to rotate');
+  await expect(page.getByTestId('editor-input')).toHaveValue(/Remember\ to\ rotate/);
   await page.getByTestId('window-close-preview').click();
   await page.getByRole('button', { name: 'Close Details', exact: true }).click();
   await page.getByTestId('file-row-Documents').dblclick();
   await page.getByTestId('file-row-server-notes.md').dblclick();
   await expect(page.getByTestId('preview-rendered').getByRole('heading', { name: 'Atlas server notes' })).toBeVisible();
   await page.getByTestId('preview-mode-raw').click();
-  await expect(page.getByTestId('preview-raw')).toContainText('# Atlas server notes');
+  await expect(page.getByTestId('editor-input')).toHaveValue(/\#\ Atlas\ server\ notes/);
   await page.getByTestId('preview-mode-rendered').click();
   await expect(page.getByTestId('preview-rendered').getByRole('listitem')).toHaveCount(4);
   await page.reload();
@@ -65,12 +66,14 @@ test('Markdown renders formatting without executing HTML or loading remote image
   await login(page);
   await page.getByTestId('file-row-Documents').dblclick();
   await page.getByTestId('file-row-server-notes.md').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Open in Preview', exact: true }).click();
+  await page.getByTestId('preview-mode-raw').click();
   const text = '# Safe document\n\n**Bold** and *italic* and `code`.\n\n> A quotation\n\n| Name | Value |\n| --- | --- |\n| One | Two |\n\n```html\n<script>alert(1)</script>\n```\n\n<script>alert(2)</script>\n\n[Unsafe](javascript:alert(3))\n\n![Image](https://example.invalid/image.png)';
   await page.getByTestId('editor-input').fill(text);
   await page.getByTestId('editor-save').click();
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-server-notes.md').dblclick();
+  await page.getByTestId('preview-mode-rendered').click();
   const preview = page.getByTestId('preview-rendered');
   await expect(preview.locator('strong')).toHaveText('Bold');
   await expect(preview.locator('table')).toContainText('One');
@@ -99,15 +102,15 @@ test('window placement animates and reduced motion settles immediately', async (
   await expect(win).toHaveCSS('width', '1440px');
   expect(await win.evaluate((node) => node.getAnimations().length)).toBe(0);
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
-  await page.getByRole('menuitem', { name: 'View', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Dark Theme', exact: true }).click();
+  await page.getByTestId('dock-app-settings').click();
+  await page.getByTestId('settings-section-appearance').click();
+  await page.getByTestId('settings-theme-dark').click();
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark');
 });
 
 test('Preview protects unsaved edits while another file opens in its own window', async ({ page }) => {
   await login(page);
   await page.getByTestId('file-row-notes.txt').dblclick();
-  await page.getByTestId('preview-edit').click();
   await page.getByTestId('editor-input').fill('Keep my draft');
   await page.getByTestId('window-close-preview').click();
   const prompt = page.getByTestId('preview-unsaved-dialog');
@@ -127,12 +130,11 @@ test('Preview protects unsaved edits while another file opens in its own window'
   await prompt.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByTestId('window-preview')).toHaveCount(0);
   await page.getByTestId('file-row-notes.txt').dblclick();
-  await expect(page.getByTestId('preview-raw')).toHaveText('Keep my draft');
-  await page.getByTestId('preview-edit').click();
+  await expect(page.getByTestId('editor-input')).toHaveValue('Keep my draft');
   await page.getByTestId('editor-input').fill('Discard this draft');
-  await page.getByTestId('editor-close').click();
+  await page.getByTestId('preview-refresh').click();
   await prompt.getByRole('button', { name: 'Discard changes' }).click();
-  await expect(page.getByTestId('preview-raw')).toHaveText('Keep my draft');
+  await expect(page.getByTestId('editor-input')).toHaveValue('Keep my draft');
 });
 
 test('Files panels coexist, animate and leave a horizontally scrollable middle column', async ({ page }) => {
@@ -141,7 +143,8 @@ test('Files panels coexist, animate and leave a horizontally scrollable middle c
   await login(page);
   await expect(page.getByTestId('system-file-button')).toHaveCount(0);
   await page.getByTestId('file-row-notes.txt').click();
-  await page.getByTestId('quick-look-button').click();
+  await page.getByTestId('files-view').click();
+  await page.getByRole('menuitem', { name: 'Show Details', exact: true }).click();
   const panel = page.getByTestId('files-details-panel');
   await expect(page.getByTestId('files-sidebar')).toBeVisible();
   await expect(page.getByTestId('files-details')).toContainText('notes.txt');
@@ -157,7 +160,8 @@ test('Files panels coexist, animate and leave a horizontally scrollable middle c
   await expect(page.getByTestId('files-sidebar')).toHaveClass(/collapsed/);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(page.locator('html')).toHaveClass(/motion-reduced/);
-  await page.getByTestId('quick-look-button').click();
+  await page.getByTestId('files-view').click();
+  await page.getByRole('menuitem', { name: 'Show Details', exact: true }).click();
   expect(await panel.evaluate((element) => element.getAnimations().length)).toBe(0);
   await expect(page.getByTestId('files-sidebar')).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -165,4 +169,25 @@ test('Files panels coexist, animate and leave a horizontally scrollable middle c
   await expect(page.getByTestId('files-details')).toBeVisible();
   expect(await page.getByTestId('files-table-scroll').evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   await page.screenshot({ path: '/tmp/lumo-compact-panels.png' });
+});
+
+test('Markdown switches between rendered draft and editable raw text without losing changes', async ({ page }) => {
+  await login(page);
+  await page.getByTestId('file-row-Documents').dblclick();
+  await page.getByTestId('file-row-server-notes.md').dblclick();
+  await page.getByTestId('preview-mode-raw').click();
+  await page.getByTestId('editor-input').fill('# Unsaved heading\n\nMy draft');
+  await page.getByTestId('preview-mode-rendered').click();
+  await expect(page.getByTestId('preview-rendered').getByRole('heading', { name: 'Unsaved heading' })).toBeVisible();
+  await expect(page.getByTestId('preview-save-status')).toHaveText('Unsaved changes');
+  await page.getByTestId('preview-refresh').click();
+  await expect(page.getByTestId('preview-unsaved-dialog')).toBeVisible();
+  await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await page.getByTestId('preview-mode-raw').click();
+  await expect(page.getByTestId('editor-input')).toHaveValue('# Unsaved heading\n\nMy draft');
+  await page.getByTestId('preview-mode-rendered').click();
+  await page.getByTestId('editor-save').click();
+  await expect(page.getByTestId('preview-save-status')).toHaveText('Saved');
+  await page.getByTestId('preview-refresh').click();
+  await expect(page.getByTestId('preview-rendered').getByRole('heading', { name: 'Unsaved heading' })).toBeVisible();
 });

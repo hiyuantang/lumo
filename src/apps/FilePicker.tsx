@@ -32,7 +32,7 @@ export function FilePicker({ initialPath, onOpen, onCancel }: { initialPath?: st
     void (async () => {
       await source.getIdentity().catch(() => null);
       if (!alive) return;
-      if (path.length === 1 && path[0] !== source.homePath()[0]) { setPath(source.homePath()); return; }
+      if (path.length === 1 && path[0] !== '' && path[0] !== source.homePath()[0]) { setPath(source.homePath()); return; }
       try {
         const result = await source.listDir(path);
         if (alive) setEntries(result);
@@ -66,7 +66,7 @@ export function FilePicker({ initialPath, onOpen, onCancel }: { initialPath?: st
       <div className="file-picker-location">
         <button type="button" className="btn" aria-label="Home folder" onClick={() => navigate(source.homePath())}><IconHome size={17}/></button>
         <button type="button" className="btn" aria-label="Parent folder" disabled={path.length <= 1} onClick={() => navigate(path.slice(0, -1))}>↑</button>
-        <nav aria-label="Folder path">{path.map((segment, index) => <button type="button" key={index} onClick={() => navigate(path.slice(0, index + 1))} title={source.absolutePath(path.slice(0, index + 1))}>{index === 0 ? 'Home' : segment}</button>)}</nav>
+        <nav aria-label="Folder path">{path.map((segment, index) => <button type="button" key={index} onClick={() => navigate(path.slice(0, index + 1))} title={source.absolutePath(path.slice(0, index + 1))}>{index === 0 ? (path[0] === '' ? '/' : 'Home') : segment}</button>)}</nav>
       </div>
       <div className="file-picker-filter"><input className="input" type="search" autoFocus aria-label="Filter files" placeholder="Find in this folder" value={search} onChange={(event) => { setSearch(event.target.value); setSelected(null); }}/><button type="button" className="btn" aria-pressed={hidden} onClick={() => { setHidden(!hidden); setSelected(null); }}>Hidden files</button></div>
       <div className="file-picker-list" role="listbox" aria-label="Choose a file" aria-busy={loading} onKeyDown={(event) => {

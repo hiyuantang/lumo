@@ -260,8 +260,11 @@ func (g *Gateway) requireSession(r *http.Request) (*sessionInfo, *httpapi.Error)
 	if err != nil {
 		return nil, httpapi.NewError(httpapi.CodeUnavailable, "The session daemon is unavailable.")
 	}
-	if status != http.StatusOK {
+	if status == http.StatusNotFound || status == http.StatusUnauthorized {
 		return nil, httpapi.NewError(httpapi.CodeUnauthorized, "Session expired or unknown.")
+	}
+	if status != http.StatusOK {
+		return nil, httpapi.NewError(httpapi.CodeUnavailable, "The session agent could not be started. Please try again.")
 	}
 	return &sessionInfo{Token: resp.Token, CSRF: resp.CSRF, User: resp.User, AgentSocket: resp.AgentSocket}, nil
 }

@@ -49,7 +49,7 @@ export type MotionPref = 'system' | 'reduced' | 'full';
 type NavigationIntent = (
   | { target: 'logs' | 'services'; unit: string }
   | { target: 'settings'; section: SettingsSection }
-  | { target: 'library'; appId: ServerAppID }
+  | { target: 'library'; appId: ServerAppID; checkUpdates?: boolean }
   | { target: 'trash'; empty: true }
   | { target: 'preview'; windowId: WindowId; edit: boolean }
 ) & { nonce: number };
@@ -88,9 +88,10 @@ type Action =
   | { type: 'files-changed' }
   | { type: 'open-related'; target: 'logs' | 'services'; unit: string }
   | { type: 'open-settings'; section: SettingsSection }
-  | { type: 'open-library'; appId: ServerAppID }
+  | { type: 'open-library'; appId: ServerAppID; checkUpdates?: boolean }
   | { type: 'close-app'; appId: WindowId }
   | { type: 'focus-app'; appId: WindowId }
+  | { type: 'focus-desktop' }
   | { type: 'minimize-app'; appId: WindowId }
   | { type: 'toggle-maximize'; appId: WindowId }
   | { type: 'snap-window'; appId: WindowId; target: SnapTarget; restore?: Rect }
@@ -128,6 +129,16 @@ function localStorageAvailable(key: string): boolean {
   try { return localStorage.getItem(key) !== null; } catch { return false; }
 }
 
+function fitFloatingRect(rect: Rect, appId: AppId, viewport: Viewport): Rect {
+  const { minSize, defaultSize } = APPS[appId];
+  return clampRect({
+    x: Number.isFinite(rect.x) ? rect.x : 96,
+    y: Number.isFinite(rect.y) ? rect.y : MENUBAR_H + 40,
+    w: Math.max(minSize.w, Number.isFinite(rect.w) && rect.w > 1 ? rect.w : defaultSize.w),
+    h: Math.max(minSize.h, Number.isFinite(rect.h) && rect.h > 1 ? rect.h : defaultSize.h),
+  }, viewport);
+}
+
 function fitWindow(win: WindowState, viewport: Viewport): WindowState {
   if (win.maximized) return { ...win, snapped: null, ...workArea(viewport) };
   if (win.snapped && canSnap(win.snapped, viewport, APPS[win.appId].minSize)) {
@@ -135,7 +146,7 @@ function fitWindow(win: WindowState, viewport: Viewport): WindowState {
   }
   return {
     ...win,
-    ...clampRect(win.snapped ? (win.restore ?? win) : win, viewport),
+    ...fitFloatingRect(win.snapped ? (win.restore ?? win) : win, win.appId, viewport),
     snapped: null,
     restore: null,
   };
@@ -230,7 +241,7 @@ function reducer(state: ShellState, action: Action): ShellState {
     }
     case 'open-library': {
       const opened = reducer(state, { type: 'open-app', appId: 'library' });
-      return { ...opened, navigation: { target: 'library', appId: action.appId, nonce: (state.navigation?.nonce ?? 0) + 1 } };
+      return { ...opened, navigation: { target: 'library', appId: action.appId, checkUpdates: action.checkUpdates, nonce: (state.navigation?.nonce ?? 0) + 1 } };
     }
     case 'close-app': {
       const closed = state.windows[action.appId];
@@ -246,16 +257,18 @@ function reducer(state: ShellState, action: Action): ShellState {
       }
       return { ...state, windows, focused, navigation: (state.navigation?.target === 'preview' ? state.navigation.windowId === action.appId : state.navigation?.target === closed.appId || (closed.appId === 'home' && (state.navigation?.target === 'logs' || state.navigation?.target === 'services'))) ? null : state.navigation, remembered: { ...state.remembered, [closed.appId]: windowLayout(closed) } };
     }
+    case 'focus-desktop': return { ...state, focused: null };
     case 'focus-app': {
       const win = state.windows[action.appId];
       if (!win) return state;
-      if (state.focused === action.appId && !win.minimized) return state;
+      const fitted = fitWindow(win, state.viewport);
+      if (state.focused === action.appId && !win.minimized && fitted.x === win.x && fitted.y === win.y && fitted.w === win.w && fitted.h === win.h) return state;
       const z = state.zTop + 1;
       return {
         ...state,
         zTop: z,
         focused: action.appId,
-        windows: { ...state.windows, [action.appId]: { ...win, minimized: false, z } },
+        windows: { ...state.windows, [action.appId]: { ...fitted, minimized: false, z } },
       };
     }
     case 'minimize-app': {
@@ -273,7 +286,7 @@ function reducer(state: ShellState, action: Action): ShellState {
       if (!win) return state;
       const z = state.zTop + 1;
       const next: WindowState = win.maximized
-        ? { ...win, ...clampRect(win.restore ?? win, state.viewport), maximized: false, snapped: null, restore: null, z }
+        ? { ...win, ...fitFloatingRect(win.restore ?? win, win.appId, state.viewport), maximized: false, snapped: null, restore: null, z }
         : { ...win, maximized: true, snapped: null, restore: win.restore ?? { x: win.x, y: win.y, w: win.w, h: win.h }, ...workArea(state.viewport), z };
       return {
         ...state,
@@ -314,7 +327,7 @@ function reducer(state: ShellState, action: Action): ShellState {
     case 'update-rect': {
       const win = state.windows[action.appId];
       if (!win) return state;
-      const rect = clampRect(action.rect, state.viewport);
+      const rect = fitFloatingRect(action.rect, win.appId, state.viewport);
       return { ...state, windows: { ...state.windows, [action.appId]: { ...win, ...rect, maximized: false, snapped: null, restore: null } } };
     }
     case 'cycle-window': {
@@ -364,6 +377,7 @@ function reducer(state: ShellState, action: Action): ShellState {
     case 'set-shortcuts-open':
       return { ...state, shortcutsOpen: action.open };
     case 'set-viewport': {
+      if (!Number.isFinite(action.viewport.w) || !Number.isFinite(action.viewport.h) || action.viewport.w <= 1 || workArea(action.viewport).h <= 0) return state;
       if (action.viewport.w === state.viewport.w && action.viewport.h === state.viewport.h) return state;
       const windows: Partial<Record<WindowId, WindowState>> = {};
       for (const [id, win] of Object.entries(state.windows)) {
@@ -440,11 +454,13 @@ export interface ShellActions {
   filesChanged(): void;
   registerWindowGuard(appId: WindowId, guard: (proceed: () => void) => void): () => void;
   openSettings(section: SettingsSection): void;
-  openLibrary(appId: ServerAppID): void;
+  openLibrary(appId: ServerAppID, checkUpdates?: boolean): void;
   openLogs(unit: string): void;
   openService(unit: string): void;
   closeApp(appId: WindowId): void;
+  quitApp(appId: AppId): void;
   focusApp(appId: WindowId): void;
+  focusDesktop(): void;
   minimizeApp(appId: WindowId): void;
   toggleMaximize(appId: WindowId): void;
   snapWindow(appId: WindowId, target: SnapTarget, restore?: Rect): void;
@@ -609,11 +625,22 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       },
       openApp: (appId) => dispatch({ type: 'open-app', appId }),
       openSettings: (section) => dispatch({ type: 'open-settings', section }),
-      openLibrary: (appId) => dispatch({ type: 'open-library', appId }),
+      openLibrary: (appId, checkUpdates) => dispatch({ type: 'open-library', appId, checkUpdates }),
       openLogs: (unit) => dispatch({ type: 'open-related', target: 'logs', unit }),
       openService: (unit) => dispatch({ type: 'open-related', target: 'services', unit }),
       closeApp: closeWindow,
+      quitApp: (appId) => {
+        const ids = Object.values(currentState.current.windows).filter((win) => win?.appId === appId).map((win) => win!.id);
+        const pending = [...ids];
+        const next = () => {
+          const id = pending.shift();
+          if (id) requestWindowAction(id, next);
+          else ids.forEach((id) => { clearWindowState(currentState.current.user, id); dispatch({ type: 'close-app', appId: id }); });
+        };
+        next();
+      },
       focusApp: (appId) => dispatch({ type: 'focus-app', appId }),
+      focusDesktop: () => dispatch({ type: 'focus-desktop' }),
       minimizeApp: (appId) => dispatch({ type: 'minimize-app', appId }),
       toggleMaximize: (appId) => dispatch({ type: 'toggle-maximize', appId }),
       snapWindow: (appId, target, restore) => dispatch({ type: 'snap-window', appId, target, restore }),

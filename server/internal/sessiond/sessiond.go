@@ -60,6 +60,7 @@ type Daemon struct {
 	cfg Config
 
 	mu       sync.Mutex
+	agentMu  sync.Mutex
 	sessions map[string]*Session
 	agents   map[uint32]*agentProc
 
@@ -217,11 +218,17 @@ func (d *Daemon) handleValidate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	agentSocket, err := d.ensureAgent(sess.User.UID)
+	if err != nil {
+		log.Printf("sessiond: restore agent for uid %d: %v", sess.User.UID, err)
+		writeError(w, http.StatusServiceUnavailable, "agent unavailable")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token":       sess.Token,
 		"csrf":        sess.CSRF,
 		"user":        sess.User,
-		"agentSocket": agentSocketPath(d.cfg.RunDir, sess.User.UID),
+		"agentSocket": agentSocket,
 		"reauthUntil": sess.ReauthUntil.UnixMilli(),
 	})
 }

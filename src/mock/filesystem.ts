@@ -3,6 +3,7 @@ import { formatModified } from '../utils/file-format';
 import type { TrashItem, TrashSelection } from '../api/trash';
 import type { FsEntry } from '../api/source';
 import { ApiError } from '../api/transport';
+import { mockSkills } from './skills';
 
 const HOME: FsEntry = {
   name: 'user',
@@ -10,6 +11,15 @@ const HOME: FsEntry = {
   size: 4096,
   modified: 'Jul 12 09:14',
   children: [
+    {
+      name: '.agents', kind: 'dir', size: 4096, modified: 'Jul 12 09:14', children: [
+        { name: 'skills', kind: 'dir', size: 4096, modified: 'Jul 12 09:14', children: mockSkills.map((skill) => ({
+          name: skill.id, kind: 'dir', size: 4096, modified: 'Jul 12 09:14', children: [
+            { name: 'SKILL.md', kind: 'file', size: new TextEncoder().encode(skill.raw).length, modified: 'Jul 12 09:14', content: skill.raw },
+          ],
+        })) },
+      ],
+    },
     {
       name: 'Documents',
       kind: 'dir',
@@ -113,13 +123,20 @@ const HOME: FsEntry = {
   ],
 };
 
+const ROOT: FsEntry = {
+  name: '', kind: 'dir', size: 4096, modified: 'Jul 12 09:14', children: [
+    { name: 'home', kind: 'dir', size: 4096, modified: 'Jul 12 09:14', children: [HOME] },
+    { name: 'tmp', kind: 'dir', size: 4096, modified: 'Jul 12 09:14', children: [] },
+  ],
+};
+
 export function homePath(): string[] {
   return ['user'];
 }
 
 export function getEntry(path: string[]): FsEntry | undefined {
-  if (path.length === 0 || path[0] !== HOME.name) return undefined;
-  let node: FsEntry = HOME;
+  if (path.length === 0 || (path[0] !== HOME.name && path[0] !== '')) return undefined;
+  let node: FsEntry = path[0] === '' ? ROOT : HOME;
   for (const segment of path.slice(1)) {
     const next = node.children?.find((c) => c.name === segment);
     if (!next) return undefined;
@@ -130,7 +147,8 @@ export function getEntry(path: string[]): FsEntry | undefined {
 
 export function listDir(path: string[]): FsEntry[] {
   const node = getEntry(path);
-  if (!node || node.kind !== 'dir') return [];
+  if (!node) throw new ApiError('not_found', 'Folder not found.');
+  if (node.kind !== 'dir') throw new ApiError('validation_failed', 'This path is not a folder.');
   return [...(node.children ?? [])].sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1;
     return a.name.localeCompare(b.name);
@@ -202,7 +220,7 @@ export function deleteEntry(path: string[]): void {
     throw new ApiError('not_found', 'No such file.');
   }
   const id = crypto.randomUUID();
-  trashed.set(id, { entry: node, path: [...path], item: { id, revision: id, name, originalPath: '/'+path.join('/'), deletedAt: new Date().toISOString(), type: node.kind === 'dir' ? 'directory' : 'file', sizeBytes: node.size, canRestore: true } });
+  trashed.set(id, { entry: node, path: [...path], item: { id, revision: id, name, originalPath: path[0] === '' ? path.join('/') : '/home/'+path.join('/'), deletedAt: new Date().toISOString(), type: node.kind === 'dir' ? 'directory' : 'file', sizeBytes: node.size, canRestore: true } });
   parent.children?.splice(index, 1);
   revisions.delete(pathKey(path));
 }

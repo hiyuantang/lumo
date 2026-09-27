@@ -60,6 +60,52 @@ required by AGPL-3.0 §13 for modified versions used over a network.
 - Match the style of neighboring files; do not introduce new frameworks
   without checking the project first.
 
+## UI design rules
+
+Apply these rules to every UI change. See [DESKTOP_STYLE.md](docs/DESKTOP_STYLE.md)
+for visual details and [DESIGN_PRINCIPLES.md](docs/DESIGN_PRINCIPLES.md) for
+interaction and accessibility requirements.
+
+- **Use space efficiently.** Keep actions beside the heading or content they
+  affect. A single Edit or Refresh button must not consume a whole row.
+  Avoid duplicate information, redundant controls and unnecessary metadata.
+- **Keep navigation compact.** Put Back and Forward on the left, followed by
+  the current page or folder name. Move lengthy details to a separate page.
+  Use distinct icons for navigation, sidebar toggling and other actions.
+- **Scope controls locally.** Search belongs above the list it filters. Put
+  compact Refresh controls in the left panel or card header; App Library uses
+  View → Refresh. Do not add unexplained refresh icons or extra update buttons.
+- **Size cards consistently.** Use adaptive grids: typically two app cards
+  across, with more or fewer as the window changes. Cap card height and clamp
+  long descriptions with an ellipsis; keep full content on the details page.
+- **Keep detail headers simple.** Show the content's own title and description,
+  with Edit on the right, then one divider and the body. Avoid repeating the
+  title or adding a separate action row. Skills render by default; Edit opens
+  Preview. Do not add Raw/Rendered controls to Skills.
+- **Keep Files concise.** Show only the current folder name in the toolbar.
+  Keep the full path below, with clickable folder segments and Copy on the
+  right; no path-edit field. Preserve List/Grid views and sorting choices.
+- **Make menus consistent.** Left-align labels with a fixed checkmark column.
+  Clicking outside a menu, including inside another app, dismisses it and
+  performs the clicked action.
+- **Use direct update flows.** App Library has Discovery and Updates. Offer
+  Update per app and Update all. Completed updates move to installed history,
+  showing old version → new version without an extra disclosure step.
+- **Use consistent names.** Match names across the dock, menus and App Library
+  (for example, Docker and Nginx). Omit incidental engine/demo labels from
+  everyday controls; show version details where they help with updates.
+- **Keep surfaces neutral and matte.** Light mode uses white and grey; dark
+  mode uses near-black and charcoal. Buttons have a soft matte finish without
+  glossy gradients, bevels or plastic highlights. App icons are colorful,
+  minimalist and original. The desktop menu bar is transparent with no bottom
+  separator.
+- **Keep window controls small and clear.** Circular coral, amber and green
+  controls belong at the top left, with readable, sufficiently bold glyphs.
+- **Coordinate motion.** Transitions should feel smooth and explain state.
+  A dock thumbnail disappears as its window restores, without lingering as
+  a duplicate. Preserve window state and respect reduced motion. Verify UI
+  changes in both themes and at normal and narrow window sizes as applicable.
+
 ## Development
 
 The repository root is a Vite + React + TypeScript application (strict

@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useAppMenus } from '../shell/appMenus';
+import { useContextMenu } from '../shell/ContextMenu';
+import { copyText } from '../utils/clipboard';
 import { useAppState } from '../shell/useAppState';
 import { Select } from '../shell/Select';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -104,6 +107,7 @@ function exportLines(lines: LogLine[]) {
 }
 
 export function Logs() {
+  const openContextMenu = useContextMenu();
   const { actions, state } = useShell();
   const source = getDataSource();
   const [lines, setLines] = useState<LogLine[]>([]);
@@ -266,6 +270,14 @@ export function Logs() {
     setSearch(saved.search);
   }
 
+  useAppMenus({
+    file: [{ id: 'export', label: 'Export JSONL…', disabled: filtered.length === 0, run: () => exportLines(filtered) }],
+    view: [
+      { id: 'refresh', label: 'Refresh', run: () => setRetryNonce((value) => value + 1) },
+      { id: 'pause', label: 'Pause Live Logs', checked: paused, run: () => setPaused(!paused) },
+    ],
+  });
+
   return (
     <div className="app logs" data-testid="app-logs">
       <div className="app-toolbar logs-toolbar">
@@ -290,15 +302,20 @@ export function Logs() {
           <IconSearch size={13} />
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search logs" aria-label="Search logs" />
         </label>
+        <div className="app-toolbar-actions">
         <button type="button" className="btn" data-testid="logs-pause" aria-pressed={paused} onClick={() => setPaused((value) => !value)}>
           {paused ? <IconPlay size={12} /> : <IconPause size={12} />}
           {paused ? 'Resume' : 'Pause'}
         </button>
+        </div>
       </div>
 
       <div className="logs-saved-bar">
+        <span>{filtered.length} entries · Newest first</span>
         <Select value={selectedSavedId} onChange={applySavedSearch} aria-label="Saved searches" options={[{ value: '', label: 'Saved searches' }, ...savedSearches.map((saved) => ({ value: saved.id, label: saved.label }))]} />
+        <div className="app-toolbar-actions">
         <button type="button" className="btn" data-testid="logs-save-search" onClick={saveCurrentSearch}>Save search</button>
+        <button type="button" className="btn" data-testid="logs-export" disabled={filtered.length === 0} onClick={() => exportLines(filtered)}>Export JSONL</button>
         <button
           type="button"
           className="btn"
@@ -311,15 +328,21 @@ export function Logs() {
         >
           Delete
         </button>
-        <span>{filtered.length} entries · Newest first</span>
-        <button type="button" className="btn" data-testid="logs-export" disabled={filtered.length === 0} onClick={() => exportLines(filtered)}>Export JSONL</button>
+        </div>
       </div>
 
       {streamError && <p className="logs-banner" data-testid="logs-stream-error">{streamError}</p>}
 
       <div className="logs-list" ref={scrollRef} onScroll={rememberScrollPosition} role="log" aria-label="Journal stream" data-testid="logs-list">
         {filtered.map((line) => (
-          <button key={line.id} type="button" className={`logs-row${selectedId === line.id ? ' selected' : ''}`} data-log-id={line.id} data-testid="logs-row" onClick={() => setSelectedId(line.id)}>
+          <button key={line.id} type="button" className={`logs-row${selectedId === line.id ? ' selected' : ''}`} data-log-id={line.id} data-testid="logs-row" onClick={() => setSelectedId(line.id)} onContextMenu={(event) => {
+            setSelectedId(line.id);
+            openContextMenu(event, [
+              { label: 'Copy Message', run: () => { void copyText(line.message).catch(() => actions.notify('Clipboard unavailable', 'Could not copy the log message.')); } },
+              { label: 'Filter to This Unit', disabled: unit === line.unit, run: () => setUnit(line.unit) },
+              ...(line.unit.endsWith('.service') ? [{ label: 'Open Service', run: () => actions.openService(line.unit) }] : []),
+            ]);
+          }}>
             <span className="logs-time mono">{new Date(line.timestamp).toLocaleTimeString([], { hour12: false })}</span>
             <span className={`logs-prio prio-${line.priority}`}>{line.priority}</span>
             <span className="logs-unit-name mono">{line.unit}</span>

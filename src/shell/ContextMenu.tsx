@@ -2,9 +2,7 @@
 import { copyText, readClipboard } from '../utils/clipboard';
 import { createContext, useContext, useState, type MouseEvent, type ReactNode } from 'react';
 import { Popup } from './Popup';
-import { useShell, type ShellActions, type WindowState } from './ShellContext';
-import { APPS } from '../apps/registry';
-import { canSnap, COMPACT_WIDTH, type Viewport } from './windowGeometry';
+import { useShell } from './ShellContext';
 
 export interface ContextAction {
   label: string;
@@ -13,26 +11,17 @@ export interface ContextAction {
   danger?: boolean;
   separator?: boolean;
 }
-export function windowContextActions(win: WindowState, viewport: Viewport, actions: ShellActions): ContextAction[] {
-  return [
-    { label: 'Minimize', run: () => actions.minimizeApp(win.id) },
-    { label: win.maximized ? 'Restore' : 'Maximize', disabled: viewport.w <= COMPACT_WIDTH, run: () => actions.toggleMaximize(win.id) },
-    { label: 'Tile Left', disabled: !canSnap('left', viewport, APPS[win.appId].minSize), run: () => actions.snapWindow(win.id, 'left') },
-    { label: 'Tile Right', disabled: !canSnap('right', viewport, APPS[win.appId].minSize), run: () => actions.snapWindow(win.id, 'right') },
-    { label: 'Close Window', separator: true, run: () => actions.closeApp(win.id) },
-  ];
-}
-
 type OpenMenu = (event: MouseEvent, items: ContextAction[]) => void;
 const ContextMenuContext = createContext<OpenMenu>(() => {});
 export const useContextMenu = () => useContext(ContextMenuContext);
 
 export function ContextMenuProvider({ children }: { children: ReactNode }) {
-  const { state, actions, resolvedTheme } = useShell();
+  const { state, actions } = useShell();
   const [menu, setMenu] = useState<{ x: number; y: number; items: ContextAction[]; target: HTMLElement; placement?: 'above' } | null>(null);
   const open: OpenMenu = (event, items) => {
     event.preventDefault();
     event.stopPropagation();
+    if (!items.length) { setMenu(null); return; }
     const target = ((event.currentTarget as HTMLElement).style.display === 'contents' ? event.target : event.currentTarget) as HTMLElement;
     const box = target.getBoundingClientRect();
     const dock = !!target.closest('.dock');
@@ -64,19 +53,12 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     }
     if (!state.user) { event.preventDefault(); return; }
     const selected = window.getSelection()?.toString();
-    const windowId = target.closest('.window')?.getAttribute('data-testid');
-    const win = Object.values(state.windows).find((item) => item && `window-${item.id}` === windowId);
-    const contextActions: ContextAction[] = win ? windowContextActions(win, state.viewport, actions) : [
-      { label: 'Open Files', run: () => actions.openApp('files') },
-      { label: 'Open Terminal', run: () => actions.openApp('terminal') },
-      { label: 'Show Desktop', disabled: !Object.values(state.windows).some((item) => item && !item.minimized), run: () => Object.values(state.windows).forEach((item) => { if (item && !item.minimized) actions.minimizeApp(item.id); }), separator: true },
-      { label: resolvedTheme === 'dark' ? 'Light Theme' : 'Dark Theme', run: actions.toggleTheme },
-      { label: 'Settings', run: () => actions.openApp('settings') },
-    ];
-    open(event, [
-      ...(selected ? [{ label: 'Copy', run: () => { void copyText(selected).catch(() => actions.notify('Clipboard unavailable', 'Use the keyboard shortcut to copy.')); } }] : []),
-      ...contextActions,
-    ]);
+    if (selected && window.getSelection()?.containsNode(target, true)) {
+      open(event, [{ label: 'Copy', run: () => { void copyText(selected).catch(() => actions.notify('Clipboard unavailable', 'Use the keyboard shortcut to copy.')); } }]);
+      return;
+    }
+    if (!target.closest('a[href], [contenteditable="true"]')) event.preventDefault();
+    setMenu(null);
   }
   return <ContextMenuContext.Provider value={open}>
     <div style={{ display: 'contents' }} onContextMenu={fallback}>{children}</div>
@@ -90,7 +72,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
         const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
         items[next]?.focus();
       }}>
-        {menu.items.map((item) => <div key={item.label}>
+        {menu.items.map((item, index) => <div key={`${item.label}-${index}`}>
           {item.separator && <div role="separator" className="popup-separator" />}
           <button type="button" role="menuitem" className={`popup-item${item.danger ? ' danger' : ''}`} disabled={item.disabled} onClick={() => { close(true); item.run(); }}>{item.label}</button>
         </div>)}

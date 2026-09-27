@@ -32,7 +32,7 @@ test('Preview picks files in its own dialog, with navigation, filtering and keyb
   await picker.getByRole('button', { name: 'Parent folder' }).click();
   await page.getByTestId('file-picker-entry-notes.txt').click();
   await page.getByTestId('file-picker-open').click();
-  await expect(page.getByTestId('preview-raw')).toContainText('Remember to rotate');
+  await expect(page.getByTestId('editor-input')).toHaveValue(/Remember\ to\ rotate/);
   await expect(page.locator('.window[data-app-id="preview"]')).toHaveCount(1);
 });
 
@@ -62,7 +62,6 @@ test('picker cancels without opening apps, traps focus and fits a compact viewpo
 
 test('opening another file protects the current draft until discard is confirmed', async ({ page }) => {
   await page.getByTestId('file-picker-entry-notes.txt').dblclick();
-  await page.getByTestId('preview-edit').click();
   await page.getByTestId('editor-input').fill('Unsaved draft');
   const choose = async () => {
     await page.getByTestId('preview-open').click();

@@ -415,3 +415,21 @@ func TestLoginLimiterExpiresAndBoundsEntries(t *testing.T) {
 		t.Fatal("account key normalization is unstable")
 	}
 }
+
+func TestAgentRestartFailureDoesNotExpireSession(t *testing.T) {
+	socket := startStub(t, "sessiond.sock", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "agent unavailable"})
+	}))
+	gw := New(Config{SessiondSocket: socket})
+	req := httptest.NewRequest("GET", "/api/v1/files/list", nil)
+	req.AddCookie(&http.Cookie{Name: "lumo_session", Value: testToken})
+	recorder := httptest.NewRecorder()
+	gw.Handler().ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusServiceUnavailable || !strings.Contains(recorder.Body.String(), `"code":"unavailable"`) {
+		t.Fatalf("agent restart failure = %d %s", recorder.Code, recorder.Body.String())
+	}
+	if len(recorder.Result().Cookies()) != 0 {
+		t.Fatal("temporary failure changed session cookies")
+	}
+}

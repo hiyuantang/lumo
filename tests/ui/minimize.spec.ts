@@ -82,7 +82,7 @@ test('minimizing keeps maximized and tiled geometry, including across reloads', 
   await expect(terminal).toHaveAttribute('data-window-placement', 'maximized');
   expect(await terminal.boundingBox()).toEqual(maximized);
 
-  await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Window', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Tile Window Right', exact: true }).click();
   await terminal.evaluate((node) => Promise.all(node.getAnimations().map((motion) => motion.finished.catch(() => {}))));
   const tiled = await terminal.boundingBox();
@@ -130,7 +130,6 @@ test('Dock snapshots show the current document with its original proportions and
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-notes.txt').dblclick();
   const win = page.getByTestId('window-preview');
-  await win.getByTestId('preview-edit').click();
   await win.getByTestId('editor-input').fill('A document full of visible text.\n'.repeat(30));
   const bounds = (await win.boundingBox())!;
   await page.getByTestId('window-minimize-preview').click();
@@ -151,4 +150,28 @@ test('Dock snapshots show the current document with its original proportions and
   expect(await snapshot.screenshot()).not.toEqual(textImage);
   await tile.click();
   await expect(win.getByTestId('editor-input')).toHaveValue('Short draft.');
+});
+
+
+test('restoring fades the dock snapshot while the window travels back to the desktop', async ({ page }) => {
+  const terminal = await openTerminal(page);
+  await page.getByTestId('window-minimize-terminal').click();
+  await expect(terminal).toBeHidden();
+  const tile = page.getByTestId('dock-minimized-terminal');
+  await tile.click();
+  await terminal.evaluate((element) => {
+    const animation = element.getAnimations()[0];
+    if (!animation) throw new Error('Expected an active restore animation');
+    animation.pause();
+    animation.currentTime = Number(animation.effect!.getTiming().duration) * 0.5;
+  });
+  await expect(terminal).toHaveAttribute('data-window-visibility', 'restoring');
+  await expect(terminal).toBeVisible();
+  await expect(tile).toHaveAttribute('data-restoring', 'true');
+  await expect(tile.locator('.dock-window-preview')).toHaveCSS('opacity', '0');
+  await expect(tile).toHaveCSS('pointer-events', 'none');
+  await terminal.evaluate((element) => element.getAnimations()[0].play());
+  await expect(terminal).toHaveAttribute('data-window-visibility', 'visible');
+  await expect(tile).toHaveCount(0);
+  await expect(terminal).not.toHaveAttribute('inert');
 });

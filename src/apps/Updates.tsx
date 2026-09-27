@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useAppMenus } from '../shell/appMenus';
 import { useEffect, useState } from 'react';
 import { describeError, getDataSource, type UpdatePlan, type UpdateProgress } from '../api/source';
 import { useShell } from '../shell/ShellContext';
@@ -7,7 +8,7 @@ import '../styles/updates.css';
 
 type Operation = 'refresh' | 'plan' | 'apply' | null;
 
-export function Updates() {
+export function Updates({ active = true }: { active?: boolean }) {
   const source = getDataSource();
   const { actions } = useShell();
   const [plan, setPlan] = useState<UpdatePlan | null>(null);
@@ -101,16 +102,20 @@ export function Updates() {
     }
   }
 
+  useAppMenus({ view: active ? [{ id: 'refresh', label: 'Refresh Package List', disabled: operation !== null, run: () => { void refresh(); } }] : [] });
+
   return (
     <div className="app updates" data-testid="app-updates">
       <div className="app-toolbar updates-toolbar">
-        <button type="button" className="btn" data-testid="updates-refresh" disabled={operation !== null} onClick={() => void refresh()}>
-          {operation === 'refresh' ? 'Refreshing…' : 'Refresh package list'}
-        </button>
-        <button type="button" className="btn btn-primary" data-testid="updates-plan" disabled={operation !== null} onClick={() => void calculatePlan()}>
-          {operation === 'plan' ? 'Checking…' : 'Check for updates'}
-        </button>
         {refreshedAt && <span className="updates-refreshed">Refreshed {formatDate(refreshedAt)}</span>}
+        <div className="app-toolbar-actions">
+          <button type="button" className="btn" data-testid="updates-refresh" disabled={operation !== null} onClick={() => void refresh()}>
+            {operation === 'refresh' ? 'Refreshing…' : 'Refresh package list'}
+          </button>
+          <button type="button" className="btn btn-primary" data-testid="updates-plan" disabled={operation !== null} onClick={() => void calculatePlan()}>
+            {operation === 'plan' ? 'Checking…' : 'Check for updates'}
+          </button>
+        </div>
       </div>
 
       <div className="updates-body">

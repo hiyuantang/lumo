@@ -13,6 +13,7 @@ test('Containers opens from the dock and confirms lifecycle changes without losi
   page.on('pageerror', (e) => errors.push(e.message));
   await login(page);
   await page.getByTestId('dock-app-library').click();
+  await page.getByTestId('library-docker').click();
   await expect(page.getByTestId('library-primary')).toHaveText('Uninstall…');
   await expect(page.getByTestId('app-containers')).toHaveCount(0);
   await page.getByTestId('dock-app-containers').click();
@@ -102,12 +103,13 @@ test('App Library entries show descriptions and management actions without launc
     ['opencode', 'opencode', 'AI coding assistant'],
   ]) {
     await page.getByTestId(`library-${id}`).click();
-    await expect(page.getByTestId(`library-${id}`)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.library-discovery-grid')).toHaveCount(0);
     await expect(page.getByTestId('app-library')).toContainText(description);
     await expect(page.getByTestId('library-description')).toBeVisible();
     await expect(page.getByTestId('library-description')).not.toContainText('Trash');
     await expect(page.getByTestId('app-library')).not.toContainText('Installed for your Linux account.');
     await expect(page.getByTestId(`app-${appId}`)).toHaveCount(0);
+    await page.getByTestId('library-back').click();
   }
   await page.getByTestId('library-nginx').click();
   await expect(page.getByTestId('library-primary')).toHaveText('Uninstall…');

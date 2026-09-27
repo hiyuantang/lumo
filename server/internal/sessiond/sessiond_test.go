@@ -4,11 +4,14 @@ package sessiond
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -157,5 +160,73 @@ func TestSessionExpiry(t *testing.T) {
 	d.sessions["t1"] = sess
 	if _, err := d.lookup("t1", false); err == nil {
 		t.Error("absolute expiry should evict the session")
+	}
+}
+
+func TestValidateRestartsExitedAgentWithoutReplacingSession(t *testing.T) {
+	d, client, username := testDaemon(t)
+	status, login := post(t, client, "/login", map[string]any{"username": username, "password": "x"})
+	if status != http.StatusOK {
+		t.Fatalf("login: %d", status)
+	}
+	token := login["token"].(string)
+	sess, err := d.lookup(token, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.agents[sess.User.UID].markDead()
+	var starts atomic.Int32
+	d.spawnAgentFn = func(uid uint32) (*agentProc, error) {
+		starts.Add(1)
+		time.Sleep(10 * time.Millisecond)
+		return &agentProc{socketPath: filepath.Join(d.cfg.RunDir, "restarted.sock")}, nil
+	}
+	var group sync.WaitGroup
+	for range 12 {
+		group.Go(func() {
+			status, result := post(t, client, "/validate", map[string]any{"token": token})
+			if status != http.StatusOK || result["token"] != token || result["csrf"] != login["csrf"] || result["agentSocket"] != filepath.Join(d.cfg.RunDir, "restarted.sock") {
+				t.Errorf("validation after exit: status=%d", status)
+			}
+		})
+	}
+	group.Wait()
+	if starts.Load() != 1 {
+		t.Fatalf("started %d agents for concurrent requests", starts.Load())
+	}
+}
+
+func TestValidateRejectsUnknownSessionBeforeStartingAgent(t *testing.T) {
+	d, client, _ := testDaemon(t)
+	d.spawnAgentFn = func(uid uint32) (*agentProc, error) {
+		t.Error("spawn for unknown session")
+		return nil, fmt.Errorf("unexpected spawn")
+	}
+	status, _ := post(t, client, "/validate", map[string]any{"token": "missing"})
+	if status != http.StatusNotFound {
+		t.Fatalf("invalid session: %d", status)
+	}
+}
+
+func TestValidatePreservesSessionWhenAgentRestartFails(t *testing.T) {
+	d, client, username := testDaemon(t)
+	_, login := post(t, client, "/login", map[string]any{"username": username, "password": "x"})
+	token := login["token"].(string)
+	sess, err := d.lookup(token, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.agents[sess.User.UID].markDead()
+	d.spawnAgentFn = func(uid uint32) (*agentProc, error) { return nil, fmt.Errorf("temporary spawn failure") }
+	status, _ := post(t, client, "/validate", map[string]any{"token": token})
+	if status != http.StatusServiceUnavailable {
+		t.Fatalf("spawn failure: %d", status)
+	}
+	d.spawnAgentFn = func(uid uint32) (*agentProc, error) {
+		return &agentProc{socketPath: agentSocketPath(d.cfg.RunDir, uid)}, nil
+	}
+	status, result := post(t, client, "/validate", map[string]any{"token": token})
+	if status != http.StatusOK || result["token"] != token {
+		t.Fatalf("retry: %d", status)
 	}
 }

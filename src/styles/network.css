@@ -85,8 +85,7 @@
   margin-bottom: var(--space-4);
 }
 
-.network-heading h3,
-.network-editor h3 {
+.network-heading h3 {
   margin: 0;
 }
 
@@ -113,158 +112,35 @@
   font-size: 12.5px;
 }
 
-.network-pending {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-  padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--amber) 42%, transparent);
-  border-radius: var(--radius-l);
-  background: var(--amber-soft);
-}
-
-.network-pending div {
-  display: grid;
-  gap: 2px;
-}
-
-.network-pending strong {
-  font-size: 13px;
-}
-
-.network-pending span {
-  color: var(--text-muted);
-  font-size: 11.5px;
-}
-
 .network-details {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-  overflow: hidden;
-  margin-bottom: var(--space-4);
+  margin: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-l);
-  background: var(--border);
-}
-
-.network-details div {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-  padding: var(--space-3);
-  background: var(--surface-raised);
-}
-
-.network-details span {
-  color: var(--text-muted);
-  font-size: 11.5px;
-}
-
-.network-details strong {
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.network-editor {
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-l);
-  background: var(--surface-raised);
 }
 
-.network-editor > header,
-.network-editor > footer,
-.network-fields,
-.network-mode {
-  padding: var(--space-4);
-}
-
-.network-editor h3 {
-  font-size: 13.5px;
-}
-
-.network-mode {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-}
-
-.network-mode button {
-  min-height: 30px;
-  padding: 5px 12px;
-  border-radius: var(--radius-m);
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.network-mode button[aria-pressed='true'] {
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 650;
-}
-
-.network-fields {
+.network-detail {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-  border-bottom: 1px solid var(--border);
-}
-
-.network-fields label {
-  display: grid;
-  gap: var(--space-1);
-  color: var(--text-muted);
-  font-size: 11.5px;
-}
-
-.network-fields input {
-  width: 100%;
-  min-width: 0;
-  padding: 7px 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-m);
-  background: var(--surface);
-  color: var(--text);
-  font: 12px var(--font-mono);
-}
-
-.network-editor > footer {
-  display: flex;
+  grid-template-columns: 140px minmax(0, 1fr);
   align-items: center;
-  justify-content: flex-end;
   gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised);
 }
 
-.network-empty {
-  display: grid;
-  min-height: 180px;
-  place-items: center;
-  color: var(--text-muted);
-  font-size: 12.5px;
-}
-
-.network-confirm > span {
-  display: block;
-  margin-top: var(--space-2);
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
+.network-detail + .network-detail { border-top: 1px solid var(--border); }
+.network-detail dt { color: var(--text-muted); font-size: 11.5px; margin-bottom: 6px; }
+.network-detail dd { margin: 0; font-size: 12.5px; }
+.network-value { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.network-value + .network-value { margin-top: 8px; }
+.network-value > span { min-width: 0; overflow-wrap: anywhere; user-select: text; }
+.network-value > button { flex: none; }
+.network-note { color: var(--text-muted); font-size: 12px; line-height: 1.6; margin: 0 0 var(--space-4); }
+.network-content > .network-note { margin-top: var(--space-3); }
+.network-unavailable { color: var(--text-muted); }
+.network-copy-status { min-height: 20px; color: var(--text-muted); font-size: 12px; }
+.network-empty { padding: 36px 0; color: var(--text-muted); font-size: 12.5px; }
 
 @container (max-width: 620px) {
-  .network-details,
-  .network-fields {
-    grid-template-columns: 1fr;
-  }
-
-  .network-pending,
-  .network-editor > footer {
-    align-items: flex-start;
-    flex-direction: column;
-  }
+  .network-detail { grid-template-columns: 1fr; gap: 6px; }
 }

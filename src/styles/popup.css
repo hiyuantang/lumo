@@ -53,3 +53,6 @@
 .custom-select[aria-expanded='true'] { border-color: var(--accent); }
 .select-options { max-height: min(300px, 55dvh); overflow-y: auto; overscroll-behavior: contain; outline: none; }
 .select-search { width: 100%; padding: 9px; margin-bottom: 6px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
+
+.popup-item.dropdown-menu-item { justify-content: flex-start; gap: 8px; }
+.dropdown-menu-check { flex: 0 0 14px; text-align: center; }

@@ -42,6 +42,8 @@ func TestActionsForwardTypedRequestsAndSession(t *testing.T) {
 	planID := "pln_" + strings.Repeat("a", 24)
 	for _, tc := range []struct{ path, action, body, key, value, expected string }{
 		{"/apps/plan", "apps.plan", `{"requestId":"plan","appId":"nginx"}`, "appId", "nginx", ""},
+		{"/apps/plan", "apps.plan", `{"requestId":"update","appId":"docker","operation":"update"}`, "operation", "update", ""},
+		{"/docker/resource", "docker.resource", `{"requestId":"volume-create","kind":"volume","action":"create","id":"test-data","revision":"absent"}`, "", "", ""},
 		{"/apps/plan", "apps.plan", `{"requestId":"remove","appId":"nginx","operation":"uninstall"}`, "operation", "uninstall", ""},
 		{"/containers/action", "containers.restart", `{"requestId":"restart","id":"` + strings.Repeat("a", 64) + `","action":"restart","expectedRevision":"` + revision + `"}`, "containerId", strings.Repeat("a", 64), `{"revision":"` + revision + `"}`},
 		{"/websites/save", "websites.save", `{"requestId":"save","id":"notes","definition":{"domain":"notes.example.com","kind":"proxy","port":3000,"root":"","enabled":true},"expectedRevision":"absent"}`, "siteId", "notes", `{"revision":"absent"}`},

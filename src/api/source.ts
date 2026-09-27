@@ -4,7 +4,7 @@ import type { TrashItem, TrashSelection } from './trash';
 import { LiveDataSource } from './client';
 import { ApiError } from './transport';
 import { MockDataSource } from '../mock/source';
-import type { AppCatalog, AppLogs, ContainerAction, ContainerDetail, ContainerSnapshot, ServerAppID, WebsiteDefinition, WebsiteResult, WebsiteSnapshot } from './server-apps';
+import type { DockerResources, DockerResourceRequest, AppOperation, AppCatalog, AppLogs, ContainerAction, ContainerDetail, ContainerSnapshot, ServerAppID, WebsiteDefinition, WebsiteResult, WebsiteSnapshot } from './server-apps';
 
 export type ServiceState = 'active' | 'inactive' | 'failed';
 export type ServiceAction = 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'disable';
@@ -59,11 +59,15 @@ export interface NetworkInterface {
   addresses: string[];
   up: boolean;
   loopback: boolean;
+  gateways?: string[] | null;
+  dnsServers?: string[] | null;
 }
 
 export interface NetworkSnapshot {
-  revision: string;
+  revision?: string;
   interfaces: NetworkInterface[];
+  dnsServers?: string[] | null;
+  dnsSource?: 'resolved' | 'resolv.conf';
 }
 
 export interface PendingNetworkChange {
@@ -230,7 +234,7 @@ export interface UpdatePackage {
 
 export interface UpdatePlan {
   appId?: ServerAppID;
-  operation?: 'install' | 'uninstall';
+  operation?: AppOperation;
   id: string;
   createdAt: string;
   expiresAt: string;
@@ -239,6 +243,15 @@ export interface UpdatePlan {
   downloadBytes: number;
   installedDeltaBytes: number;
   rebootRequired: boolean;
+}
+
+export interface AppUpdateHistoryEntry {
+  requestId: string;
+  appId: ServerAppID;
+  completedAt: string;
+  success: boolean;
+  error?: string;
+  packages: UpdatePackage[];
 }
 
 export interface UpdateProgress {
@@ -296,7 +309,9 @@ export interface DataSource {
   readSkill(id: string): Promise<SkillDetail>;
   getAppCatalog(): Promise<AppCatalog>;
   uninstallOpenCode(): Promise<void>;
-  planAppInstall(id: ServerAppID, operation?: 'install' | 'uninstall'): Promise<UpdatePlan>;
+  planAppInstall(id: ServerAppID, operation?: AppOperation): Promise<UpdatePlan>;
+  getDockerResources(): Promise<DockerResources>;
+  runDockerResourceAction(request: DockerResourceRequest): Promise<void>;
   getContainers(): Promise<ContainerSnapshot>;
   getContainer(id: string): Promise<ContainerDetail>;
   getContainerLogs(id: string): Promise<AppLogs>;
@@ -351,6 +366,7 @@ export interface DataSource {
   deleteFile(path: string[]): Promise<void>;
 
   refreshUpdates(): Promise<string>;
+  getAppUpdateHistory(): Promise<AppUpdateHistoryEntry[]>;
   calculateUpdatePlan(): Promise<UpdatePlan>;
   applyUpdatePlan(planId: string): Promise<string>;
   subscribeUpdateProgress(requestId: string, onProgress: (progress: UpdateProgress) => void, onError?: (err: Error) => void): Unsubscribe;

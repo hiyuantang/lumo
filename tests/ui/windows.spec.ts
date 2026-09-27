@@ -182,12 +182,12 @@ test('resizing respects the work area and keeps the opposite edge anchored at th
   await expectDockClear(page, 'files');
 });
 
-test('the View menu supports tiling and restore, while compact windows keep the dock clear', async ({ page }) => {
+test('the Window menu supports tiling and restore, while compact windows keep the dock clear', async ({ page }) => {
   const original = await rect(page, 'files');
-  await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Window', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Tile Window Right', exact: true }).click();
   await expect(page.getByTestId('window-files')).toHaveAttribute('data-window-placement', 'right');
-  await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Window', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Restore Window', exact: true }).click();
   expect(await rect(page, 'files')).toEqual(original);
 
@@ -198,10 +198,10 @@ test('the View menu supports tiling and restore, while compact windows keep the 
   const restored = await rect(page, 'files');
   expect(restored.x + restored.width).toBeLessThanOrEqual(860);
   await expectDockClear(page, 'files');
-  await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Window', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Tile Window Left', exact: true })).toBeDisabled();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('menuitem', { name: 'View', exact: true })).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('menuitem', { name: 'Window', exact: true })).toHaveAttribute('aria-expanded', 'false');
 
   await page.getByTestId('window-maximize-files').click();
   await page.setViewportSize({ width: 800, height: 700 });
@@ -221,5 +221,52 @@ test('the View menu supports tiling and restore, while compact windows keep the 
   await expect(page.getByTestId('window-files')).toBeHidden();
   await page.getByTestId('dock-app-files').click();
   await expect(page.getByTestId('window-files')).toBeVisible();
+  await expectDockClear(page, 'files');
+});
+
+test('collapsed saved windows recover usable sizes when reopened', async ({ page }) => {
+  await page.getByTestId('dock-app-websites').click();
+  await expect(page.getByTestId('window-websites')).toBeVisible();
+  await page.evaluate(() => {
+    const key = 'lumo.windows.v1:demo';
+    const saved = JSON.parse(localStorage.getItem(key)!);
+    for (const id of ['files', 'websites']) saved.windows[id] = { ...saved.windows[id], x: 0, y: 32, w: 1, h: 0 };
+    localStorage.setItem(key, JSON.stringify(saved));
+  });
+  await page.reload();
+  for (const app of ['websites', 'files']) {
+    await page.getByTestId(`dock-app-${app}`).click();
+    const recovered = await rect(page, app);
+    expect(recovered.width).toBeGreaterThanOrEqual(900);
+    expect(recovered.height).toBeGreaterThanOrEqual(600);
+    await expectDockClear(page, app);
+  }
+  await expect(page.getByTestId('file-row-notes.txt')).toBeVisible();
+  await page.getByTestId('window-close-files').click();
+  await page.getByTestId('dock-app-files').click();
+  expect((await rect(page, 'files')).width).toBeGreaterThanOrEqual(900);
+  await expect(page.getByTestId('file-row-notes.txt')).toBeVisible();
+});
+
+test('temporary empty viewports do not overwrite usable window sizes', async ({ page }) => {
+  const original = await rect(page, 'files');
+  await page.setViewportSize({ width: 1, height: 1 });
+  await page.waitForFunction(() => window.innerWidth === 1 && window.innerHeight === 1);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByTestId('dock-app-files').click();
+  expect(await rect(page, 'files')).toEqual(original);
+  await page.reload();
+  expect(await rect(page, 'files')).toEqual(original);
+});
+
+test('windows regain their minimum size after a very small viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 240 });
+  await expect.poll(async () => (await page.getByTestId('window-files').boundingBox())!.width).toBeLessThanOrEqual(320);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByTestId('dock-app-files').click();
+  const recovered = await rect(page, 'files');
+  expect(recovered.width).toBeGreaterThanOrEqual(440);
+  expect(recovered.height).toBeGreaterThanOrEqual(340);
+  await expect(page.getByTestId('file-row-notes.txt')).toBeVisible();
   await expectDockClear(page, 'files');
 });

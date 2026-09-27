@@ -61,18 +61,62 @@ provide a graphical interface for every installed program.
 | Updates | Package refresh, upgrade plan, installation and reboot status | Phase 5 complete |
 | Storage | Disks, partitions, mounts, filesystems and SMART status | planned |
 | App Library | Detect, install and open the two supported integrations | Initial implementation; fixed Docker and Nginx catalog, reviewed package plans and installation progress |
-| Containers | Existing Docker containers, lifecycle controls, logs, ports, storage and Compose project labels | Initial implementation; deployment, Compose editing, images and Podman remain planned |
-| Websites | Nginx static sites, local HTTP proxies, configuration and logs | Initial implementation; validation, backups and reload; certificate issuance remains planned |
-| Settings | Server identity, network, time, appearance and system controls; users, SSH keys, security, TLS, locale, listeners and firewall remain planned | Phase 6 in progress: read-only server identity, reauthenticated time edits, live interfaces and typed Netplan transactions with dead-man rollback, local appearance and power controls |
+| Docker | Containers, logs, images, volumes, networks and storage usage | Initial implementation; resource creation/removal guards; deployment, Compose editing and Podman remain planned |
+| Nginx | Nginx static sites, local HTTP proxies, configuration and logs | Initial implementation; validation, backups and reload; certificate issuance remains planned |
+| Settings | Server identity, network, time, appearance and system controls; users, SSH keys, security, TLS, locale, listeners and firewall remain planned | Phase 6 in progress: read-only server identity, reauthenticated time edits, read-only network details, local appearance and power controls |
 
-Network is a section inside Settings, with one interface for viewing addresses
-and testing IP, gateway and DNS changes. Command Center opens this section in
-the existing Settings window. Updates and Services remain separate applications.
+Network is a read-only section inside Settings for viewing and copying IP
+addresses, interface status, default gateways, DNS servers and MAC addresses.
+Network changes are made through SSH or the server’s network tools. Basic
+network details do not depend on Netplan. Monitor shows live traffic activity.
+Command Center opens Network in the existing Settings window. Updates and Services remain separate applications.
 
-App Library installs the server software needed by Containers and Websites and
+App Library installs the server software needed by Docker and Nginx and
 opens those same applications. It is a curated two-entry catalog, with no
 third-party plugin upload or arbitrary installation scripts. Packages already
 installed outside Lumo are detected. See [server applications](SERVER_APPS.md).
+
+## Menus
+
+The menu bar starts with the bold active app name, followed by File, Edit,
+View and Window. With no selected window it defaults to Files. Common
+commands retain their positions and appear disabled when unavailable;
+app commands come from the selected window. The app menu holds preferences
+and Quit, which checks every document for unsaved changes. File handles
+opening, creating, uploading and saving. Edit handles text history and
+clipboard operations. View controls content and panels; Window controls
+placement, sizing and switching. Help is omitted.
+
+Toolbars keep information on the left and related actions on the right:
+view controls, file actions, then the primary action. Files uses anchored
+New and View dropdowns with keyboard navigation.
+
+Preview has two Markdown views: Rendered and editable Raw. Other complete
+text files open directly in an editor with Save always visible. Auto-save
+is an account preference in the Preview menu, initially off. When enabled,
+it saves after a short typing pause and preserves edits typed during a
+write. Failed writes pause auto-save and keep the draft. Conflicts require
+reloading the current server version or saving a separate copy. Refresh,
+opening another document, closing, and quitting protect unsaved changes.
+
+Right-click menus act on the clicked item: files and folders, terminal tabs
+and output, service units, log entries, Preview documents, skills and Trash
+items. Keep each menu limited to actions relevant to that item. Text fields
+retain clipboard actions. Empty desktop areas, window title bars and generic
+application backgrounds have no custom menu.
+
+File and View in the top bar hold common launch and window commands. Theme
+and motion controls live in Settings; appearance searches in Command Center
+open that Settings section. Dock menus offer running-window actions and new
+windows where supported; a closed app with only an Open action needs no menu.
+Destructive item actions reuse the same confirmation and authorization flow
+as their visible controls.
+
+Files has Back and Forward controls followed by the current folder name.
+The bottom path contains clickable folder segments and a Copy action for the
+selected item or current folder's absolute path. It has no path-edit field.
+View offers List and Grid, with ascending or descending sorting by name,
+type, size or modified date. View and sorting preferences are retained.
 
 ## Markdown editing workflow
 

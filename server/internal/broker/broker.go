@@ -78,21 +78,22 @@ type ActionRequest struct {
 	RequestID string `json:"requestId"`
 	Action    string `json:"action"`
 	Arguments struct {
-		Unit              string              `json:"unit"`
-		PlanID            string              `json:"planId"`
-		Path              string              `json:"path"`
-		ContentBase64     string              `json:"contentBase64"`
-		Mode              string              `json:"mode"`
-		RestartUnit       string              `json:"restartUnit"`
-		Config            network.Config      `json:"config"`
-		ConfirmTimeoutSec int                 `json:"confirmTimeoutSec"`
-		Token             string              `json:"token"`
-		Change            hostsettings.Change `json:"change"`
-		ContainerID       string              `json:"containerId"`
-		SiteID            string              `json:"siteId"`
-		AppID             string              `json:"appId"`
-		Operation         string              `json:"operation"`
-		Website           websites.Definition `json:"website"`
+		Unit              string                     `json:"unit"`
+		PlanID            string                     `json:"planId"`
+		Path              string                     `json:"path"`
+		ContentBase64     string                     `json:"contentBase64"`
+		Mode              string                     `json:"mode"`
+		RestartUnit       string                     `json:"restartUnit"`
+		Config            network.Config             `json:"config"`
+		ConfirmTimeoutSec int                        `json:"confirmTimeoutSec"`
+		Token             string                     `json:"token"`
+		Change            hostsettings.Change        `json:"change"`
+		Resource          containers.ResourceRequest `json:"resource"`
+		ContainerID       string                     `json:"containerId"`
+		SiteID            string                     `json:"siteId"`
+		AppID             string                     `json:"appId"`
+		Operation         string                     `json:"operation"`
+		Website           websites.Definition        `json:"website"`
 	} `json:"arguments"`
 	Expected *struct {
 		ActiveState string `json:"activeState"`
@@ -228,6 +229,7 @@ func (s *Server) Run() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /action", s.handleAction)
 	mux.HandleFunc("GET /updates/progress", s.handleUpdateProgress)
+	mux.HandleFunc("GET /apps/update-history", s.handleAppUpdateHistory)
 	srv := &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
@@ -288,14 +290,14 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		unlock := s.lockUnit("system.settings")
 		defer unlock()
 	}
-	if containerAction(req.Action) || req.Action == "websites.save" {
-		if (containerAction(req.Action) && s.containers == nil) || (req.Action == "websites.save" && s.websites == nil) {
+	if containerAction(req.Action) || req.Action == "docker.resource" || req.Action == "websites.save" {
+		if ((containerAction(req.Action) || req.Action == "docker.resource") && s.containers == nil) || (req.Action == "websites.save" && s.websites == nil) {
 			s.writeErr(w, http.StatusServiceUnavailable, &apiError{Code: "unavailable", Message: "This server integration is unavailable."})
 			return
 		}
 		key := "websites"
-		if containerAction(req.Action) {
-			key = "container:" + req.Arguments.ContainerID
+		if containerAction(req.Action) || req.Action == "docker.resource" {
+			key = "docker"
 		}
 		unlock := s.lockUnit(key)
 		defer unlock()
@@ -347,7 +349,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		s.handleSettingsAction(w, r, req, uid, userName, polkitResult)
 		return
 	}
-	if containerAction(req.Action) || req.Action == "websites.save" {
+	if containerAction(req.Action) || req.Action == "docker.resource" || req.Action == "websites.save" {
 		s.handleServerAppAction(w, r, req, uid, userName, polkitResult)
 		return
 	}
@@ -533,6 +535,8 @@ func (s *Server) handleUpdateAction(w http.ResponseWriter, r *http.Request, req 
 		if req.Action == "apps.plan" {
 			if req.Arguments.Operation == "uninstall" {
 				plan, err = s.updates.CalculateRemovalPlan(ctx, req.Arguments.AppID)
+			} else if req.Arguments.Operation == "update" {
+				plan, err = s.updates.CalculateAppUpdatePlan(ctx, req.Arguments.AppID)
 			} else {
 				plan, err = s.updates.CalculateInstallPlan(ctx, req.Arguments.AppID)
 			}
@@ -636,7 +640,7 @@ func (s *Server) authorize(ctx context.Context, uid, pid uint32, req ActionReque
 		actionID = systemSettingsActionID
 		details = map[string]string{"action": req.Action}
 	}
-	if containerAction(req.Action) {
+	if containerAction(req.Action) || req.Action == "docker.resource" {
 		actionID = containersManageActionID
 		details = map[string]string{"containerId": req.Arguments.ContainerID}
 	}
@@ -710,7 +714,7 @@ func (req *ActionRequest) validate() *apiError {
 	if req.RequestID == "" || len(req.RequestID) > 128 {
 		return &apiError{Code: "validation_failed", Message: "requestId is required."}
 	}
-	if !serviceActions[req.Action] && !updateActions[req.Action] && !fileActions[req.Action] && !powerActions[req.Action] && !networkActions[req.Action] && req.Action != "system.settings" && !containerAction(req.Action) && req.Action != "websites.save" {
+	if !serviceActions[req.Action] && !updateActions[req.Action] && !fileActions[req.Action] && !powerActions[req.Action] && !networkActions[req.Action] && req.Action != "system.settings" && !containerAction(req.Action) && req.Action != "docker.resource" && req.Action != "websites.save" {
 		return &apiError{Code: "validation_failed", Message: "unknown action."}
 	}
 	if serviceActions[req.Action] && !unitNamePattern.MatchString(req.Arguments.Unit) {
@@ -731,7 +735,7 @@ func (req *ActionRequest) validate() *apiError {
 			return &apiError{Code: "validation_failed", Message: "expected planId must match arguments.planId."}
 		}
 	}
-	if req.Action == "apps.plan" && ((req.Arguments.AppID != "docker" && req.Arguments.AppID != "nginx") || (req.Arguments.Operation != "" && req.Arguments.Operation != "install" && req.Arguments.Operation != "uninstall")) {
+	if req.Action == "apps.plan" && ((req.Arguments.AppID != "docker" && req.Arguments.AppID != "nginx") || (req.Arguments.Operation != "" && req.Arguments.Operation != "install" && req.Arguments.Operation != "uninstall" && req.Arguments.Operation != "update")) {
 		return &apiError{Code: "validation_failed", Message: "Choose a supported application."}
 	}
 	if req.Action == "files.writePrivileged" {
@@ -776,6 +780,9 @@ func (req *ActionRequest) validate() *apiError {
 		if err := req.Arguments.Change.Validate(); err != nil {
 			return &apiError{Code: "validation_failed", Message: err.Error()}
 		}
+	}
+	if req.Action == "docker.resource" && containers.ValidateResource(req.Arguments.Resource) != nil {
+		return &apiError{Code: "validation_failed", Message: "Invalid Docker resource action."}
 	}
 	if containerAction(req.Action) {
 		if req.Expected == nil || containers.Validate(req.Arguments.ContainerID, strings.TrimPrefix(req.Action, "containers."), req.Expected.Revision) != nil {

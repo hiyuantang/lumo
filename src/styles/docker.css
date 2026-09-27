@@ -1,0 +1,56 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.docker-navigation { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 10px 16px; background: var(--surface-chrome); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.docker-navigation button { flex-shrink: 0; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 550; color: var(--text-muted); }
+.docker-navigation button:hover { background: var(--button-hover); color: var(--text); }
+.docker-navigation [aria-current=page] { background: var(--accent-soft); color: var(--text); }
+.docker-container-view { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
+.docker-content { flex: 1; min-height: 0; overflow: auto; padding: 26px; display: flex; flex-direction: column; gap: 20px; }
+.docker-heading { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.docker-heading p { margin-top: 6px; font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+.docker-heading > span { white-space: nowrap; color: var(--text-muted); font-size: 12px; }
+.docker-refresh { display: grid; place-items: center; flex: 0 0 30px; width: 30px; height: 30px; padding: 6px; }
+.docker-container-view .server-app-section-heading { justify-content: flex-start; }
+.docker-container-view .server-app-section-heading .docker-refresh { margin-left: auto; }
+.docker-container-view .app-search { flex-shrink: 0; }
+.docker-app .app-search { min-width: 0; }
+.docker-app .app-search input { min-width: 0; width: 100%; }
+.docker-app .app-search svg { flex-shrink: 0; }
+.docker-heading-title { display: flex; align-items: center; gap: 10px; }
+.docker-resource-card { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; flex-shrink: 0; }
+.docker-list-bar { display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--surface-raised); border-bottom: 1px solid var(--border); }
+.docker-list-bar .app-search { flex: 1; max-width: 280px; }
+.docker-create { margin-left: auto; white-space: nowrap; }
+.docker-table-wrap { overflow-x: auto; }
+.docker-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+.docker-table th { font-size: 11px; font-weight: 550; color: var(--text-muted); background: var(--surface-raised); padding: 12px 14px; white-space: nowrap; }
+.docker-table td { padding: 15px 14px; border-top: 1px solid var(--border); vertical-align: middle; }
+.docker-table td:first-child { min-width: 175px; max-width: 300px; overflow-wrap: anywhere; }
+.docker-table strong { display: block; font-weight: 600; }
+.docker-table small { display: block; color: var(--text-muted); margin-top: 6px; font-size: 10px; }
+.docker-table .btn { font-size: 11px; white-space: nowrap; }
+.docker-empty { padding: 25px; text-align: center; color: var(--text-muted); font-size: 13px; }
+.docker-storage section { display: grid; grid-template-columns: 1fr auto; column-gap: 24px; padding: 22px 0; border-bottom: 1px solid var(--border); }
+.docker-storage h3 { margin: 0 0 7px; }
+.docker-storage section p { color: var(--text-muted); font-size: 12px; line-height: 1.6; max-width: 500px; }
+.docker-storage section > strong { font-size: 22px; font-weight: 650; letter-spacing: -.5px; }
+.docker-storage section small { grid-column: 2; color: var(--text-muted); text-align: right; }
+.docker-storage > p { margin-top: 20px; }
+.docker-sampled { font-size: 11px; line-height: 1.5; color: var(--text-muted); margin-top: auto; }
+.docker-confirm-field { display: flex; flex-direction: column; gap: 10px; font-size: 12px; overflow-wrap: anywhere; }
+.docker-confirm-field input { padding: 10px 12px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 8px; width: 100%; }
+.docker-confirm-field small { color: var(--text-muted); }
+@container (max-width: 660px) {
+ .docker-content { padding: 18px; }
+ .docker-navigation { padding: 8px; gap: 2px; }
+ .docker-navigation button { padding: 8px 10px; }
+ .docker-heading { align-items: flex-start; }
+ .docker-storage section > strong { font-size: 18px; }
+}
+@container (max-width: 480px) {
+ .docker-navigation { flex-wrap: wrap; }
+ .docker-heading > span { display: none; }
+ .docker-content { padding: 16px; }
+ .docker-list-bar { flex-wrap: wrap; gap: 8px; padding: 10px; }
+ .docker-list-bar .app-search { flex-basis: 150px; max-width: none; }
+ .docker-container-view .server-app-sidebar { max-height: 230px; }
+}

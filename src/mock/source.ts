@@ -37,7 +37,7 @@ import type {
 } from '../api/source';
 import { ApiError } from '../api/transport';
 import { MockServerApps } from './server-apps';
-import type { AppCatalog, ContainerAction, ServerAppID, WebsiteDefinition } from '../api/server-apps';
+import type { DockerResourceRequest, AppOperation, AppCatalog, ContainerAction, ServerAppID, WebsiteDefinition } from '../api/server-apps';
 import {
   deleteEntry, listTrashed, restoreTrashed, removeTrashed,
   entryRevision,
@@ -61,6 +61,8 @@ import { MockTerminalSession } from './terminal';
 import { readSystemFile, writePrivilegedFile } from './privileged-files';
 import {
   applyUpdatePlan,
+  getAppUpdateHistory,
+  rememberAppPlan,
   calculateUpdatePlan,
   refreshUpdates,
   subscribeUpdateProgress,
@@ -71,10 +73,14 @@ const TICK_MS = 2000;
 export class MockDataSource implements DataSource {
   async getAppCatalog(): Promise<AppCatalog> { return { canInstall: true, apps: [{ id: 'docker', installed: true }, { id: 'nginx', installed: true }] }; }
   async uninstallOpenCode(): Promise<void> {}
-  async planAppInstall(id: ServerAppID, operation: 'install' | 'uninstall' = 'install'): Promise<UpdatePlan> {
-    return { ...await calculateUpdatePlan(), appId: id, operation, packages: [] };
+  async planAppInstall(id: ServerAppID, operation: AppOperation = 'install'): Promise<UpdatePlan> {
+    const updated = id === 'docker' ? this.serverApps.engineVersion === '27.5.2' : this.updatedNginx;
+    return rememberAppPlan({ ...await calculateUpdatePlan(), appId: id, operation, packages: operation === 'update' && !updated ? [{ name: id === 'docker' ? 'docker.io' : 'nginx', fromVersion: id === 'docker' ? this.serverApps.engineVersion : '1.24.0', toVersion: id === 'docker' ? '27.5.2' : '1.24.1', security: false, downloadBytes: 24000000, installedDeltaBytes: 1200000 }] : [], downloadBytes: operation === 'update' && !updated ? 24000000 : 0 }, () => { if (operation === 'update') { if (id === 'docker') this.serverApps.engineVersion = '27.5.2'; else this.updatedNginx = true; } });
   }
+  private updatedNginx = false;
   private serverApps = new MockServerApps();
+  getDockerResources() { return this.serverApps.getDockerResources(); }
+  runDockerResourceAction(request: DockerResourceRequest) { return this.serverApps.runDockerResourceAction(request); }
   getContainers() { return this.serverApps.getContainers(); }
   getContainer(id: string) { return this.serverApps.getContainer(id); }
   getContainerLogs(id: string) { return this.serverApps.getContainerLogs(id); }
@@ -93,7 +99,7 @@ export class MockDataSource implements DataSource {
     canServiceActions: true,
     canTerminal: true,
     canPowerControl: true,
-    canConfigureNetwork: true,
+    canConfigureNetwork: false,
   };
 
   async login(username: string): Promise<SessionUser> {
@@ -166,12 +172,15 @@ export class MockDataSource implements DataSource {
 
   async getNetworkSnapshot(): Promise<NetworkSnapshot> {
     return {
-      revision: `sha256:${'0'.repeat(64)}`,
+      dnsServers: ['1.1.1.1'],
+      dnsSource: 'resolved',
       interfaces: [
         {
           name: 'eth0',
           hardwareAddress: '02:42:ac:11:00:02',
-          addresses: ['192.0.2.10/24'],
+          addresses: ['192.0.2.10/24', '2001:db8::10/64'],
+          gateways: ['192.0.2.1'],
+          dnsServers: ['192.0.2.53'],
           up: true,
           loopback: false,
         },
@@ -251,11 +260,15 @@ export class MockDataSource implements DataSource {
     return [...LOG_UNITS];
   }
 
-  async listSkills(): Promise<SkillCatalog> { return { path: '/home/user/.agents/skills', skills: mockSkills, limited: false }; }
+  async listSkills(): Promise<SkillCatalog> { return { path: '/home/user/.agents/skills', skills: await Promise.all(mockSkills.filter((skill) => getEntry(skill.path.split('/'))).map((skill) => this.readSkill(skill.id))), limited: false }; }
   async readSkill(id: string): Promise<SkillDetail> {
     const skill = mockSkills.find((item) => item.id === id);
-    if (!skill) throw new Error('Skill no longer exists. Refresh the list.');
-    return skill;
+    const raw = skill && getEntry(skill.path.split('/'))?.content;
+    if (!skill || raw === undefined) throw new Error('Skill no longer exists. Refresh the list.');
+    const header = raw.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+    const field = (name: string) => header?.[1].match(new RegExp(`^${name}:\\s*(.*)$`, 'm'))?.[1].trim().replace(/^['"]|['"]$/g, '') ?? '';
+    const name = field('name'), description = field('description');
+    return { ...skill, name: name || skill.id, description, raw, body: header ? raw.slice(header[0].length) : raw, issue: name && description ? undefined : 'The YAML header needs a name and description.' };
   }
 
   homePath(): string[] {
@@ -266,7 +279,7 @@ export class MockDataSource implements DataSource {
     return mockListDir(path);
   }
 
-  absolutePath(path: string[]): string { return `/home/${path.join('/')}`; }
+  absolutePath(path: string[]): string { return path[0] === '' ? path.join('/') || '/' : `/home/${path.join('/')}`; }
 
   async createEntry(path: string[], kind: 'file' | 'directory'): Promise<void> { mockCreateEntry(path, kind); }
 
@@ -307,6 +320,8 @@ export class MockDataSource implements DataSource {
   async deleteFile(path: string[]): Promise<void> {
     deleteEntry(path);
   }
+
+  getAppUpdateHistory = getAppUpdateHistory;
 
   refreshUpdates(): Promise<string> {
     return refreshUpdates();

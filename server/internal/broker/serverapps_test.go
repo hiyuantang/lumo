@@ -27,6 +27,12 @@ func (f *fakeContainers) Act(_ context.Context, id, action, revision string, uid
 	return containers.Detail{Container: containers.Container{ID: id, State: "running"}, Revision: revision}, f.err
 }
 
+func (f *fakeContainers) ResourceAction(_ context.Context, request containers.ResourceRequest, uid uint32) (containers.ResourceResult, error) {
+	f.calls++
+	f.uid = uid
+	return containers.ResourceResult{ID: request.ID, Action: request.Action}, f.err
+}
+
 type fakeWebsites struct {
 	calls int
 	err   error
@@ -40,6 +46,9 @@ func (f *fakeWebsites) Apply(_ context.Context, id string, definition websites.D
 func serverAppPayload(action, id string) string {
 	args := `{"containerId":"` + strings.Repeat("a", 64) + `"}`
 	revision := "sha256:" + strings.Repeat("b", 64)
+	if action == "docker.resource" {
+		args = `{"resource":{"kind":"volume","action":"remove","id":"test-data","revision":"` + revision + `"}}`
+	}
 	if action == "websites.save" {
 		args = `{"siteId":"notes","website":{"domain":"notes.example.com","kind":"proxy","port":3000,"root":"","enabled":true}}`
 		revision = "absent"
@@ -48,7 +57,7 @@ func serverAppPayload(action, id string) string {
 }
 
 func TestServerAppsPolicyAuditAndIdempotency(t *testing.T) {
-	for action, expectedPolicy := range map[string]string{"containers.start": containersManageActionID, "containers.stop": containersManageActionID, "containers.restart": containersManageActionID, "websites.save": websitesManageActionID} {
+	for action, expectedPolicy := range map[string]string{"docker.resource": containersManageActionID, "containers.start": containersManageActionID, "containers.stop": containersManageActionID, "containers.restart": containersManageActionID, "websites.save": websitesManageActionID} {
 		t.Run(action, func(t *testing.T) {
 			var policy string
 			s, client, _ := testBroker(t, StaticAuthorizer{Rules: func(_ uint32, id string, _ map[string]string) Result { policy = id; return Allow }}, nil)
@@ -63,7 +72,7 @@ func TestServerAppsPolicyAuditAndIdempotency(t *testing.T) {
 			if policy != expectedPolicy || container.calls+website.calls != 1 {
 				t.Fatalf("policy=%s calls=%d", policy, container.calls+website.calls)
 			}
-			if containerAction(action) && container.uid != uint32(os.Getuid()) {
+			if (containerAction(action) || action == "docker.resource") && container.uid != uint32(os.Getuid()) {
 				t.Fatalf("requester UID lost: %d", container.uid)
 			}
 			var outcome string
@@ -75,7 +84,7 @@ func TestServerAppsPolicyAuditAndIdempotency(t *testing.T) {
 }
 
 func TestServerAppsRequirePermissionAndFreshAuthentication(t *testing.T) {
-	for _, action := range []string{"containers.stop", "websites.save"} {
+	for _, action := range []string{"docker.resource", "containers.stop", "websites.save"} {
 		for _, policy := range []Result{Deny, Challenge} {
 			for _, fresh := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s-%v-%v", action, policy, fresh), func(t *testing.T) {
@@ -118,19 +127,19 @@ func TestServerAppsConflictValidationAndUnavailableAudit(t *testing.T) {
 		t.Fatal("invalid input reached controller")
 	}
 	container.err, website.err = containers.ErrStale, websites.ErrStale
-	for _, action := range []string{"containers.stop", "websites.save"} {
+	for _, action := range []string{"docker.resource", "containers.stop", "websites.save"} {
 		status, _, body := callAction(t, client, serverAppPayload(action, action))
 		if status != 409 || body["error"].(map[string]any)["code"] != "stale_revision" {
 			t.Fatalf("conflict: %d %v", status, body)
 		}
 	}
 	_ = s.audit.db.Close()
-	for _, action := range []string{"containers.stop", "websites.save"} {
+	for _, action := range []string{"docker.resource", "containers.stop", "websites.save"} {
 		if status, _, _ := callAction(t, client, serverAppPayload(action, "no-audit-"+action)); status != 503 {
 			t.Fatalf("audit failure status=%d", status)
 		}
 	}
-	if container.calls+website.calls != 2 {
+	if container.calls+website.calls != 3 {
 		t.Fatal("mutation executed without audit")
 	}
 }

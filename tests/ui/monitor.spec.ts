@@ -38,6 +38,7 @@ test('Dock menus sit above icons and Trash offers confirmed emptying', async ({ 
   await page.getByTestId('login-password').fill('demo');
   await page.getByTestId('login-submit').click();
   const icon = page.getByTestId('dock-app-files');
+  await icon.click();
   await icon.click({ button: 'right' });
   const menu = page.getByTestId('context-menu');
   await expect(menu.getByRole('menuitem', { name: /Move (Left|Right)/ })).toHaveCount(0);

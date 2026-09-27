@@ -9,7 +9,7 @@ import { Monitor } from './Monitor';
 import type { AppId } from './registry';
 import { Settings } from './Settings';
 import { Terminal } from './Terminal';
-import { Containers } from './Containers';
+import { Docker as Containers } from './Docker';
 import { Websites } from './Websites';
 import { AppLibrary } from './AppLibrary';
 

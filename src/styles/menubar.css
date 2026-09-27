@@ -16,12 +16,6 @@
   user-select: none;
 }
 
-.menubar-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-}
-
 .menubar-left,
 .menubar-right {
   display: flex;
@@ -113,11 +107,10 @@
   cursor: default;
 }
 
-.menubar-item.separator-above {
-  margin-top: var(--space-1);
-  border-top: 1px solid var(--border);
-  border-radius: 0 0 var(--radius-s) var(--radius-s);
-  padding-top: var(--space-2);
+.menubar-separator {
+  height: 1px;
+  margin: var(--space-1) var(--space-2);
+  background: var(--border);
 }
 
 .menubar-item kbd {
@@ -161,3 +154,17 @@
 .menubar-brand, .menubar-clock { display: inline-flex; align-items: center; height: 24px; white-space: nowrap; }
 .menubar-clock { position: relative; }
 .menubar-right, .menubar-menus, .menubar-brand { flex-shrink: 0; }
+
+.menubar-app-name { font-weight: 700; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menubar-check { display: inline-block; width: 20px; }
+.menubar-dropdown { max-height: calc(100dvh - 48px); overflow-y: auto; max-width: calc(100vw - 16px); }
+@media (max-width: 700px) {
+  .menubar-date { display: none; }
+  .menubar-button { padding-inline: 6px; }
+  .menubar-app-name { max-width: 100px; }
+}
+@media (max-width: 380px) {
+  .menubar-clock time { display: none; }
+  .menubar-clock { width: 16px; }
+  .menubar-clock::before { content: '◷'; font-size: 16px; }
+}

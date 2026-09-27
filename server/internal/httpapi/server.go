@@ -52,6 +52,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/apps", s.handleApps)
 	mux.HandleFunc("POST /api/v1/apps/plan", s.handleAppPlan)
 	mux.HandleFunc("POST /api/v1/apps/opencode/uninstall", s.handleOpenCodeUninstall)
+	mux.HandleFunc("GET /api/v1/docker/resources", s.handleDockerResources)
+	mux.HandleFunc("POST /api/v1/docker/resource", s.handleDockerResourceAction)
 	mux.HandleFunc("GET /api/v1/containers", s.handleContainers)
 	mux.HandleFunc("GET /api/v1/containers/detail", s.handleContainers)
 	mux.HandleFunc("GET /api/v1/containers/logs", s.handleContainers)
@@ -84,6 +86,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/files/write-privileged", s.handleFilesWritePrivileged)
 	mux.HandleFunc("POST /api/v1/services/action", s.handleServicesAction)
 	mux.HandleFunc("POST /api/v1/updates/refresh", s.handleUpdatesRefresh)
+	mux.HandleFunc("GET /api/v1/apps/update-history", s.handleAppUpdateHistory)
 	mux.HandleFunc("POST /api/v1/updates/plan", s.handleUpdatesPlan)
 	mux.HandleFunc("POST /api/v1/updates/apply", s.handleUpdatesApply)
 	if s.deps.WS != nil {

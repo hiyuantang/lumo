@@ -28,9 +28,9 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: linear-gradient(145deg, #5bbfc0, #06767e);
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5), 0 4px 14px rgba(5, 50, 59, 0.2);
-  color: var(--accent-contrast);
+  background: var(--icon-terminal);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5), 0 4px 14px rgba(0, 0, 0, 0.2);
+  color: #fff;
   font-size: 26px;
   font-weight: 600;
 }
@@ -75,14 +75,16 @@
   height: 38px;
   margin-top: var(--space-1);
   border-radius: var(--radius-m);
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--button-primary);
+  border: 1px solid var(--button-primary-border);
+  box-shadow: var(--button-shadow);
+  color: var(--button-primary-text);
   font-weight: 600;
   transition: background var(--dur-fast) var(--ease-out);
 }
 
 .login-submit:hover:not(:disabled) {
-  background: var(--accent-strong);
+  background: var(--button-primary-hover);
 }
 
 .login-submit:disabled {

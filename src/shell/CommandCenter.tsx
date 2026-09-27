@@ -30,7 +30,7 @@ function fuzzyRank(text: string, query: string): number | null {
 }
 
 export function CommandCenter() {
-  const { state, actions, resolvedTheme, reducedMotion } = useShell();
+  const { state, actions } = useShell();
   const source = getDataSource();
   const requireReauth = useReauth();
   const [query, setQuery] = useState('');
@@ -98,18 +98,11 @@ export function CommandCenter() {
     }
     list.push(
       {
-        id: 'toggle-theme',
-        title: resolvedTheme === 'dark' ? 'Light Theme' : 'Dark Theme',
-        group: 'Shell',
-        keywords: 'theme dark light appearance',
-        run: actions.toggleTheme,
-      },
-      {
-        id: 'toggle-motion',
-        title: reducedMotion ? 'Full Motion' : 'Reduced Motion',
-        group: 'Shell',
-        keywords: 'motion animation reduce accessibility',
-        run: actions.toggleMotion,
+        id: 'appearance-settings',
+        title: 'Open Appearance Settings',
+        group: 'Settings',
+        keywords: 'theme dark light appearance motion animation reduce accessibility',
+        run: () => actions.openSettings('appearance'),
       },
       {
         id: 'show-shortcuts',
@@ -127,7 +120,7 @@ export function CommandCenter() {
       },
     );
     return list;
-  }, [actions, resolvedTheme, reducedMotion, services, source]);
+  }, [actions, services, source]);
 
   const results = useMemo(() => {
     return allActions

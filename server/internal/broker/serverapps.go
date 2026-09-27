@@ -29,6 +29,15 @@ func (s *Server) handleServerAppAction(w http.ResponseWriter, r *http.Request, r
 	var err error
 	if containerAction(req.Action) {
 		data, err = s.containers.Act(ctx, req.Arguments.ContainerID, strings.TrimPrefix(req.Action, "containers."), req.Expected.Revision, uid)
+	} else if req.Action == "docker.resource" {
+		actor, ok := s.containers.(interface {
+			ResourceAction(context.Context, containers.ResourceRequest, uint32) (containers.ResourceResult, error)
+		})
+		if !ok {
+			err = containers.ErrUnavailable
+		} else {
+			data, err = actor.ResourceAction(ctx, req.Arguments.Resource, uid)
+		}
 	} else {
 		data, err = s.websites.Apply(ctx, req.Arguments.SiteID, req.Arguments.Website, req.Expected.Revision, req.RequestID)
 	}

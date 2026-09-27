@@ -214,7 +214,7 @@ test('interface response: Preview shows decoded file content', async ({ page }) 
   const quickLook = page.getByTestId('app-preview');
   await expect(quickLook).toBeVisible();
   await expect(quickLook).toContainText('hello from the live server');
-  await expect(page.getByTestId('preview-raw')).toContainText('hello from the live server');
+  await expect(page.getByTestId('editor-input')).toHaveValue(/hello\ from\ the\ live\ server/);
 });
 
 test('interface response: failed initial load shows a retry affordance and recovers', async ({ page }) => {
@@ -367,7 +367,7 @@ test('interface response: terminal exit shows exited state and restart resubscri
   await expect.poll(() => terminalSubscribes, { timeout: 5_000 }).toBeGreaterThan(before);
 });
 
-test('interface response: file editor closes after saving with the keyboard', async ({ page }) => {
+test('interface response: file editor stays open after saving with the keyboard', async ({ page }) => {
   await stubRest(page);
   await page.route('**/api/v1/files/write', async (route) => {
     await fulfillData(route, { path: '/home/user/notes.txt', revision: 'sha256:new1', sizeBytes: 21 });
@@ -377,14 +377,14 @@ test('interface response: file editor closes after saving with the keyboard', as
   await page.getByTestId('dock-app-files').click();
   const files = page.getByTestId('app-files');
   await files.getByTestId('file-row-notes.txt').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Open in Preview', exact: true }).click();
 
   const input = page.getByTestId('editor-input');
   await expect(input).toHaveValue('hello from the live server\n');
   await input.fill('updated live content\n');
   await input.press('ControlOrMeta+s');
 
-  await expect(page.getByTestId('file-editor')).toHaveCount(0);
+  await expect(page.getByTestId('editor-save')).toBeDisabled();
 });
 
 test('interface response: stale revision shows conflict banner and reload resolves it', async ({ page }) => {
@@ -415,7 +415,7 @@ test('interface response: stale revision shows conflict banner and reload resolv
   await page.getByTestId('dock-app-files').click();
   const files = page.getByTestId('app-files');
   await files.getByTestId('file-row-notes.txt').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Open in Preview', exact: true }).click();
   await page.getByTestId('editor-input').fill('conflicting edit\n');
   await page.getByTestId('editor-save').click();
 
@@ -424,11 +424,12 @@ test('interface response: stale revision shows conflict banner and reload resolv
 
   stale = false;
   await page.getByTestId('editor-reload').click();
+  await page.getByTestId('preview-unsaved-dialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
   await expect(page.getByTestId('editor-input')).toHaveValue('hello from the live server\n');
   await expect(page.getByTestId('editor-conflict')).toHaveCount(0);
-
+  await page.getByTestId('editor-input').fill('New content after reload');
   await page.getByTestId('editor-save').click();
-  await expect(page.getByTestId('file-editor')).toHaveCount(0);
+  await expect(page.getByTestId('editor-save')).toBeDisabled();
   expect(writeAttempts).toBe(2);
 });
 
@@ -623,10 +624,112 @@ test('interface response: an unreadable file cannot create an unsaved draft', as
   await login(page);
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-notes.txt').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Open in Preview', exact: true }).click();
   await expect(page.getByTestId('app-preview').getByRole('alert')).toBeVisible();
-  await expect(page.getByTestId('preview-edit')).toBeDisabled();
+  await expect(page.getByTestId('editor-save')).toBeDisabled();
   await page.getByTestId('window-close-preview').click();
   await expect(page.getByTestId('window-preview')).toHaveCount(0);
   await expect(page.getByTestId('preview-unsaved-dialog')).toHaveCount(0);
+});
+
+test('Preview auto-save preserves typing during a write and respects the off toggle', async ({ page }) => {
+  await stubRest(page);
+  let content = 'Initial text';
+  let revision = 'sha256:initial';
+  const writes: { text: string; revision: string }[] = [];
+  let release: (() => void) | undefined;
+  await page.route('**/api/v1/files/read**', async (route) => fulfillData(route, { ...FILE_READ, content: Buffer.from(content).toString('base64'), revision }));
+  await page.route('**/api/v1/files/write', async (route) => {
+    const body = route.request().postDataJSON();
+    const text = Buffer.from(body.content, 'base64').toString();
+    writes.push({ text, revision: body.expectedRevision });
+    if (writes.length === 1) await new Promise<void>((resolve) => { release = resolve; });
+    expect(body.expectedRevision).toBe(revision);
+    content = text;
+    revision = `sha256:saved-${writes.length}`;
+    await fulfillData(route, { path: FILE_READ.path, revision, sizeBytes: Buffer.byteLength(content) });
+  });
+  await login(page);
+  await page.getByTestId('dock-app-files').click();
+  await page.getByTestId('file-row-notes.txt').dblclick();
+  const input = page.getByTestId('editor-input');
+  const autoSave = page.getByTestId('preview-autosave');
+  await page.locator('[data-menu-button=app]').click();
+  await expect(autoSave).toHaveAttribute('aria-checked', 'false');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('preview-edit')).toHaveCount(0);
+  await page.locator('[data-menu-button=app]').click();
+  await autoSave.click();
+  await input.fill('First draft');
+  await expect.poll(() => writes.length).toBe(1);
+  await input.fill('Typing while the first save is in flight');
+  release!();
+  await expect(page.getByTestId('preview-save-status')).toHaveText('Saved');
+  expect(writes.map((write) => write.text)).toEqual(['First draft', 'Typing while the first save is in flight']);
+  expect(writes[1].revision).toBe('sha256:saved-1');
+  await expect(input).toHaveValue(content);
+  await page.locator('[data-menu-button=app]').click();
+  await autoSave.click();
+  await input.fill('Manual save only');
+  await page.waitForTimeout(1100);
+  expect(writes).toHaveLength(2);
+  await input.press('ControlOrMeta+s');
+  await expect(page.getByTestId('preview-save-status')).toHaveText('Saved');
+  expect(content).toBe('Manual save only');
+  await page.locator('[data-menu-button=app]').click();
+  await autoSave.click();
+  await page.reload();
+  await login(page);
+  await page.locator('[data-menu-button=app]').click();
+  await expect(page.getByTestId('preview-autosave')).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('editor-input')).toHaveValue('Manual save only');
+});
+
+for (const failure of ['conflict', 'denied']) {
+  test(`Preview pauses auto-save after ${failure} and keeps the draft`, async ({ page }) => {
+    await stubRest(page);
+    let attempts = 0;
+    await page.route('**/api/v1/files/write', async (route) => {
+      attempts++;
+      await route.fulfill({ status: failure === 'conflict' ? 409 : 403, contentType: 'application/json', body: JSON.stringify({ ok: false, error: { code: failure === 'conflict' ? 'stale_revision' : 'permission_denied', message: 'Save rejected', details: {} } }) });
+    });
+    await login(page);
+    await page.getByTestId('dock-app-files').click();
+    await page.getByTestId('file-row-notes.txt').dblclick();
+    await page.locator('[data-menu-button=app]').click();
+    await page.getByTestId('preview-autosave').click();
+    await page.getByTestId('editor-input').fill('Preserve this draft');
+    await expect(page.getByTestId('preview-save-status')).toHaveText('Auto-save paused');
+    await expect(page.getByTestId('editor-input')).toHaveValue('Preserve this draft');
+    await page.getByTestId('editor-input').fill('Still editing after rejection');
+    await page.waitForTimeout(1100);
+    expect(attempts).toBe(1);
+    await page.getByTestId('window-close-preview').click();
+    await expect(page.getByTestId('preview-unsaved-dialog')).toBeVisible();
+    await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(page.getByTestId('editor-input')).toHaveValue('Still editing after rejection');
+  });
+}
+
+test('Preview never enables saving for binary or incomplete content', async ({ page }) => {
+  await stubRest(page);
+  let binary = false;
+  await page.route('**/api/v1/files/read**', async (route) => fulfillData(route, { ...FILE_READ, encoding: binary ? 'binary' : 'utf-8', truncated: !binary }));
+  await login(page);
+  await page.getByTestId('dock-app-files').click();
+  await page.getByTestId('file-row-notes.txt').dblclick();
+  await expect(page.getByTestId('app-preview')).toContainText('Editing is unavailable');
+  await expect(page.getByTestId('editor-input')).toHaveCount(0);
+  await expect(page.getByTestId('editor-save')).toBeDisabled();
+  await page.locator('[data-menu-button=app]').click();
+  await expect(page.getByTestId('preview-autosave')).toBeDisabled();
+  await page.keyboard.press('Escape');
+  binary = true;
+  await page.getByTestId('preview-refresh').click();
+  await expect(page.getByTestId('app-preview')).toContainText('cannot be previewed');
+  await expect(page.getByTestId('editor-save')).toBeDisabled();
+  await page.locator('[data-menu-button=app]').click();
+  await expect(page.getByTestId('preview-autosave')).toBeDisabled();
+  await page.keyboard.press('Escape');
 });

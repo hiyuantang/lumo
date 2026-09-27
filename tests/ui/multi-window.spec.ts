@@ -21,7 +21,6 @@ test('Preview windows keep separate documents and drafts, with individual Dock d
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-notes.txt').dblclick();
   const first = page.getByTestId('window-preview');
-  await first.getByTestId('preview-edit').click();
   await first.getByTestId('editor-input').fill('First window draft');
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('files-view').click();
@@ -30,7 +29,6 @@ test('Preview windows keep separate documents and drafts, with individual Dock d
   await expect(previews(page)).toHaveCount(2);
   const second = previews(page).last();
   const secondId = await second.getAttribute('data-window-id');
-  await second.getByTestId('preview-edit').click();
   await second.getByTestId('editor-input').fill('Second window draft');
   await second.getByRole('button', { name: 'Minimize Preview', exact: true }).click();
   await page.getByTestId('dock-app-preview').click({ button: 'right' });
@@ -111,14 +109,12 @@ test('signing out checks unsaved changes in every Preview window', async ({ page
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-notes.txt').dblclick();
   const first = page.getByTestId('window-preview');
-  await first.getByTestId('preview-edit').click();
   await first.getByTestId('editor-input').fill('First draft');
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('files-view').click();
   await page.getByRole('menuitem', { name: 'Show Hidden Files', exact: true }).click();
   await page.getByTestId('file-row-.bashrc').dblclick();
   const second = previews(page).last();
-  await second.getByTestId('preview-edit').click();
   await second.getByTestId('editor-input').fill('Second draft');
   await page.getByTestId('dock-app-settings').click();
   await page.getByTestId('logout-button').click();

@@ -38,6 +38,7 @@ async function fixture(page: Page, installApp: 'docker' | 'nginx' | null = null)
     if (path === '/api/v1/system/overview') return data({ uptimeSeconds: 1000, memoryUsedBytes: 0, memoryTotalBytes: 4096, failedUnits: 0, updatesPending: 0, securityUpdatesPending: 0 });
     if (path === '/api/v1/system/metrics') return data({ cpu: { usagePercent: 0 }, network: [], disks: [] });
     if (path === '/api/v1/containers') return data({ status: mode === 'permission' ? 'permission-denied' : 'ready', message: 'This Linux user does not have Docker access.', version: '27.5.1', containers: mode === 'permission' ? [] : [container] });
+    if (path === '/api/v1/docker/resources') return data({ images: [], volumes: [], networks: [], containers: [], imageBytes: 0, buildCacheBytes: 0, sampledAt: new Date().toISOString() });
     if (path === '/api/v1/containers/detail') return data(container);
     if (path === '/api/v1/containers/logs') return failure(400, 'validation_failed', 'This container uses a logging driver that does not support reading logs.');
     if (path === '/api/v1/containers/action') {
@@ -99,13 +100,12 @@ test(`App Library reviews ${app} installation, reauthenticates, resumes progress
   await expect(page.getByTestId('library-progress')).toContainText(`Installing ${app}`);
   await page.getByRole('button', { name: 'Close App Library', exact: true }).click();
   await page.getByTestId('dock-app-library').click();
-  await expect(page.getByTestId(`library-${app}`)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('library-description')).toBeVisible();
   await expect(page.getByTestId('library-progress')).toContainText(`Installing ${app}`);
   expect(server.applies()).toBe(2);
   server.complete();
   await expect(page.getByTestId('library-primary')).toHaveText('Uninstall…');
   await expect(page.getByTestId(app === 'docker' ? 'dock-app-containers' : 'dock-app-websites')).toBeVisible();
-  await page.getByTestId(`library-${app}`).click();
   await expect(page.getByTestId(app === 'docker' ? 'app-containers' : 'app-websites')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('lumo-app-install'))).toBeNull();
 });

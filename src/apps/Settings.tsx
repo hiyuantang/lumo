@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useAppMenus } from '../shell/appMenus';
 import { useAppState } from '../shell/useAppState';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -13,7 +14,7 @@ import { Updates } from './Updates';
 import { AboutLegal } from './AboutLegal';
 import { SettingsEditor } from './SettingsEditor';
 import { SettingsMotion } from './SettingsMotion';
-import { loadPendingNetworkChange, SettingsNetwork } from './SettingsNetwork';
+import { SettingsNetwork } from './SettingsNetwork';
 import type { SettingsSection } from './registry';
 import '../styles/apps.css';
 import '../styles/settings.css';
@@ -62,7 +63,7 @@ export function Settings() {
   const source = getDataSource();
   const { state, actions } = useShell();
   const requireReauth = useReauth();
-  const [section, setSection] = useAppState<SettingsSection>('settings', 'section', () => loadPendingNetworkChange() ? 'network' : state.navigation?.target === 'settings' ? state.navigation.section : 'system', ['system', 'time', 'network', 'appearance', 'updates', 'about']);
+  const [section, setSection] = useAppState<SettingsSection>('settings', 'section', () => state.navigation?.target === 'settings' ? state.navigation.section : 'system', ['system', 'time', 'network', 'appearance', 'updates', 'about']);
   const [updatesOpened, setUpdatesOpened] = useState(section === 'updates');
   useEffect(() => { if (section === 'updates') setUpdatesOpened(true); }, [section]);
   const [networkOpened, setNetworkOpened] = useState(section === 'network');
@@ -99,7 +100,6 @@ export function Settings() {
     }
   }, [state.navigation]);
 
-  useEffect(() => { if (loadPendingNetworkChange()) setSection('network'); }, [setSection]);
   useEffect(() => { if (section === 'network') setNetworkOpened(true); }, [section]);
 
   const refresh = useCallback(async () => {
@@ -173,6 +173,11 @@ export function Settings() {
   const blocked = saving || Boolean(settingsError);
   const uptime = overview ? Math.floor((Date.now() - overview.bootedAt) / 3_600_000) : 0;
 
+  useAppMenus({ view: [
+    ...(section === 'system' || section === 'time' ? [{ id: 'refresh', label: 'Refresh', disabled: loading || saving, run: () => { void refresh(); } }] : []),
+    ...SECTIONS.map(({ id, label }) => ({ id: `section-${id}`, label, checked: section === id, run: () => setSection(id) })),
+  ] });
+
   return (
     <div className="app settings" data-testid="app-settings">
       <aside className="settings-sidebar">
@@ -204,14 +209,14 @@ export function Settings() {
           {zoneError ? <div className="settings-notice" role="alert"><p>{zoneError}</p><button className="btn" type="button" onClick={() => setZoneAttempt((n) => n + 1)}>Retry time zones</button></div> : null}
         </div>
 
-        <div className="settings-page" hidden={section !== 'network'}>{networkOpened ? <SettingsNetwork /> : null}</div>
+        <div className="settings-page" hidden={section !== 'network'}>{networkOpened ? <SettingsNetwork active={section === 'network'} /> : null}</div>
 
         <div className="settings-page" hidden={section !== 'appearance'}>
           <h3 className="settings-section-title">Theme</h3>
           <div className="settings-themes" role="group" aria-label="Color theme">{([{ value: null, label: 'Automatic', style: 'auto' }, { value: 'light', label: 'Light', style: 'light' }, { value: 'dark', label: 'Dark', style: 'dark' }] as { value: ThemePref; label: string; style: string }[]).map(({ value, label, style }) => <button type="button" className={`settings-theme ${style}`} key={label} aria-pressed={state.theme === value} data-testid={`settings-theme-${style}`} onClick={() => actions.setTheme(value)}><span className="settings-theme-preview"><i /><i /><i /></span><span>{label}</span></button>)}</div>
           <section className="settings-group" aria-label="Motion"><div className="settings-row"><div><h3>Window animations</h3></div><SettingsMotion value={state.motion} onChange={actions.setMotion} active={section === 'appearance' && visible} /></div></section>
         </div>
-        <div className="settings-page settings-updates" hidden={section !== 'updates'}>{updatesOpened ? <Updates /> : null}</div>
+        <div className="settings-page settings-updates" hidden={section !== 'updates'}>{updatesOpened ? <Updates active={section === 'updates'} /> : null}</div>
         <div className="settings-page" hidden={section !== 'about'}><AboutLegal /></div>
       </main>
       {confirm ? <div className="quicklook-overlay" onPointerDown={() => setConfirm(null)}><div className="file-confirm" role="alertdialog" aria-modal="true" aria-label={`${POWER_COPY[confirm].title} server`} data-testid="settings-power-confirm" onPointerDown={(event) => event.stopPropagation()}><p>{POWER_COPY[confirm].prompt}</p><div className="file-confirm-actions"><button type="button" className="btn" onClick={() => setConfirm(null)}>Cancel</button><button type="button" className="btn btn-danger" data-testid="settings-confirm-action" onClick={() => { const action = confirm; setConfirm(null); run(action); }}>{POWER_COPY[confirm].title}</button></div></div></div> : null}

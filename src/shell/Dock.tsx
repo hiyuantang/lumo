@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { IconTrash } from './icons';
+import { AppIcon } from './AppIcon';
 import { useContextMenu } from './ContextMenu';
 import { APPS, CORE_APP_COUNT, type AppId } from '../apps/registry';
 import { useAppCatalog } from './AppCatalogContext';
@@ -49,7 +49,7 @@ export function Dock() {
       if (target) setOrder((previous) => moveDockApp(previous, app, target));
       return;
     }
-    const items = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button'));
+    const items = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not([data-restoring="true"])'));
     const index = items.indexOf(current as HTMLButtonElement);
     items[(index + (e.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length]?.focus();
   }
@@ -65,7 +65,6 @@ export function Dock() {
           const running = Boolean(win);
           const minimized = Boolean(win?.minimized);
           const active = running && !minimized && state.focused === win?.id;
-          const Icon = meta.icon;
           return (
             <button
               key={appId}
@@ -77,19 +76,18 @@ export function Dock() {
               title={meta.title}
               aria-description="Drag to reorder, or use Alt and the left or right arrow key."
               {...reorder.bind(appId)}
-              onContextMenu={(event) => openContextMenu(event, [
+              onContextMenu={(event) => openContextMenu(event, !running && appId !== 'opencode' && appId !== 'preview' ? [] : [
                 { label: minimized ? 'Restore' : running ? 'Show Window' : 'Open', run: () => onAppClick(appId) },
                 ...(appId === 'opencode' ? [{ label: 'New Window', run: actions.newOpenCodeWindow }, ...appWindows.map((item) => ({ label: windowTitle(item), run: () => actions.focusApp(item.id) }))] : []),
                 ...(appId === 'preview' ? [{ label: 'New Window', run: actions.newPreviewWindow }, ...appWindows.map((item, index) => ({ label: `${windowTitle(item)}${item.filePath ? '' : ` ${index + 1}`}`, run: () => actions.focusApp(item.id) }))] : []),
                 ...(running ? [
-                  { label: 'Minimize', disabled: minimized, run: () => actions.minimizeApp(win.id) },
                   { label: 'Close Window', run: () => actions.closeApp(win.id) },
                 ] : []),
               ])}
               onClick={() => onAppClick(appId)}
             >
               <span className="dock-icon">
-                <Icon size={31} />
+                <AppIcon appId={appId} />
               </span>
 
               <span className="dock-label" aria-hidden="true">{meta.title}</span>
@@ -101,20 +99,19 @@ export function Dock() {
         {dockWindows.length > 0 && <>
           <div className="dock-windows" aria-label="Minimized windows" data-testid="dock-windows">
             {dockWindows.map((win) => {
-              const Icon = APPS[win.appId].icon;
               const title = windowTitle(win);
-              return <button key={win.id} type="button" className="dock-app dock-window" data-window-id={win.id} data-testid={`dock-minimized-${win.id}`} aria-label={`Restore ${title}`} title={`Restore ${title}`} onClick={() => actions.focusApp(win.id)} onContextMenu={(event) => openContextMenu(event, [
+              return <button key={win.id} type="button" className="dock-app dock-window" data-restoring={!win.minimized} tabIndex={win.minimized ? 0 : -1} data-app={win.appId} data-window-id={win.id} data-testid={`dock-minimized-${win.id}`} aria-label={`Restore ${title}`} title={`Restore ${title}`} onClick={() => actions.focusApp(win.id)} onContextMenu={(event) => openContextMenu(event, [
                 { label: 'Restore', run: () => actions.focusApp(win.id) },
                 { label: 'Close Window', run: () => actions.closeApp(win.id) },
               ])}>
-                <span className="dock-icon dock-window-preview"><span className="dock-window-canvas"><WindowThumbnail win={win} /></span><span className="dock-window-badge"><Icon size={16} /></span></span>
+                <span className="dock-icon dock-window-preview"><span className="dock-window-canvas"><WindowThumbnail win={win} /></span><span className="dock-window-badge"><AppIcon appId={win.appId} /></span></span>
                 <span className="dock-label" aria-hidden="true">{title}</span><span className="dock-dot" aria-hidden="true" />
               </button>;
             })}
           </div>
         </>}
         <button type="button" className={`dock-app${state.focused === 'trash' ? ' active' : ''}`} data-app="trash" data-testid="dock-app-trash" aria-label="Trash" title="Trash" onClick={() => onAppClick('trash')} onContextMenu={(event) => openContextMenu(event, [{ label: 'Open Trash', run: () => onAppClick('trash') }, { label: 'Empty Trash…', separator: true, danger: true, run: actions.emptyTrash }])}>
-          <span className="dock-icon"><IconTrash size={31}/></span><span className="dock-label" aria-hidden="true">Trash</span><span className={`dock-dot${state.windows.trash ? ' on' : ''}`} aria-hidden="true"/>
+          <span className="dock-icon"><AppIcon appId="trash" /></span><span className="dock-label" aria-hidden="true">Trash</span><span className={`dock-dot${state.windows.trash ? ' on' : ''}`} aria-hidden="true"/>
         </button>
       </div>
     </nav>

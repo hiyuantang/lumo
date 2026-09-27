@@ -5,7 +5,7 @@
   z-index: 4000;
   display: grid;
   place-items: center;
-  background: rgba(20, 18, 15, 0.22);
+  background: rgba(0, 0, 0, 0.22);
 }
 
 .reauth-sheet {

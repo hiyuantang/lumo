@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { useContextMenu, windowContextActions } from './ContextMenu';
 import { APP_COMPONENTS } from '../apps';
 import { WindowContext, windowTitle } from './WindowContext';
 import { APPS } from '../apps/registry';
@@ -15,7 +14,6 @@ const RESIZE_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
 const SNAP_LABELS: Record<SnapTarget, string> = { left: 'Tile left', right: 'Tile right', maximize: 'Maximize' };
 
 export function Window({ win }: { win: WindowState }) {
-  const openContextMenu = useContextMenu();
   const { state, actions, reducedMotion } = useShell();
   const meta = APPS[win.appId];
   const Body = APP_COMPONENTS[win.appId];
@@ -200,7 +198,6 @@ export function Window({ win }: { win: WindowState }) {
         <header
           className="window-titlebar"
           data-testid={`window-titlebar-${win.id}`}
-          onContextMenu={(event) => openContextMenu(event, windowContextActions(win, state.viewport, actions))}
           onPointerDown={onTitlePointerDown}
           onDoubleClick={(e) => {
             if (state.viewport.w > COMPACT_WIDTH && !(e.target as HTMLElement).closest('.window-controls')) actions.toggleMaximize(win.id);

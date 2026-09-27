@@ -119,6 +119,10 @@ export function IconChevronRight(p: IconProps) {
   return base(p, <path d="m9 5 7 7-7 7" />);
 }
 
+export function IconChevronDown(p: IconProps) {
+  return base(p, <path d="m6 9 6 6 6-6" />);
+}
+
 export function IconX(p: IconProps) {
   return base(p, <path d="m6 6 12 12M18 6 6 18" />);
 }
@@ -211,9 +215,17 @@ export function IconMonitor(p: IconProps) {
 }
 
 export function IconRefresh(p: IconProps) {
-  return base(p, <><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9"/></>);
+  return base(p, <><path d="M20 14a8.25 8.25 0 1 1-1-6.5"/><path d="M19 3v4.5h-4.5"/></>);
 }
 
 export function IconSkills(p: IconProps) {
   return base(p, <><path d="M4 5.5C7 4 9.5 4.5 12 6c2.5-1.5 5-2 8-.5v14c-3-1.5-5.5-1-8 .5-2.5-1.5-5-2-8-.5zM12 6v14M7 9h2M7 12h2M15 9h2M15 12h2"/></>);
+}
+
+export function IconDownload(p: IconProps) {
+  return base(p, <><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></>);
+}
+
+export function IconSidebar(p: IconProps) {
+  return base(p, <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></>);
 }

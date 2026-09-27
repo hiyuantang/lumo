@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { Unsubscribe, UpdatePlan, UpdateProgress } from '../api/source';
+import type { Unsubscribe, UpdatePlan, UpdateProgress, AppUpdateHistoryEntry } from '../api/source';
+
+const history: AppUpdateHistoryEntry[] = [];
+export async function getAppUpdateHistory(): Promise<AppUpdateHistoryEntry[]> { return [...history]; }
 
 const progressByRequest = new Map<string, UpdateProgress>();
+const appPlans = new Map<string, { plan: UpdatePlan; done: () => void }>();
+export function rememberAppPlan(plan: UpdatePlan, done: () => void): UpdatePlan { appPlans.set(plan.id, { plan, done }); return plan; }
+
 const listeners = new Map<string, Set<(progress: UpdateProgress) => void>>();
 
 export async function refreshUpdates(): Promise<string> {
@@ -55,10 +61,12 @@ export async function applyUpdatePlan(planId: string): Promise<string> {
   };
   progressByRequest.set(requestId, progress);
   let step = 0;
+  const appPlan = appPlans.get(planId);
+  const packageNames = appPlan?.plan.packages.map((pkg) => pkg.name) ?? ['openssl', 'systemd'];
   const stages = [
     { phase: 'downloading', percent: 18, message: 'Downloading packages' },
-    { phase: 'installing', percent: 58, message: 'Installing openssl' },
-    { phase: 'installing', percent: 86, message: 'Installing systemd' },
+    { phase: 'installing', percent: 58, message: `Updating ${packageNames[0] ?? 'packages'}` },
+    { phase: 'installing', percent: 86, message: `Configuring ${packageNames.at(-1) ?? 'packages'}` },
     { phase: 'complete', percent: 100, message: 'Updates installed' },
   ];
   const timer = window.setInterval(() => {
@@ -74,6 +82,10 @@ export async function applyUpdatePlan(planId: string): Promise<string> {
       success: stage.phase === 'complete',
       updatedAt: new Date().toISOString(),
     };
+    if (next.done) {
+      appPlan?.done();
+      if (appPlan?.plan.appId && appPlan.plan.operation === 'update') history.unshift({ requestId, appId: appPlan.plan.appId, completedAt: next.updatedAt, success: next.success, packages: appPlan.plan.packages });
+    }
     progressByRequest.set(requestId, next);
     listeners.get(requestId)?.forEach((listener) => listener(next));
     if (next.done) window.clearInterval(timer);

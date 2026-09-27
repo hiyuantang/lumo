@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 .file-picker { padding: 0; width: min(560px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); border: 1px solid var(--border); border-radius: 18px; color: var(--text); background: var(--surface-raised); box-shadow: 0 24px 80px #0005; overflow: hidden; }
 .file-picker[open] { animation: file-picker-appear 160ms ease-out; }
-.file-picker::backdrop { background: #091b2259; }
+.file-picker::backdrop { background: #00000059; }
 .file-picker-body { display: flex; flex-direction: column; height: min(500px, calc(100dvh - 34px)); }
 .file-picker header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
 .file-picker h2 { margin: 0; font-size: 16px; }

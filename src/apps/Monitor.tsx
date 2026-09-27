@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useAppMenus } from '../shell/appMenus';
 import { useEffect, useState } from 'react';
 import { describeError, getDataSource, type ProcessInfo } from '../api/source';
 import { useShell } from '../shell/ShellContext';
@@ -25,6 +26,8 @@ export function Monitor() {
   const { state } = useShell();
   const [section, setSection] = useAppState<Section>('home', 'section', () => state.navigation?.target === 'logs' ? 'logs' : 'overview', sections.map((item) => item.id));
   useEffect(() => { if (state.navigation?.target === 'logs' || state.navigation?.target === 'services') setSection(state.navigation.target); }, [state.navigation]);
+  useAppMenus({ view: sections.map(({ id, label }) => ({ id: `section-${id}`, label, checked: section === id, run: () => setSection(id) })) });
+
   return <div className="app monitor" data-testid="app-monitor">
     <nav className="monitor-sidebar" aria-label="Monitor sections">{sections.map(({ id, label, icon: Icon }) => <button key={id} type="button" title={label} aria-label={label} aria-current={section === id ? 'page' : undefined} className={section === id ? 'active' : ''} data-testid={`monitor-section-${id}`} onClick={() => setSection(id)}><Icon size={19}/><span>{label}</span></button>)}</nav>
     <div className="monitor-content">{section === 'logs' ? <Logs/> : section === 'services' ? <Services/> : section === 'activity' ? <ProcessActivity/> : <Home section={section}/>}</div>

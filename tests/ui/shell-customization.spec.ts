@@ -36,7 +36,7 @@ test('transparent top bar has aligned labels and account controls live in Settin
   expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(1);
   await bar.locator('[data-menu-button="file"]').focus();
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('menuitem', { name: 'Command Center' })).toBeFocused();
+  await expect(page.getByRole('menuitem', { name: 'New File', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await page.getByTestId('dock-app-settings').click();
   await expect(page.getByRole('region', { name: 'Account', exact: true })).toContainText('demo');
@@ -113,11 +113,12 @@ test('custom dropdowns support keyboard choice and the clock opens notifications
   await expect(boot).toContainText('Previous boot');
 });
 
-test('right-click menus act on desktop, dock, windows, files and text fields', async ({ page }) => {
+test('right-click menus are limited to actionable items and text fields', async ({ page }) => {
   await login(page);
   const menu = page.getByTestId('context-menu');
   await page.locator('main.desktop').click({ button: 'right', position: { x: 1200, y: 400 } });
-  await menu.getByRole('menuitem', { name: 'Open Files', exact: true }).click();
+  await expect(menu).toHaveCount(0);
+  await page.getByTestId('dock-app-files').click();
   await expect(page.getByTestId('app-files')).toBeVisible();
   const row = page.locator('[data-kind="file"]').first();
   await row.click({ button: 'right' });
@@ -131,7 +132,9 @@ test('right-click menus act on desktop, dock, windows, files and text fields', a
   await page.getByTestId('delete-cancel-button').click();
   await expect(row).toBeVisible();
   await page.getByTestId('window-titlebar-files').click({ button: 'right' });
-  await menu.getByRole('menuitem', { name: 'Minimize', exact: true }).click();
+  await expect(menu).toHaveCount(0);
+  await page.getByRole('menuitem', { name: 'Window', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Minimize Window', exact: true }).click();
   await expect(page.getByTestId('window-files')).toBeHidden();
   const dock = page.getByTestId('dock-app-files');
   await dock.click({ button: 'right' });
@@ -179,12 +182,12 @@ test('text and terminal context menus preserve editing and clipboard actions', a
   await expect(page.getByTestId('terminal-input')).toBeFocused();
 });
 
-test('left clicks dismiss context menus even on the original desktop, row, and control', async ({ page }) => {
+test('blank desktop has no menu and outside clicks dismiss item menus', async ({ page }) => {
   await login(page);
   const menu = page.getByTestId('context-menu');
   const desktop = page.locator('main.desktop');
   await desktop.click({ button: 'right', position: { x: 1150, y: 200 } });
-  await expect(menu).toBeVisible();
+  await expect(menu).toHaveCount(0);
   await desktop.click({ position: { x: 1100, y: 180 } });
   await expect(menu).toHaveCount(0);
   await page.getByTestId('dock-app-files').click();

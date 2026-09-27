@@ -20,11 +20,13 @@ application names. The following rules are binding for every UI task:
 
 1. **UI font:** Inter (SIL OFL) with a system-ui fallback stack. Never
    San Francisco, never SF Symbols.
-2. **Window controls:** left-aligned with original geometry — rounded
-   squares carrying glyphs. Never macOS traffic-light circles.
-3. **Accent palette:** warm teal plus amber. Never macOS blue.
-4. **Icons:** original inline SVG in a geometric line style. Never Apple
-   assets, never third-party icon packs copied verbatim.
+2. **Window controls:** left-aligned circular controls in coral, amber and
+   green. Use 14px matte circles with bold 11px action glyphs on hover
+   and keyboard focus.
+3. **Accent palette:** neutral white, silver, charcoal and near-black
+   surfaces. Rich color belongs to app icons, file glyphs and semantic status.
+4. **Icons:** original generated artwork for app identities and inline SVG
+   for interface actions. Never Apple assets or copied third-party icon packs.
 
 ## Interaction rules
 
@@ -37,7 +39,8 @@ system and generated-wallpaper provenance.
 1. All shell interaction renders locally in the browser with **zero
    server round trips**: moving a window, opening a menu or switching
    applications never touches the network.
-2. Motion is 120–200 ms ease-out. Nothing bounces, nothing lingers.
+2. Small transitions use 140–220 ms ease-out. Window minimize and dock
+   layout transitions use their coordinated longer timings. Nothing bounces.
 3. Every destructive action confirms before it executes.
 4. Markdown editing and preview render locally. Typing, scrolling and
    preview updates require no server round trip; explicit file operations

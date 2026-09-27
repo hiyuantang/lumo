@@ -14,11 +14,11 @@ import { dockSpace } from './shell/windowGeometry';
 
 function Desktop() {
   const narrow = useIsNarrow();
-  const { state } = useShell();
+  const { state, actions } = useShell();
   return (
     <div className={`desktop-root${narrow ? ' narrow' : ''}`} style={{ '--dock-space': `${dockSpace(state.viewport)}px` } as CSSProperties}>
       <MenuBar />
-      <main className="desktop wallpaper" aria-label="Desktop">
+      <main className="desktop wallpaper" aria-label="Desktop" onPointerDown={(event) => { if (event.target === event.currentTarget) { (document.activeElement as HTMLElement | null)?.blur(); actions.focusDesktop(); } }}>
         <WindowManager />
       </main>
       <Dock />

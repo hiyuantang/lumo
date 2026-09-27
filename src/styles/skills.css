@@ -12,27 +12,25 @@
 .skills-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .skills-count { padding: 0 6px; color: var(--text-muted); font-size: 11px; }
 .skills-list { min-height: 0; flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 7px; }
-.skills-list button { flex-shrink: 0; text-align: left; display: grid; gap: 6px; padding: 14px 12px; border: 1px solid transparent; border-radius: 12px; }
+.skills-list button { flex-shrink: 0; min-width: 0; max-width: 100%; max-height: 114px; overflow: hidden; text-align: left; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 6px; padding: 14px 12px; border: 1px solid transparent; border-radius: 12px; }
 .skills-list button:hover { background: var(--accent-soft); }
 .skills-list [aria-current='page'] { background: var(--accent-soft); border-color: var(--border-strong); }
-.skills-list strong { font-size: 13px; overflow-wrap: anywhere; }
-.skills-list span { font-size: 11px; color: var(--text-muted); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.skills-list strong { font-size: 13px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.skills-list span { font-size: 11px; color: var(--text-muted); line-height: 1.6; height: 3.2em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .skills-list small { color: var(--amber); font-size: 10px; }
 .skills-location { display: grid; gap: 6px; border-top: 1px solid var(--border); padding: 14px 6px 0; font-size: 11px; color: var(--text-muted); }
 .skills-location code { font-size: 11px; }
 .skills-detail { min-width: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column; background: var(--surface-raised); }
-.skills-hero { display: flex; align-items: flex-start; gap: 18px; padding: 30px 30px 24px; }
+.skills-hero { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; align-items: start; gap: 18px; margin: 0 30px; padding: 30px 0 24px; border-bottom: 1px solid var(--border); }
+.skills-hero > div { min-width: 0; }
+.skills-hero > .btn { align-self: start; }
 .skills-emblem { width: 58px; height: 58px; display: grid; place-items: center; flex-shrink: 0; border-radius: 16px; color: var(--accent); background: var(--accent-soft); }
-.skills-eyebrow { color: var(--text-muted); font-size: 10px; letter-spacing: .12em; }
-.skills-hero h1 { margin: 6px 0 10px; font-size: 25px; overflow-wrap: anywhere; }
+.skills-hero h1 { margin: 0 0 10px; font-size: 25px; overflow-wrap: anywhere; }
 .skills-hero p { margin: 0; font-size: 13px; line-height: 1.7; color: var(--text-muted); overflow-wrap: anywhere; }
-.skills-document-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 30px; padding: 14px 0; border-block: 1px solid var(--border); }
-.skills-document-heading h2 { margin: 0; font-size: 13px; }
 .skills-document { flex: 1; }
 .skills-document .markdown { font-size: 13px; padding: 26px 30px; }
 .skills-document .markdown h1 { font-size: 24px; }
 .skills-document .markdown h2 { font-size: 18px; }
-.skills-document > pre { margin: 0; padding: 26px 30px; font: 12px/1.7 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .skills-file-path { padding: 12px 30px; color: var(--text-muted); font: 10px/1.6 var(--font-mono); border-top: 1px solid var(--border); overflow-wrap: anywhere; }
 .skills-notice { margin: 14px 24px; padding: 12px; border-radius: 9px; background: var(--amber-soft); color: var(--amber); font-size: 12px; }
 .skills-status { padding: 22px 30px; color: var(--text-muted); font-size: 13px; }
@@ -43,10 +41,10 @@
 @container (max-width: 670px) {
   .skills-layout { grid-template-columns: 190px minmax(0, 1fr); }
   .skills-sidebar { padding: 16px 10px 12px; }
-  .skills-hero { padding: 22px 18px; flex-direction: column; gap: 12px; }
+  .skills-hero { grid-template-columns: 40px minmax(0, 1fr) auto; margin-inline: 18px; padding: 22px 0; gap: 12px; }
+  .skills-emblem { width: 40px; height: 40px; border-radius: 12px; }
   .skills-hero h1 { font-size: 21px; }
-  .skills-document-heading { margin-inline: 18px; }
-  .skills-document .markdown, .skills-document > pre { padding: 22px 18px; }
+  .skills-document .markdown { padding: 22px 18px; }
 }
 @container (max-width: 480px) {
   .skills-layout { display: flex; flex-direction: column; }

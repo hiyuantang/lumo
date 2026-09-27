@@ -1,96 +1,107 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useWindowMenus, type AppCommand } from './appMenus';
+import { editCommands } from './editCommands';
+import { windowTitle } from './WindowContext';
 import { APPS } from '../apps/registry';
 import { useNow, useShell } from './ShellContext';
 import { canSnap, COMPACT_WIDTH, MENUBAR_H } from './windowGeometry';
 import '../styles/menubar.css';
 
-type MenuId = 'file' | 'view';
-
-interface MenuItemDef {
-  id: string;
-  label: string;
-  hint?: string;
-  disabled?: boolean;
-  separatorAbove?: boolean;
-  run: () => void;
-}
+type MenuId = 'app' | 'file' | 'edit' | 'view' | 'window';
+const order: MenuId[] = ['app', 'file', 'edit', 'view', 'window'];
 
 export function MenuBar() {
-  const { state, actions, resolvedTheme, reducedMotion } = useShell();
+  const { state, actions } = useShell();
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const now = useNow(1000);
   const barRef = useRef<HTMLElement>(null);
 
   const focusedWindow = state.focused ? state.windows[state.focused] : null;
 
-  const menus: Record<MenuId, { label: string; items: MenuItemDef[] }> = {
-    file: {
-      label: 'File',
-      items: [
-        ...(focusedWindow?.appId === 'opencode' ? [{ id: 'new-opencode', label: 'New Window', run: actions.newOpenCodeWindow }] : []),
-        ...(focusedWindow?.appId === 'preview' ? [{ id: 'new-preview', label: 'New Window', run: actions.newPreviewWindow }] : []),
-        {
-          id: 'command-center',
-          label: 'Command Center',
-          hint: '⌘K',
-          run: () => actions.setPalette(true),
-        },
-        {
-          id: 'close-window',
-          label: 'Close Window',
-          hint: '⌥W',
-          disabled: !state.focused,
-          run: () => state.focused && actions.closeApp(state.focused),
-        },
-      ],
-    },
-    view: {
-      label: 'View',
-      items: [
-        {
-          id: 'toggle-theme',
-          label: resolvedTheme === 'dark' ? 'Light Theme' : 'Dark Theme',
-          run: actions.toggleTheme,
-        },
-        {
-          id: 'toggle-motion',
-          label: reducedMotion ? 'Full Motion' : 'Reduced Motion',
-          run: actions.toggleMotion,
-        },
-        {
-          id: 'shortcuts',
-          label: 'Keyboard Shortcuts',
-          run: () => actions.setShortcutsOpen(true),
-        },
-        {
-          id: 'maximize-window',
-          label: 'Maximize Window',
-          separatorAbove: true,
-          disabled: !focusedWindow || focusedWindow.maximized || state.viewport.w <= COMPACT_WIDTH,
-          run: () => focusedWindow && actions.toggleMaximize(focusedWindow.id),
-        },
-        {
-          id: 'restore-window',
-          label: 'Restore Window',
-          disabled: !focusedWindow || (!focusedWindow.maximized && !focusedWindow.snapped) || state.viewport.w <= COMPACT_WIDTH,
-          run: () => focusedWindow && actions.updateRect(focusedWindow.id, focusedWindow.restore ?? focusedWindow),
-        },
-        {
-          id: 'tile-left',
-          label: 'Tile Window Left',
-          disabled: !focusedWindow || !canSnap('left', state.viewport, APPS[focusedWindow.appId].minSize),
-          run: () => focusedWindow && actions.snapWindow(focusedWindow.id, 'left'),
-        },
-        {
-          id: 'tile-right',
-          label: 'Tile Window Right',
-          disabled: !focusedWindow || !canSnap('right', state.viewport, APPS[focusedWindow.appId].minSize),
-          run: () => focusedWindow && actions.snapWindow(focusedWindow.id, 'right'),
-        },
-      ],
-    },
-
+  const registered = useWindowMenus(state.focused ?? 'files');
+  const custom = state.focused ? registered : Object.fromEntries(Object.entries(registered).map(([category, items]) => [category, items.map((item: AppCommand) => ({ ...item, run: () => { actions.openApp('files'); item.run(); } }))])) as typeof registered;
+  const appName = focusedWindow ? APPS[focusedWindow.appId].title : 'Files';
+  const editTarget = useRef<HTMLElement | null>(null);
+  const [editing, setEditing] = useState<AppCommand[]>(() => editCommands(null, () => {}));
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const remember = (event: FocusEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.menubar')) editTarget.current = target.closest('.window') ? target : null;
+    };
+    document.addEventListener('focusin', remember);
+    return () => document.removeEventListener('focusin', remember);
+  }, []);
+  useEffect(() => { setOpenMenu(null); editTarget.current = null; }, [state.focused]);
+  useEffect(() => {
+    const dismiss = () => setOpenMenu(null);
+    window.addEventListener('blur', dismiss);
+    window.addEventListener('resize', dismiss);
+    return () => { window.removeEventListener('blur', dismiss); window.removeEventListener('resize', dismiss); };
+  }, []);
+  useEffect(() => {
+    if (!openMenu) return;
+    const outside = (event: Event) => {
+      const menus = barRef.current?.querySelector('.menubar-menus');
+      if (!menus?.contains(event.target as Node)) setOpenMenu(null);
+    };
+    window.addEventListener('pointerdown', outside, true);
+    window.addEventListener('focusin', outside, true);
+    window.addEventListener('wheel', outside, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', outside, true);
+      window.removeEventListener('focusin', outside, true);
+      window.removeEventListener('wheel', outside, true);
+    };
+  }, [openMenu]);
+  useLayoutEffect(() => {
+    const node = dropdownRef.current;
+    if (!node) return;
+    node.style.translate = '';
+    const box = node.getBoundingClientRect();
+    node.style.translate = `${Math.min(0, window.innerWidth - box.right - 8)}px 0`;
+  }, [openMenu, appName]);
+  function open(menu: MenuId | null) {
+    const selection = window.getSelection();
+    const selectedNode = selection?.toString() ? selection.anchorNode?.parentElement : null;
+    const field = editTarget.current;
+    const target = field?.isConnected && (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) ? field : selectedNode?.closest('.window') ? selectedNode : field;
+    const windowNode = target?.closest<HTMLElement>('.window');
+    const valid = !!target?.isConnected && windowNode?.dataset.testid === `window-${state.focused}`;
+    setEditing(editCommands(valid ? target : null, () => actions.notify('Edit command unavailable', 'Use the keyboard shortcut to complete this action.')));
+    setOpenMenu(menu);
+  }
+  const combine = (base: AppCommand[], extra: AppCommand[] = []) => [...base.map((item) => extra.find((command) => command.id === item.id) ?? item), ...extra.filter((item) => !base.some((command) => command.id === item.id))];
+  const disabled = (id: string, label: string): AppCommand => ({ id, label, disabled: true, run: () => {} });
+  const menus: Record<MenuId, { label: string; items: AppCommand[] }> = {
+    app: { label: appName, items: [
+      ...(custom.app ?? []),
+      { id: 'settings', label: 'System Settings…', separatorAbove: !!custom.app?.length, run: () => actions.openApp('settings') },
+      { id: 'command-center', label: 'Command Center', hint: '⌘K', run: () => actions.setPalette(true) },
+      { id: 'shortcuts', label: 'Keyboard Shortcuts', run: () => actions.setShortcutsOpen(true) },
+      { id: 'quit', label: `Quit ${appName}`, separatorAbove: true, disabled: !focusedWindow && !state.windows.files, run: () => actions.quitApp(focusedWindow?.appId ?? 'files') },
+    ] },
+    file: { label: 'File', items: [
+      ...combine([
+        { id: 'new-window', label: 'New Window', disabled: !focusedWindow || !['preview', 'opencode'].includes(focusedWindow.appId), run: () => focusedWindow?.appId === 'preview' ? actions.newPreviewWindow() : actions.newOpenCodeWindow() },
+        disabled('new-file', 'New File'), disabled('new-folder', 'New Folder'),
+        { ...(!focusedWindow ? { id: 'open', label: 'Open Files', run: () => actions.openApp('files') } : disabled('open', 'Open File…')), separatorAbove: true },
+        disabled('upload', 'Upload File…'), disabled('download', 'Download'), disabled('save', 'Save'),
+      ], custom.file),
+      { id: 'close-window', label: 'Close Window', hint: '⌥W', separatorAbove: true, disabled: !focusedWindow, run: () => focusedWindow && actions.closeApp(focusedWindow.id) },
+    ] },
+    edit: { label: 'Edit', items: editing },
+    view: { label: 'View', items: combine([disabled('refresh', 'Refresh'), disabled('sidebar', 'Show Sidebar')], custom.view) },
+    window: { label: 'Window', items: [
+      { id: 'minimize-window', label: 'Minimize Window', disabled: !focusedWindow, run: () => focusedWindow && actions.minimizeApp(focusedWindow.id) },
+      { id: 'maximize-window', label: 'Maximize Window', disabled: !focusedWindow || focusedWindow.maximized || state.viewport.w <= COMPACT_WIDTH, run: () => focusedWindow && actions.toggleMaximize(focusedWindow.id) },
+      { id: 'restore-window', label: 'Restore Window', disabled: !focusedWindow || (!focusedWindow.maximized && !focusedWindow.snapped) || state.viewport.w <= COMPACT_WIDTH, run: () => focusedWindow && actions.updateRect(focusedWindow.id, focusedWindow.restore ?? focusedWindow) },
+      { id: 'tile-left', label: 'Tile Window Left', separatorAbove: true, disabled: !focusedWindow || !canSnap('left', state.viewport, APPS[focusedWindow.appId].minSize), run: () => focusedWindow && actions.snapWindow(focusedWindow.id, 'left') },
+      { id: 'tile-right', label: 'Tile Window Right', disabled: !focusedWindow || !canSnap('right', state.viewport, APPS[focusedWindow.appId].minSize), run: () => focusedWindow && actions.snapWindow(focusedWindow.id, 'right') },
+      { id: 'show-desktop', label: 'Show Desktop', separatorAbove: true, disabled: !Object.values(state.windows).some((win) => win && !win.minimized), run: () => Object.values(state.windows).forEach((win) => { if (win && !win.minimized) actions.minimizeApp(win.id); }) },
+      ...Object.values(state.windows).flatMap((win) => win ? [{ id: win.id, label: windowTitle(win), checked: win.id === state.focused, run: () => actions.focusApp(win.id) }] : []),
+    ] },
   };
 
   function focusTopButton(menuId: MenuId) {
@@ -99,7 +110,6 @@ export function MenuBar() {
   }
 
   function siblingMenu(menuId: MenuId, dir: 1 | -1): MenuId {
-    const order: MenuId[] = ['file', 'view'];
     const idx = order.indexOf(menuId);
     return order[(idx + dir + order.length) % order.length];
   }
@@ -107,7 +117,7 @@ export function MenuBar() {
   function onMenuButtonKey(e: ReactKeyboardEvent, menuId: MenuId) {
     if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      setOpenMenu(menuId);
+      open(menuId);
       requestAnimationFrame(() => {
         barRef.current
           ?.querySelector<HTMLButtonElement>(`[data-menu="${menuId}"] [data-menu-item]:not([disabled])`)
@@ -116,7 +126,7 @@ export function MenuBar() {
     } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
       const next = siblingMenu(menuId, e.key === 'ArrowRight' ? 1 : -1);
-      if (openMenu) setOpenMenu(next);
+      if (openMenu) open(next);
       focusTopButton(next);
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -136,13 +146,16 @@ export function MenuBar() {
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       items[(idx + 1 + items.length) % items.length]?.focus();
+    } else if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault();
+      (e.key === 'Home' ? items[0] : items.at(-1))?.focus();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       items[(idx - 1 + items.length) % items.length]?.focus();
     } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
       const next = siblingMenu(menuId, e.key === 'ArrowRight' ? 1 : -1);
-      setOpenMenu(next);
+      open(next);
       requestAnimationFrame(() => focusTopButton(next));
     } else if (e.key === 'Tab') {
       setOpenMenu(null);
@@ -157,36 +170,42 @@ export function MenuBar() {
         <button
           type="button"
           data-menu-button={menuId}
-          className="menubar-button"
+          className={`menubar-button${menuId === 'app' ? ' menubar-app-name' : ''}`}
           role="menuitem"
           aria-haspopup="menu"
           aria-expanded={isOpen}
-          onClick={() => setOpenMenu(isOpen ? null : menuId)}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => { open(isOpen ? null : menuId); focusTopButton(menuId); }}
           onKeyDown={(e) => onMenuButtonKey(e, menuId)}
           onMouseEnter={() => {
-            if (openMenu && openMenu !== menuId) setOpenMenu(menuId);
+            if (openMenu && openMenu !== menuId) open(menuId);
           }}
         >
           {menu.label}
         </button>
         {isOpen && (
-          <div className="menubar-dropdown" role="menu" data-menu={menuId} onKeyDown={(e) => onMenuListKey(e, menuId)}>
+          <div ref={dropdownRef} className="menubar-dropdown" role="menu" aria-label={menu.label} data-menu={menuId} onKeyDown={(e) => onMenuListKey(e, menuId)}>
             {menu.items.map((item) => (
+              <Fragment key={item.id}>
+              {item.separatorAbove && <div className="menubar-separator" role="separator" />}
               <button
-                key={item.id}
                 type="button"
-                role="menuitem"
+                role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+                aria-checked={item.checked}
+                data-testid={menuId === 'app' && item.id === 'auto-save' ? 'preview-autosave' : `menu-${item.id}`}
                 data-menu-item
-                className={`menubar-item${item.separatorAbove ? ' separator-above' : ''}`}
+                className="menubar-item"
                 disabled={item.disabled}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
                   setOpenMenu(null);
                   item.run();
                 }}
               >
-                <span>{item.label}</span>
+                <span><span className="menubar-check" aria-hidden="true">{item.checked ? '✓' : ''}</span>{item.label}</span>
                 {item.hint && <kbd>{item.hint}</kbd>}
               </button>
+              </Fragment>
             ))}
           </div>
         )}
@@ -196,12 +215,9 @@ export function MenuBar() {
 
   return (
     <header ref={barRef} className="menubar" data-testid="menu-bar" style={{ height: MENUBAR_H }}>
-      {openMenu && <div className="menubar-backdrop" onClick={() => setOpenMenu(null)} />}
       <div className="menubar-left">
-        <span className="menubar-brand">Lumo</span>
         <nav className="menubar-menus" role="menubar" aria-label="Application menus">
-          {renderMenu('file')}
-          {renderMenu('view')}
+          {order.map(renderMenu)}
         </nav>
       </div>
       <div className="menubar-right">
@@ -214,7 +230,7 @@ export function MenuBar() {
           onClick={() => actions.setNotifOpen(!state.notifOpen)}
         >
 <time dateTime={new Date(now).toISOString()}>
-          {new Date(now).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+          <span className="menubar-date">{new Date(now).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}</span>
           {new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </time>
           {state.unread > 0 && (

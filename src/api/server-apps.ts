@@ -50,5 +50,19 @@ export interface WebsiteResult { site: Website; rollbackRef: string; reloaded: b
 
 export type ServerAppID = 'docker' | 'nginx';
 export type LibraryAppID = ServerAppID | 'opencode';
-export type AppOperation = 'install' | 'uninstall';
+export type AppOperation = 'install' | 'uninstall' | 'update';
 export interface AppCatalog { canInstall: boolean; apps: { id: LibraryAppID; installed: boolean; canUninstall?: boolean }[] }
+
+export interface DockerImage { id: string; tags: string[]; created: number; size: number | null; sharedSize: number | null; containers: string[]; revision: string }
+export interface DockerVolume { removable: boolean; name: string; driver: string; scope: string; created: string; size: number | null; containers: string[]; revision: string }
+export interface DockerNetwork { id: string; name: string; driver: string; scope: string; internal: boolean; subnets: string[]; containers: string[]; removable: boolean; revision: string }
+export interface DockerResources {
+  images: DockerImage[];
+  volumes: DockerVolume[];
+  networks: DockerNetwork[];
+  containers: { id: string; writableSize: number | null; rootSize: number | null }[];
+  imageBytes: number | null;
+  buildCacheBytes: number | null;
+  sampledAt: string;
+}
+export interface DockerResourceRequest { kind: 'container' | 'image' | 'volume' | 'network'; action: 'create' | 'remove'; id: string; revision: string }

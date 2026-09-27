@@ -1026,19 +1026,24 @@ returns the stored result and does not schedule a second transition.
 
 ### `network.snapshot`
 
-`GET /api/v1/network` returns live interface state together with a
-revision of Netplan's merged configuration:
+`GET /api/v1/network` returns a read-only snapshot of live interfaces, default
+gateways from the main routing table, and DNS servers. It does not create a
+Netplan configuration or require Netplan. Refresh reads current system state.
+The snapshot does not provide a mutation revision.
 
 ```json
 {
   "ok": true,
   "data": {
-    "revision": "sha256:41b0…",
+    "dnsServers": ["1.1.1.1"],
+    "dnsSource": "resolved",
     "interfaces": [
       {
         "name": "eth0",
         "hardwareAddress": "02:42:ac:11:00:02",
         "addresses": ["192.0.2.10/24"],
+        "gateways": ["192.0.2.1"],
+        "dnsServers": ["192.0.2.53"],
         "up": true,
         "loopback": false
       }
@@ -1046,6 +1051,22 @@ revision of Netplan's merged configuration:
   }
 }
 ```
+
+Per-interface `dnsServers` come from systemd-resolved. Top-level `dnsServers`
+are system-wide servers, obtained from systemd-resolved or `/etc/resolv.conf`
+(`dnsSource` is `resolved` or `resolv.conf`). Resolver-file addresses may refer
+to a local stub and are not presented as interface-specific upstream DNS.
+A null `gateways` or `dnsServers` means the source is unavailable; an empty
+array means the source was read successfully and reported no values.
+`up` is the interface's administrative state, not proof of internet access.
+IPv6 link-local gateways and DNS addresses include the interface zone.
+
+The Settings overview has no network mutation controls. The existing backend
+mutation contracts below are retained for compatibility and are not used by
+this read-only view.
+
+References: [Linux routing API](https://man7.org/linux/man-pages/man7/rtnetlink.7.html)
+and [systemd-resolved D-Bus API](https://www.freedesktop.org/software/systemd/man/247/org.freedesktop.resolve1.html).
 
 ### `network.applyWithRollback`
 
@@ -1221,6 +1242,64 @@ Only `start`, `stop` and `restart` are supported. The agent forwards a typed
 socket access and a current container revision are required. The result is
 the refreshed detail. A changed revision returns `409 stale_revision`.
 
+### Docker resources
+
+`GET /api/v1/docker/resources` reads the local Docker Engine's `/system/df`
+and network inspection endpoints as the authenticated Linux user. It returns:
+
+- `images`: ID, tags, created timestamp, size, sharedSize, referencing container
+  names, and revision.
+- `volumes`: name, driver, scope, creation time, size, referencing containers,
+  removable flag, and revision. Removal is available only when local scope and
+  the engine reports zero references, including stopped containers.
+- `networks`: ID, name, driver, scope, internal flag, subnets, connected container
+  names, removable flag, and revision. Built-in and nonlocal networks are protected.
+- `containers`: ID, writableSize, and rootSize, in bytes.
+- `imageBytes`: engine layer total with shared image layers counted once;
+  `buildCacheBytes`: sum of reported cache records; `sampledAt`: UTC timestamp.
+
+Missing or negative sizes become `null`, never zero. Build-cache and image
+figures may overlap; clients must not present their sum as total disk usage.
+Bind mounts and container log files are not included in writable-layer figures.
+Driver options, environment values, and other secret-bearing engine fields are
+not returned. Storage measurement is explicit/on-open, not an idle polling job.
+
+`POST /api/v1/docker/resource` accepts `requestId`, `kind` (`container`, `image`,
+`volume`, `network`), `action` (`create`, `remove`), `id`, and `revision`.
+Creation supports named local volumes and local bridge networks only, with
+`revision: "absent"`; names are 2–128 letters, digits, underscores, dots, or
+hyphens and must start with a letter/digit. Removal requires a current SHA-256
+revision; images use full `sha256:` IDs, containers/networks use 64-hex IDs,
+and volumes use names. No force, driver options, arbitrary engine endpoints,
+container creation, bulk prune, or exec arguments are accepted.
+
+The broker validates and serializes Docker mutations, applies
+`os.lumo.containers.manage`, verifies the requester's existing socket access,
+audits the operation, and rechecks the resource/references before mutation.
+Running containers and referenced images/volumes are refused. Container removal
+uses `force=false&v=false`, preserving volumes; image removal does not prune
+parents. Resource deletion is permanent and requires explicit UI confirmation
+with the resource name. External Docker actions can still race an engine request;
+Docker's own non-force conflict checks remain the final guard.
+
+### App Library updates
+
+`POST /api/v1/apps/plan` also accepts `operation: "update"`. Clients refresh APT
+indexes first, then review the returned package versions and download size.
+Docker updates target installed packages from the detected Docker family
+(`docker.io` or `docker-ce`), with installed Compose/runtime/CLI companions;
+Nginx updates target the installed `nginx` package. Unsupported/manual installs
+are rejected, not replaced with a different package distribution. Update planning
+uses `--only-upgrade --no-remove`; applying uses the existing reviewed, pinned
+package plan and progress stream, including dependency revalidation. An empty
+plan means up to date with configured APT repositories, not with every upstream
+release. Engine updates can restart Docker and interrupt containers. They do not
+pull application images or recreate containers.
+
+Reference: [Docker Engine API v1.45](https://docs.docker.com/reference/api/engine/version/v1.45/).
+The original UI uses separate resource tables and an explicit measurement time,
+with Engine maintenance located in App Library.
+
 ### Websites
 
 `GET /api/v1/websites` returns `{ installed, sites, warnings }`. Site records
@@ -1305,3 +1384,20 @@ files must remain inside the skills root. Non-regular, oversized, non-UTF-8
 and malformed documents are reported with an issue instead of executing
 anything. Metadata follows the Agent Skills YAML-frontmatter specification:
 https://agentskills.io/specification.
+
+### App update history
+
+`GET /api/v1/apps/update-history` returns `{ entries: AppUpdateHistoryEntry[] }`.
+Each entry has `requestId`, `appId`, `completedAt`, `success`, optional `error`,
+and `packages` with reviewed old/new versions. The read-only broker endpoint
+`GET /apps/update-history` uses Unix peer credentials to return only the caller's
+last 50 completed Lumo app-update attempts, newest first. Entries join existing
+package-application audit results to the same user's app plans; checks, pending
+jobs, installations, removals and other users' actions are excluded. Successful
+and failed attempts remain available after a broker restart. This is an audit
+view, not a second store of installed state or a record of updates made via SSH.
+
+App Library separates Discovery from Updates. Discovery uses an adaptive card
+grid; Updates refreshes APT metadata once, checks installed managed apps in
+sequence, shows per-app failures separately from up-to-date results, and reviews
+a fresh plan before applying. OpenCode is explicitly managed outside APT.

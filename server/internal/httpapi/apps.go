@@ -34,7 +34,7 @@ func (s *Server) handleAppPlan(w http.ResponseWriter, r *http.Request) {
 		AppID     string `json:"appId"`
 		Operation string `json:"operation"`
 	}
-	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil || !validRequestID(req.RequestID) || (req.AppID != "docker" && req.AppID != "nginx") || (req.Operation != "" && req.Operation != "install" && req.Operation != "uninstall") {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil || !validRequestID(req.RequestID) || (req.AppID != "docker" && req.AppID != "nginx") || (req.Operation != "" && req.Operation != "install" && req.Operation != "uninstall" && req.Operation != "update") {
 		WriteError(w, NewError(CodeValidationFailed, "Choose Docker or Nginx from the App Library."))
 		return
 	}

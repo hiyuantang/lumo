@@ -22,8 +22,8 @@ export const APPS: Record<AppId, AppMeta> = {
   opencode: { id: 'opencode', requiredPackage: 'opencode', title: 'OpenCode', icon: IconCode, defaultSize: { w: 980, h: 680 }, minSize: { w: 460, h: 360 } },
   preview: { id: 'preview', title: 'Preview', icon: IconEye, defaultSize: { w: 840, h: 620 }, minSize: { w: 380, h: 300 } },
   library: { id: 'library', title: 'App Library', icon: IconGrid, defaultSize: { w: 900, h: 630 }, minSize: { w: 390, h: 380 } },
-  containers: { id: 'containers', requiredPackage: 'docker', title: 'Containers', icon: IconBoxes, defaultSize: { w: 920, h: 610 }, minSize: { w: 390, h: 380 } },
-  websites: { id: 'websites', requiredPackage: 'nginx', title: 'Websites', icon: IconGlobe, defaultSize: { w: 960, h: 650 }, minSize: { w: 390, h: 380 } },
+  containers: { id: 'containers', requiredPackage: 'docker', title: 'Docker', icon: IconBoxes, defaultSize: { w: 920, h: 610 }, minSize: { w: 390, h: 380 } },
+  websites: { id: 'websites', requiredPackage: 'nginx', title: 'Nginx', icon: IconGlobe, defaultSize: { w: 960, h: 650 }, minSize: { w: 390, h: 380 } },
   home: {
     id: 'home',
     title: 'Monitor',

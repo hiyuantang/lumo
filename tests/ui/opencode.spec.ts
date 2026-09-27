@@ -46,7 +46,8 @@ test('OpenCode setup stays discoverable while the Dock only shows an installed C
   await expect(page.getByTestId('dock-app-opencode')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Installation guide' })).toHaveAttribute('href', 'https://opencode.ai/docs/');
   installed = true;
-  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Refresh', exact: true }).click();
   await expect(page.getByTestId('dock-app-opencode')).toBeVisible();
   await page.getByTestId('dock-app-opencode').click();
   await page.getByTestId('opencode-project').fill('relative/path');

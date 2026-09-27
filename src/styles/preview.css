@@ -38,3 +38,12 @@
 .preview-conflict { padding: 10px 20px; background: var(--amber-soft); color: var(--amber); font-size: 12px; }
 .preview-conflict p { margin: 0 0 8px; }
 .preview-conflict > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.preview-path { display: flex; align-items: center; gap: 16px; }
+.preview-path > span:first-child { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.preview-path > span:last-child { flex: none; font-family: var(--font-sans); }
+@media (max-width: 700px) {
+  .preview-toolbar { padding: 10px; }
+  .preview-toolbar .app-toolbar-actions { gap: 6px; }
+  .preview-toolbar .btn { padding: 6px 8px; font-size: 12px; }
+  .preview-toolbar .preview-modes { padding: 2px; gap: 2px; }
+}

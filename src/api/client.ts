@@ -59,10 +59,11 @@ import type {
   Unsubscribe,
   UpdatePlan,
   UpdateProgress,
+  AppUpdateHistoryEntry,
 } from './source';
 import { ApiError, apiGet, apiPost, apiPut, csrfToken, onSessionExpired as onSessionExpiredListener } from './transport';
 import { LumoSocket } from './ws';
-import type { AppCatalog, AppLogs, ContainerAction, ContainerDetail, ContainerSnapshot, ServerAppID, WebsiteDefinition, WebsiteResult, WebsiteSnapshot } from './server-apps';
+import type { DockerResources, DockerResourceRequest, AppOperation, AppCatalog, AppLogs, ContainerAction, ContainerDetail, ContainerSnapshot, ServerAppID, WebsiteDefinition, WebsiteResult, WebsiteSnapshot } from './server-apps';
 
 const MB = 1024 * 1024;
 const GB = 1024 * 1024 * 1024;
@@ -145,18 +146,21 @@ function sortEntries(a: FsEntry, b: FsEntry): number {
   return a.name.localeCompare(b.name);
 }
 
-function joinUnderHome(homeDir: string, path: string[]): string {
+function resolveFilePath(homeDir: string, path: string[]): string {
   const rest = path.slice(1).join('/');
-  return rest ? `${homeDir}/${rest}` : homeDir;
+  if (path[0] === '') return `/${rest}`;
+  return rest ? `${homeDir === '/' ? '' : homeDir}/${rest}` : homeDir;
 }
 
 export class LiveDataSource implements DataSource {
   getAppCatalog() { return apiGet<AppCatalog>('/apps'); }
   async uninstallOpenCode(): Promise<void> { await apiPost('/apps/opencode/uninstall', { requestId: crypto.randomUUID() }); }
 
-  async planAppInstall(id: ServerAppID, operation: 'install' | 'uninstall' = 'install'): Promise<UpdatePlan> {
+  async planAppInstall(id: ServerAppID, operation: AppOperation = 'install'): Promise<UpdatePlan> {
     return (await apiPost<{ plan: UpdatePlan }>('/apps/plan', { requestId: crypto.randomUUID(), appId: id, operation })).plan;
   }
+  getDockerResources() { return apiGet<DockerResources>('/docker/resources'); }
+  async runDockerResourceAction(request: DockerResourceRequest): Promise<void> { await apiPost('/docker/resource', { requestId: crypto.randomUUID(), ...request }); }
   getContainers() { return apiGet<ContainerSnapshot>('/containers'); }
   getContainer(id: string) { return apiGet<ContainerDetail>('/containers/detail', { id }); }
   getContainerLogs(id: string) { return apiGet<AppLogs>('/containers/logs', { id }); }
@@ -174,7 +178,7 @@ export class LiveDataSource implements DataSource {
     canServiceActions: true,
     canTerminal: true,
     canPowerControl: true,
-    canConfigureNetwork: true,
+    canConfigureNetwork: false,
   };
 
   private socket = new LumoSocket();
@@ -495,7 +499,7 @@ export class LiveDataSource implements DataSource {
   }
 
   absolutePath(path: string[]): string {
-    return joinUnderHome(this.homeDir, path);
+    return resolveFilePath(this.homeDir, path);
   }
 
   async createEntry(path: string[], kind: 'file' | 'directory'): Promise<void> {
@@ -503,12 +507,12 @@ export class LiveDataSource implements DataSource {
   }
 
   async listDir(path: string[]): Promise<FsEntry[]> {
-    const data = await apiGet<WireFilesList>('/files/list', { path: joinUnderHome(this.homeDir, path) });
+    const data = await apiGet<WireFilesList>('/files/list', { path: resolveFilePath(this.homeDir, path) });
     return data.entries.map(mapFileEntry).sort(sortEntries);
   }
 
   readFile(path: string[]): Promise<FileRead> {
-    return this.readSystemFile(joinUnderHome(this.homeDir, path));
+    return this.readSystemFile(resolveFilePath(this.homeDir, path));
   }
 
   async readSystemFile(path: string): Promise<FileRead> {
@@ -525,7 +529,7 @@ export class LiveDataSource implements DataSource {
 
   async writeFile(path: string[], contentBase64: string, expectedRevision: string | null): Promise<FileWrite> {
     const data = await apiPut<WireFileWrite>('/files/write', {
-      path: joinUnderHome(this.homeDir, path),
+      path: resolveFilePath(this.homeDir, path),
       content: contentBase64,
       ...(expectedRevision ? { expectedRevision } : {}),
       requestId: crypto.randomUUID(),
@@ -561,10 +565,12 @@ export class LiveDataSource implements DataSource {
 
   async deleteFile(path: string[]): Promise<void> {
     await apiPost<{ trashed: boolean }>('/files/delete', {
-      path: joinUnderHome(this.homeDir, path),
+      path: resolveFilePath(this.homeDir, path),
       requestId: crypto.randomUUID(),
     });
   }
+
+  async getAppUpdateHistory(): Promise<AppUpdateHistoryEntry[]> { return (await apiGet<{ entries: AppUpdateHistoryEntry[] }>('/apps/update-history')).entries; }
 
   async refreshUpdates(): Promise<string> {
     const data = await apiPost<{ refreshedAt: string }>('/updates/refresh', { requestId: crypto.randomUUID() });

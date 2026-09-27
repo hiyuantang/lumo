@@ -562,3 +562,15 @@ func TestFilesCreateHandler(t *testing.T) {
 		t.Fatalf("request ID required: %d", status)
 	}
 }
+
+func TestNetworkReadOnlySnapshotDoesNotRequireConfigurationService(t *testing.T) {
+	server := NewServer(Deps{Network: network.NewReader()})
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, httptest.NewRequest("GET", "/api/v1/network", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), `"revision"`) || !strings.Contains(response.Body.String(), `"interfaces"`) {
+		t.Fatalf("unexpected read-only snapshot: %s", response.Body.String())
+	}
+}

@@ -49,6 +49,9 @@ func OpenAudit(path string) (*Audit, error) {
 	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_request ON audit(request_id)`); err != nil {
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_user_action ON audit(uid, action, kind, id)`); err != nil {
+		return nil, err
+	}
 	return &Audit{db: db}, nil
 }
 

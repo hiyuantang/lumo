@@ -68,7 +68,7 @@ func runAgent(args []string) {
 	terminals := terminal.NewManager()
 	networkReader := network.NewReader()
 	if !networkReader.Available() {
-		log.Printf("agent: Netplan D-Bus not reachable; network capability disabled")
+		log.Printf("agent: network details unavailable")
 	}
 	var settingsReader hostsettings.Reader
 	if client, err := hostsettings.NewClient(); err == nil {

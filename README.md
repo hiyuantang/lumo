@@ -17,10 +17,10 @@ permissions. Service changes made over SSH also appear in Lumo.
 | Preview | Read and edit text files; switch Markdown between rendered and raw views |
 | Terminal | Run commands as your Linux user |
 | Skills | Browse account skills from `~/.agents/skills`, search descriptions and read their instructions |
-| App Library | Browse app details, install packages and uninstall apps |
-| Containers | Inspect existing Docker containers, view logs and start, stop or restart them |
-| Websites | Manage Nginx sites for static files or local web applications |
-| Settings | View server identity, manage network and time settings, adjust appearance and schedule a restart or shutdown |
+| App Library | Discover apps, install or remove them, apply updates and view update history |
+| Docker | Manage containers, images, volumes and networks; inspect logs and storage usage |
+| Nginx | Manage Nginx sites for static files or local web applications |
+| Settings | View server identity, inspect network details and manage time settings, adjust appearance and schedule a restart or shutdown |
 
 Lumo manages one server per browser session. It runs command-line tools
 through Terminal; it does not stream a remote graphical desktop.

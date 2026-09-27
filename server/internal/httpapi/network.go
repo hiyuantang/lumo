@@ -20,7 +20,7 @@ func (s *Server) handleNetworkSnapshot(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	snapshot, err := s.deps.Network.Snapshot(ctx)
 	if err != nil {
-		WriteError(w, NewError(CodeUnavailable, "Network configuration is unavailable."))
+		WriteError(w, NewError(CodeUnavailable, "Network details are unavailable."))
 		return
 	}
 	WriteData(w, snapshot)

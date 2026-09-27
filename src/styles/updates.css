@@ -7,7 +7,7 @@
 }
 
 .updates-toolbar .updates-refreshed {
-  margin-left: auto;
+  margin-right: auto;
   color: var(--text-faint);
   font-size: 11.5px;
 }

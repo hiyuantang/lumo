@@ -207,6 +207,7 @@ func testBroker(t *testing.T, authz Authorizer, sessiondHandler http.Handler) (*
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /action", s.handleAction)
+	mux.HandleFunc("GET /apps/update-history", s.handleAppUpdateHistory)
 	srv := &http.Server{
 		Handler: mux,
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {

@@ -130,3 +130,22 @@ real Ubuntu installation with Linux login support, use the
 [source installer](INSTALL.md). Product and protocol specifications are in
 [PRODUCT.md](PRODUCT.md) and [PROTOCOL.md](PROTOCOL.md). Follow the independent
 implementation rules in [AGENTS.md](../AGENTS.md).
+
+### Docker resource management
+
+`npx playwright test tests/ui/docker.spec.ts tests/ui/server-apps.spec.ts`
+checks resource sizes and references, protected resources, named confirmation,
+volume/network creation and removal, image removal, compact screens, and the
+App Library update and completion flow using simulated responses.
+
+The `containers`, `httpapi`, `broker`, and `updates` Go packages test Engine
+response normalization, network inspection, stale revisions, in-use guards,
+fixed creation parameters, authorization, audit, replay, and installed-package
+family selection. These tests do not update the host Engine or delete host data.
+
+For an optional read-only contract check against a real local Engine, set
+`LUMO_TEST_DOCKER_SOCKET` to its Unix socket and run the `containers` package with
+`-run TestLiveDockerResourceInventory -v` using the project Go toolchain/cache
+configuration. This test only invokes Engine GET endpoints. Live deletion,
+volume/network creation, and real APT Engine upgrades require a disposable Ubuntu
+host; successful mock tests do not establish those real mutation workflows.

@@ -175,6 +175,55 @@ func (w *Worker) CalculateRemovalPlan(ctx context.Context, appID string) (Plan, 
 	return w.calculatePlan(ctx, appID, "uninstall")
 }
 
+func (w *Worker) CalculateAppUpdatePlan(ctx context.Context, appID string) (Plan, error) {
+	if appID != "docker" && appID != "nginx" {
+		return Plan{}, errors.New("unsupported application")
+	}
+	return w.calculatePlan(ctx, appID, "update")
+}
+
+func (w *Worker) installedAppPackages(ctx context.Context, appID string) ([]string, error) {
+	candidates := []string{"nginx"}
+	if appID == "docker" {
+		candidates = []string{"docker.io", "docker-compose-v2", "containerd", "runc", "docker-ce", "docker-ce-cli", "containerd.io", "docker-buildx-plugin", "docker-compose-plugin", "docker-ce-rootless-extras"}
+	}
+	installed := []string{}
+	for _, name := range candidates {
+		output, err := w.runner.Output(ctx, w.dpkg, "-W", "-f=${db:Status-Status}", name)
+		if err == nil && strings.TrimSpace(string(output)) == "installed" {
+			installed = append(installed, name)
+		}
+	}
+	has := func(target string) bool {
+		for _, name := range installed {
+			if name == target {
+				return true
+			}
+		}
+		return false
+	}
+	if appID == "docker" && has("docker.io") && has("docker-ce") {
+		return nil, errors.New("Multiple Docker package families are installed. Resolve the package configuration before updating.")
+	}
+	if (appID == "docker" && !has("docker.io") && !has("docker-ce")) || (appID == "nginx" && !has("nginx")) {
+		return nil, errors.New("This app is not installed through a supported APT package. Update it using its original installer.")
+	}
+	if appID == "docker" {
+		family := map[string]bool{"docker.io": true, "docker-compose-v2": true, "containerd": true, "runc": true}
+		if has("docker-ce") {
+			family = map[string]bool{"docker-ce": true, "docker-ce-cli": true, "containerd.io": true, "docker-buildx-plugin": true, "docker-compose-plugin": true, "docker-ce-rootless-extras": true}
+		}
+		selected := []string{}
+		for _, name := range installed {
+			if family[name] {
+				selected = append(selected, name)
+			}
+		}
+		installed = selected
+	}
+	return installed, nil
+}
+
 func (w *Worker) calculatePlan(ctx context.Context, appID, operation string) (Plan, error) {
 	if !w.Available() {
 		return Plan{}, ErrUnavailable
@@ -192,6 +241,14 @@ func (w *Worker) calculatePlan(ctx context.Context, appID, operation string) (Pl
 		args = []string{"-s", "-V", "--no-remove", "-o", "Dpkg::Use-Pty=0", "install", "--"}
 		if operation == "uninstall" {
 			args = []string{"-s", "-V", "-o", "Dpkg::Use-Pty=0", "remove", "--"}
+		}
+		if operation == "update" {
+			var err error
+			packages, err = w.installedAppPackages(ctx, appID)
+			if err != nil {
+				return Plan{}, err
+			}
+			args = []string{"-s", "-V", "--no-remove", "--only-upgrade", "-o", "Dpkg::Use-Pty=0", "install", "--"}
 		}
 		args = append(args, packages...)
 	}
@@ -356,6 +413,17 @@ func (w *Worker) apply(plan Plan, requestID string, done func(Progress)) {
 				err = errors.New("removal requires installing other packages")
 			}
 			actual = parseRemovalOutput(string(output))
+		}
+		if plan.Operation == "update" {
+			before := map[string]string{}
+			for _, pkg := range plan.Packages {
+				before[pkg.Name] = pkg.FromVersion
+			}
+			for _, pkg := range actual {
+				if previous, ok := before[pkg.Name]; !ok || previous != pkg.FromVersion {
+					err = errors.New("installed package versions changed")
+				}
+			}
 		}
 		if err != nil || !samePackagePlan(plan.Packages, actual) {
 			progress := w.finish(requestID, false, "The package plan changed. Review a new package plan before continuing.")

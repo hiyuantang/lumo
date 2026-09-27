@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useAppMenus } from '../shell/appMenus';
+import { folderPath } from '../utils/folder-path';
+import { copyText } from '../utils/clipboard';
+import { DropdownMenu } from '../shell/DropdownMenu';
 import { useReorder } from '../shell/useReorder';
 import { useAppPreference, useAppState } from '../shell/useAppState';
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
@@ -10,9 +14,11 @@ import { Trash } from './Trash';
 import { formatSize } from '../utils/file-format';
 import { useContextMenu } from '../shell/ContextMenu';
 import { useShell } from '../shell/ShellContext';
-import { IconTrash, IconChevronRight, IconEye, IconFile, IconFolder, IconHome, IconUpload } from '../shell/icons';
+import { IconTrash, IconChevronRight, IconFile, IconFolder, IconHome, IconUpload, IconSidebar } from '../shell/icons';
 import '../styles/apps.css';
 import '../styles/files.css';
+
+type FileLocation = { path: string[]; location: 'folder' | 'trash' };
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
@@ -22,10 +28,14 @@ export function Files() {
   const { state, actions } = useShell();
   const [path, setPath] = useAppState<string[]>('files', 'path', () => source.homePath());
   const [showHidden, setShowHidden] = useAppPreference<boolean>('files', 'show-hidden', false);
+  const [viewMode, setViewMode] = useAppPreference<'list' | 'grid'>('files', 'view', 'list', ['list', 'grid']);
+  const [sortBy, setSortBy] = useAppPreference<'name' | 'type' | 'size' | 'modified'>('files', 'sort-by', 'name', ['name', 'type', 'size', 'modified']);
+  const [sortDirection, setSortDirection] = useAppPreference<'ascending' | 'descending'>('files', 'sort-direction', 'ascending', ['ascending', 'descending']);
   const [entries, setEntries] = useState<FsEntry[]>([]);
   const [pinnedFolders, setPinnedFolders] = useAppPreference<string[]>('files', 'pinned-folders', []);
   const reorderPinned = useReorder(pinnedFolders, setPinnedFolders, (path) => path, 'vertical');
   const [location, setLocation] = useAppState<'folder' | 'trash'>('files', 'location', 'folder', ['folder', 'trash']);
+  const [navigation, setNavigation] = useState<{ back: FileLocation[]; forward: FileLocation[] }>({ back: [], forward: [] });
   const [listError, setListError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [selectedName, setSelectedName] = useAppState<string | null>('files', 'selection', null);
@@ -35,6 +45,12 @@ export function Files() {
   const [deleteTarget, setDeleteTarget] = useState<FsEntry | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [copiedPath, setCopiedPath] = useState<string | null>(null);
+  useEffect(() => {
+    if (copiedPath === null) return;
+    const timer = window.setTimeout(() => setCopiedPath(null), 1800);
+    return () => window.clearTimeout(timer);
+  }, [copiedPath]);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -44,7 +60,7 @@ export function Files() {
       await source.getIdentity().catch(() => null);
       if (!alive) return;
       const home = source.homePath();
-      if (path.length === 1 && path[0] !== home[0]) {
+      if (path.length === 1 && path[0] !== '' && path[0] !== home[0]) {
         setPath(home);
         return;
       }
@@ -64,8 +80,25 @@ export function Files() {
     };
   }, [source, path, refreshNonce, state.fileRevision, location]);
 
-  const visibleEntries = entries.filter((entry) => showHidden || !entry.name.startsWith('.'));
+  const visibleEntries = entries.filter((entry) => showHidden || !entry.name.startsWith('.')).sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1;
+    const names = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    const value = sortBy === 'type' ? fileType(a).localeCompare(fileType(b)) : sortBy === 'size' ? a.size - b.size : sortBy === 'modified' ? (Date.parse(a.modifiedAt ?? a.modified) || 0) - (Date.parse(b.modifiedAt ?? b.modified) || 0) : names;
+    return (value || names) * (sortDirection === 'ascending' ? 1 : -1);
+  });
   const selected = visibleEntries.find((e) => e.name === selectedName) ?? null;
+
+  const absolutePath = source.absolutePath(selected ? [...path, selected.name] : path);
+  const pathSegments = absolutePath.split('/').filter(Boolean);
+
+  async function copyAbsolutePath() {
+    try {
+      await copyText(absolutePath);
+      setCopiedPath(absolutePath);
+    } catch {
+      actions.notify('Clipboard unavailable', 'Could not copy the path.');
+    }
+  }
 
   function refresh() {
     setRefreshNonce((n) => n + 1);
@@ -77,10 +110,27 @@ export function Files() {
     return { label: pinned ? 'Unpin Folder' : 'Pin Folder', run: () => setPinnedFolders((current) => pinned ? current.filter((item) => item !== key) : [...current, key]) };
   }
 
-  function navigateTo(nextPath: string[]) {
-    setLocation('folder');
-    setPath(nextPath);
+  function showLocation(next: FileLocation) {
+    setLocation(next.location);
+    setPath(next.path);
     setSelectedName(null);
+  }
+
+  function navigateTo(nextPath: string[], nextLocation: FileLocation['location'] = 'folder') {
+    if (location === nextLocation && source.absolutePath(path) === source.absolutePath(nextPath)) {
+      setSelectedName(null);
+      return;
+    }
+    setNavigation((previous) => ({ back: [...previous.back, { path, location }].slice(-100), forward: [] }));
+    showLocation({ path: nextPath, location: nextLocation });
+  }
+
+  function travel(direction: 'back' | 'forward') {
+    const next = navigation[direction].at(-1);
+    if (!next) return;
+    const opposite = direction === 'back' ? 'forward' : 'back';
+    setNavigation((previous) => ({ ...previous, [direction]: previous[direction].slice(0, -1), [opposite]: [...previous[opposite], { path, location }] }));
+    showLocation(next);
   }
 
   function showDetails(entry: FsEntry) {
@@ -120,10 +170,13 @@ export function Files() {
     } else if (e.key === ' ') {
       e.preventDefault();
       showDetails(entry);
-    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    } else if (['ArrowDown', 'ArrowUp', ...(viewMode === 'grid' ? ['ArrowLeft', 'ArrowRight'] : [])].includes(e.key)) {
       e.preventDefault();
       const idx = visibleEntries.findIndex((en) => en.name === entry.name);
-      const next = visibleEntries[e.key === 'ArrowDown' ? idx + 1 : idx - 1];
+      const rows = [...(e.currentTarget.parentElement?.querySelectorAll<HTMLElement>('[data-file-row]') ?? [])];
+      const columns = viewMode === 'grid' ? Math.max(1, rows.filter((row) => row.offsetTop === rows[0]?.offsetTop).length) : 1;
+      const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowDown' ? columns : -columns;
+      const next = visibleEntries[idx + step];
       if (next) {
         setSelectedName(next.name);
         const row = document.querySelector<HTMLElement>(`[data-file-row="${CSS.escape(next.name)}"]`);
@@ -189,15 +242,49 @@ export function Files() {
     }
   }
 
+  const displayOptions = [
+    { id: 'list', label: 'List', checked: viewMode === 'list', run: () => setViewMode('list') },
+    { id: 'grid', label: 'Grid', checked: viewMode === 'grid', run: () => setViewMode('grid') },
+    { id: 'sort-name', label: 'Sort by Name', separator: true, checked: sortBy === 'name', run: () => setSortBy('name') },
+    { id: 'sort-type', label: 'Sort by Type', checked: sortBy === 'type', run: () => setSortBy('type') },
+    { id: 'sort-size', label: 'Sort by Size', checked: sortBy === 'size', run: () => setSortBy('size') },
+    { id: 'sort-modified', label: 'Sort by Modified Date', checked: sortBy === 'modified', run: () => setSortBy('modified') },
+    { id: 'ascending', label: 'Ascending', separator: true, checked: sortDirection === 'ascending', run: () => setSortDirection('ascending') },
+    { id: 'descending', label: 'Descending', checked: sortDirection === 'descending', run: () => setSortDirection('descending') },
+  ];
+
+  useAppMenus({
+    file: [
+      { id: 'new-folder', label: 'New Folder', disabled: location !== 'folder', run: () => startCreate('directory') },
+      { id: 'new-file', label: 'New File', disabled: location !== 'folder', run: () => startCreate('file') },
+      { id: 'open', label: 'Open', disabled: location !== 'folder' || !selected, run: () => { if (selected) activate(selected); } },
+      { id: 'upload', label: 'Upload File…', disabled: uploading || location !== 'folder', run: () => uploadInputRef.current?.click() },
+      { id: 'download', label: 'Download', disabled: location !== 'folder' || selected?.kind !== 'file', run: () => { if (selected) void download(selected); } },
+    ],
+    view: [
+      { id: 'back', label: 'Back', disabled: !navigation.back.length, run: () => travel('back') },
+      { id: 'forward', label: 'Forward', disabled: !navigation.forward.length, run: () => travel('forward') },
+      ...displayOptions.map((item) => ({ ...item, separatorAbove: item.separator })),
+      ...(location === 'folder' ? [{ id: 'refresh', label: 'Refresh', run: refresh }] : []),
+      { id: 'hidden', label: 'Show Hidden Files', checked: showHidden, run: () => setShowHidden(!showHidden) },
+      { id: 'details', label: 'Show Details', checked: detailsOpen, disabled: location !== 'folder', run: () => setDetailsOpen(!detailsOpen) },
+      { id: 'sidebar', label: 'Show Sidebar', checked: !sidebarCollapsed, run: () => setSidebarCollapsed(!sidebarCollapsed) },
+    ],
+  });
+
   return (
     <div className="app files" data-testid="app-files" onKeyDownCapture={(event) => {
+        if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+          event.preventDefault(); event.stopPropagation(); travel(event.key === 'ArrowLeft' ? 'back' : 'forward');
+          return;
+        }
         if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'h') {
           event.preventDefault(); event.stopPropagation(); setShowHidden((value) => !value);
         }
       }}>
       <div className="files-workspace">
         <aside className={`files-sidebar${sidebarCollapsed ? ' collapsed' : ''}`} aria-label="File locations" data-testid="files-sidebar">
-          <header className="files-sidebar-header"><h2>Locations</h2><button type="button" className="btn files-sidebar-toggle" data-testid="files-sidebar-toggle" aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={() => setSidebarCollapsed(!sidebarCollapsed)}><IconChevronRight size={16} /></button></header>
+          <header className="files-sidebar-header"><h2>Locations</h2><button type="button" className="btn files-sidebar-toggle" data-testid="files-sidebar-toggle" aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={() => setSidebarCollapsed(!sidebarCollapsed)}><IconSidebar size={18} /></button></header>
           <button
             type="button"
             className={`files-location${location === 'folder' && path.join('/') === source.homePath().join('/') ? ' selected' : ''}`}
@@ -209,12 +296,12 @@ export function Files() {
             <IconHome size={19} />
             <span>Home</span>
           </button>
-          <button type="button" className={`files-location${location === 'trash' ? ' selected' : ''}`} aria-current={location === 'trash' ? 'location' : undefined} data-testid="files-location-trash" aria-label="Trash" title="Trash" onClick={() => setLocation('trash')}><IconTrash size={19}/><span>Trash</span></button>
+          <button type="button" className={`files-location${location === 'trash' ? ' selected' : ''}`} aria-current={location === 'trash' ? 'location' : undefined} data-testid="files-location-trash" aria-label="Trash" title="Trash" onClick={() => navigateTo(path, 'trash')}><IconTrash size={19}/><span>Trash</span></button>
           <h2>Pinned</h2>
           {pinnedFolders.length === 0 && !sidebarCollapsed && <p className="files-pinned-hint">Right-click a folder to pin it here.</p>}
           {pinnedFolders.map((key) => {
             const folderPath = key.split('/');
-            const name = folderPath[folderPath.length - 1];
+            const name = folderPath[folderPath.length - 1] || '/';
             const active = location === 'folder' && path.join('/') === key;
             return (
               <button
@@ -235,73 +322,58 @@ export function Files() {
           })}
         </aside>
         <div className="files-main">
-          {location === 'trash' ? <Trash embedded/> : <>
           <div className="app-toolbar">
-            <button type="button" className="btn" data-testid="files-new" aria-haspopup="menu" onClick={(event) => openContextMenu(event, [
-              { label: 'New File', run: () => startCreate('file') },
-              { label: 'New Folder', run: () => startCreate('directory') },
-            ])}>New</button>
-            <button type="button" className="btn" data-testid="files-view" aria-haspopup="menu" onClick={(event) => openContextMenu(event, [
-              { label: showHidden ? 'Hide Hidden Files' : 'Show Hidden Files', run: () => setShowHidden((value) => !value) },
-              { label: detailsOpen ? 'Hide Details' : 'Show Details', run: () => setDetailsOpen((value) => !value) },
-              { label: sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar', run: () => setSidebarCollapsed((value) => !value) },
-            ])}>View</button>
-            <nav className="files-breadcrumbs" aria-label="Path">
-              <IconHome size={18} />
-              <button type="button" className="files-crumb" onClick={() => navigateTo(source.homePath())}>
-                Home
+            <div className="files-navigation">
+              <nav className="files-history" aria-label="Folder history">
+                <button type="button" className="btn files-back" data-testid="files-back" aria-label="Back" title="Back" disabled={!navigation.back.length} onClick={() => travel('back')}><IconChevronRight size={18}/></button>
+                <button type="button" className="btn" data-testid="files-forward" aria-label="Forward" title="Forward" disabled={!navigation.forward.length} onClick={() => travel('forward')}><IconChevronRight size={18}/></button>
+              </nav>
+              <div className="files-current-folder" data-testid="files-current-folder" title={location === 'trash' ? 'Trash' : source.absolutePath(path)}>
+                {location === 'trash' ? <IconTrash size={18}/> : source.absolutePath(path) === source.absolutePath(source.homePath()) ? <IconHome size={18}/> : <IconFolder size={18}/>}
+                <span>{location === 'trash' ? 'Trash' : source.absolutePath(path) === source.absolutePath(source.homePath()) ? 'Home' : path.at(-1) || '/'}</span>
+              </div>
+            </div>
+            {location === 'folder' && <div className="app-toolbar-actions">
+              <DropdownMenu label="View" testId="files-view" items={[
+                ...displayOptions,
+                { label: showHidden ? 'Hide Hidden Files' : 'Show Hidden Files', separator: true, run: () => setShowHidden((value) => !value) },
+                { label: detailsOpen ? 'Hide Details' : 'Show Details', run: () => setDetailsOpen((value) => !value) },
+                { label: sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar', run: () => setSidebarCollapsed((value) => !value) },
+              ]} />
+              <DropdownMenu label="New" testId="files-new" items={[
+                { label: 'New Folder', run: () => startCreate('directory') },
+                { label: 'New File', run: () => startCreate('file') },
+              ]} />
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-testid="upload-button"
+                disabled={uploading}
+                onClick={() => uploadInputRef.current?.click()}
+              >
+                <IconUpload size={15} />
+                {uploading ? 'Uploading…' : 'Upload'}
               </button>
-              {path.slice(1).map((segment, i) => (
-                <span key={segment} className="files-crumb-group">
-                  <IconChevronRight size={11} />
-                  <button
-                    type="button"
-                    className="files-crumb"
-                    onClick={() => navigateTo(path.slice(0, i + 2))}
-                  >
-                    {segment}
-                  </button>
-                </span>
-              ))}
-            </nav>
-            <button
-              type="button"
-              className="btn btn-primary"
-              data-testid="upload-button"
-              disabled={uploading}
-              onClick={() => uploadInputRef.current?.click()}
-            >
-              <IconUpload size={15} />
-              {uploading ? 'Uploading…' : 'Upload'}
-            </button>
-            <input ref={uploadInputRef} type="file" hidden data-testid="upload-input" onChange={(e) => void upload(e)} />
-            <button
-              type="button"
-              className="btn files-details-btn"
-              data-testid="quick-look-button" aria-pressed={detailsOpen}
-              onClick={() => setDetailsOpen(!detailsOpen)}
-            >
-              <IconEye size={13} />
-              Details
-            </button>
+              <input ref={uploadInputRef} type="file" hidden data-testid="upload-input" onChange={(e) => void upload(e)} />
+            </div>}
 
           </div>
+          {location === 'trash' ? <Trash embedded/> : <>
 
-          <div className="files-table-scroll" data-testid="files-table-scroll"><div className="files-table">
-          <div className="files-head" role="row" aria-hidden="true">
+          <div className="files-table-scroll" data-testid="files-table-scroll" data-view={viewMode}><div className={`files-table${viewMode === 'grid' ? ' files-grid' : ''}`}>
+          {viewMode === 'list' && <div className="files-head" role="row" aria-hidden="true">
             <span>Name</span>
             <span>Size</span>
             <span>Modified</span>
-          </div>
+          </div>}
           <div className="files-list" onClick={(event) => { if (event.target === event.currentTarget) setSelectedName(null); }} onContextMenu={(event) => openContextMenu(event, [
             { label: 'New File', run: () => startCreate('file') },
             { label: 'New Folder', run: () => startCreate('directory') },
             { label: 'Upload File', disabled: uploading, run: () => uploadInputRef.current?.click() },
-            { label: showHidden ? 'Hide Hidden Files' : 'Show Hidden Files', run: () => setShowHidden((value) => !value) },
+            { label: showHidden ? 'Hide Hidden Files' : 'Show Hidden Files', separator: true, run: () => setShowHidden((value) => !value) },
             { label: 'Refresh', run: refresh },
             { label: 'Open in OpenCode', run: () => actions.openOpenCode(source.absolutePath(path)) },
             pinAction(path),
-            { label: 'Go Home', run: () => navigateTo(source.homePath()) },
           ])} role="listbox" aria-label="Files" aria-activedescendant={selected ? `file-${selected.name}` : undefined}>
             {visibleEntries.map((entry) => (
               <div
@@ -320,9 +392,9 @@ export function Files() {
                     { label: entry.kind === 'dir' ? 'Open Folder' : 'Open in Preview', run: () => activate(entry) },
                     ...(entry.kind === 'dir' ? [{ label: 'Open in OpenCode', run: () => actions.openOpenCode(source.absolutePath([...path, entry.name])) }, pinAction([...path, entry.name])] : []),
                     ...(entry.kind === 'file' ? [
-                      { label: 'Edit', run: () => actions.openPreview([...path, entry.name], true) },
                       { label: 'Download', run: () => void download(entry) },
                     ] : []),
+                    { label: 'Copy Path', run: () => { void copyText(source.absolutePath([...path, entry.name])).catch(() => actions.notify('Clipboard unavailable', 'Could not copy the file path.')); } },
                     { label: 'Details', run: () => showDetails(entry) },
                     { label: 'Move to Trash', separator: true, danger: true, run: () => setDeleteTarget(entry) },
                   ]);
@@ -333,7 +405,7 @@ export function Files() {
               >
                 <span className="file-name">
                   {entry.kind === 'dir' ? <IconFolder size={15} /> : <IconFile size={15} />}
-                  <span>{entry.name}</span>
+                  <span title={entry.name}>{entry.name}</span>
                 </span>
                 <span className="file-size mono">{entry.kind === 'dir' ? '—' : formatSize(entry.size)}</span>
                 <span className="file-modified">{entry.modified}</span>
@@ -352,7 +424,18 @@ export function Files() {
           </div></div>
           <footer className="files-status" data-testid="files-status">
             <span>{listError ? 'Folder unavailable' : `${visibleEntries.length} ${visibleEntries.length === 1 ? 'item' : 'items'}`}</span>
-            <span className="mono" data-testid="files-absolute-path" title={source.absolutePath(selected ? [...path, selected.name] : path)}>{source.absolutePath(selected ? [...path, selected.name] : path)}</span>
+              <nav className="mono files-path-trail" data-testid="files-absolute-path" aria-label="Folder ancestors">
+                <button type="button" className="files-path-segment" title="/" onClick={() => navigateTo([''])}>/</button>
+                {pathSegments.map((segment, index) => {
+                  const destination = `/${pathSegments.slice(0, index + 1).join('/')}`;
+                  const isFile = selected?.kind === 'file' && index === pathSegments.length - 1;
+                  return <span className="files-path-part" key={destination}>
+                    {index > 0 && <span className="files-path-separator" aria-hidden="true">/</span>}
+                    {isFile ? <span className="files-path-filename" title={destination}>{segment}</span> : <button type="button" className="files-path-segment" title={destination} onClick={() => navigateTo(folderPath(destination, source.absolutePath(path), source.absolutePath(source.homePath()), source.homePath()))}>{segment}</button>}
+                  </span>;
+                })}
+              </nav>
+            <button type="button" className="files-path-action" data-testid="files-copy-path" aria-label="Copy absolute path" title={`Copy ${absolutePath}`} onClick={() => void copyAbsolutePath()}>{copiedPath === absolutePath ? 'Copied' : 'Copy'}</button>
           </footer>
           </>}
         </div>
@@ -407,4 +490,9 @@ export function Files() {
 
     </div>
   );
+}
+
+function fileType(entry: FsEntry): string {
+  const dot = entry.name.lastIndexOf('.');
+  return entry.kind === 'file' && dot > 0 ? entry.name.slice(dot + 1).toLowerCase() : '';
 }
