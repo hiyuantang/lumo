@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../offline';
 async function open(page: Page) {
   await page.goto('/');
   await page.getByTestId('login-username').fill('demo');
@@ -88,15 +88,15 @@ test('App details have independent back and forward history', async ({ page }) =
   await page.getByTestId('library-nginx').click();
   await expect(page.getByRole('region', { name: 'Nginx details' })).toBeVisible();
   await page.getByTestId('library-back').click();
-  await page.getByTestId('library-opencode').click();
-  await expect(page.getByRole('region', { name: 'OpenCode details' })).toBeVisible();
+  await page.getByTestId('library-pi').click();
+  await expect(page.getByRole('region', { name: 'Pi details' })).toBeVisible();
   await expect(page.getByTestId('library-forward')).toBeDisabled();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByTestId('library-back')).toBeInViewport();
   await page.getByTestId('library-back').click();
-  await expect(page.getByTestId('library-opencode')).toBeVisible();
+  await expect(page.getByTestId('library-pi')).toBeVisible();
   await page.getByTestId('library-forward').click();
-  await expect(page.getByRole('region', { name: 'OpenCode details' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Pi details' })).toBeVisible();
 });
 
 test('Update all runs apps in order and continues while the window is closed', async ({ page }) => {
@@ -128,3 +128,31 @@ test('Update controls fit a compact screen', async ({ page }) => {
   await expect(page.getByTestId('library-update-docker').getByRole('button', { name: 'Update', exact: true })).toBeInViewport();
   expect(await page.getByTestId('app-library').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
+
+for (const width of [1440, 390]) {
+  test(`App Library sidebar collapses and preserves navigation at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ colorScheme: width === 390 ? 'dark' : 'light' });
+    await open(page);
+    const toggle = page.getByTestId('library-sidebar-toggle');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId('library-discovery')).toBeInViewport();
+    await expect(page.getByTestId('library-updates')).toBeInViewport();
+    await page.getByTestId('library-check-updates').click();
+    await expect(page.getByTestId('library-update-docker')).toBeVisible();
+    await page.getByTestId('library-back').click();
+    await page.getByTestId('library-nginx').click();
+    await expect(page.getByRole('region', { name: 'Nginx details' })).toBeVisible();
+    await page.getByTestId('library-back').click();
+    await page.screenshot({ path: `/tmp/lumo-library-collapsed-${width}.png`, animations: 'disabled' });
+    await page.getByTestId('window-close-library').click();
+    await page.getByTestId('dock-app-library').click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(await page.getByTestId('app-library').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.screenshot({ path: `/tmp/lumo-library-expanded-${width}.png`, animations: 'disabled' });
+  });
+}

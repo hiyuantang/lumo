@@ -26,6 +26,7 @@ export interface WireIdentity {
     kernel: string;
   };
   architecture: string;
+  cpuModel?: string;
   bootId: string;
   serverTime: string;
   user?: {

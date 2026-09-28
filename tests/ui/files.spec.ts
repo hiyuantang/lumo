@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../offline';
 
 test('files interface: navigation, editor and delete confirmation', async ({ page }) => {
   await page.goto('/');
@@ -23,6 +23,10 @@ test('files interface: navigation, editor and delete confirmation', async ({ pag
   await expect(files.getByTestId('files-pin-user/Documents')).toHaveCount(0);
   await files.getByTestId('files-location-home').click();
 
+  await files.getByTestId('file-row-notes.txt').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Details', exact: true }).click();
+  await expect(files.getByTestId('files-details')).toContainText('218 B');
+  await files.getByRole('button', { name: 'Close Details', exact: true }).click();
   await files.getByTestId('file-row-notes.txt').click({ button: 'right' });
   await expect(page.getByTestId('context-menu').getByRole('menuitem', { name: 'Edit', exact: true })).toHaveCount(0);
   await page.getByRole('menuitem', { name: 'Open in Preview', exact: true }).click();
@@ -103,6 +107,7 @@ for (const width of [1440, 390]) {
     await choose('Grid');
     const area = page.getByTestId('files-table-scroll');
     await expect(area).toHaveAttribute('data-view', 'grid');
+    await expect(area.locator('.file-size')).toHaveCount(0);
     expect(await area.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     await page.getByTestId('file-row-Documents').dblclick();
     const rows = page.getByRole('listbox', { name: 'Files', exact: true }).getByRole('option');
@@ -115,6 +120,8 @@ for (const width of [1440, 390]) {
     await page.reload();
     await expect.poll(names).toEqual(['upgrade-plan.txt', 'invoice-june.pdf', 'server-notes.md']);
     await choose('List');
+    await expect(area.locator('.file-size')).toHaveCount(0);
+    await expect(area.locator('.files-head')).not.toContainText('Size');
     await expect.poll(names).toEqual(['upgrade-plan.txt', 'invoice-june.pdf', 'server-notes.md']);
     await choose('Grid');
     await choose('Ascending');

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../offline';
 
 async function login(page: Page) {
   await page.goto('/');
@@ -9,17 +9,17 @@ async function login(page: Page) {
   await expect(page.getByTestId('dock-app-websites')).toBeVisible();
 }
 
-const dockOrder = (page: Page) => page.locator('.dock-app').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('data-app')));
+const dockOrder = (page: Page) => page.locator('.dock-app[data-app]').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('data-app')));
 
 test('dock supports dragging and keyboard reordering and remembers the order', async ({ page }) => {
   await login(page);
   await page.getByTestId('dock-app-files').dragTo(page.getByTestId('dock-app-home'));
   await expect.poll(() => dockOrder(page)).toEqual(['files', 'home', 'preview', 'terminal', 'containers', 'websites', 'library', 'skills', 'settings', 'trash']);
   await page.reload();
-  await expect(page.locator('.dock-app').first()).toHaveAttribute('data-app', 'files');
+  await expect(page.locator('.dock-app[data-app]').first()).toHaveAttribute('data-app', 'files');
   await page.getByTestId('dock-app-files').focus();
   await page.keyboard.press('Alt+ArrowRight');
-  await expect(page.locator('.dock-app').nth(1)).toHaveAttribute('data-app', 'files');
+  await expect(page.locator('.dock-app[data-app]').nth(1)).toHaveAttribute('data-app', 'files');
   await expect(page.getByTestId('dock-app-files')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('app-files')).toBeVisible();
@@ -49,7 +49,7 @@ test('notifications fit short lists and scroll long lists above the dock', async
   await login(page);
   await page.getByTestId('dock-app-settings').click();
   await page.getByTestId('settings-section-updates').click();
-  const refresh = page.getByTestId('updates-refresh');
+  const refresh = page.getByTestId('updates-plan');
   await refresh.click();
   await expect(refresh).toBeEnabled();
   await page.getByTestId('notifications-button').click();
@@ -87,7 +87,7 @@ test('custom dropdowns support keyboard choice and the clock opens notifications
   await page.getByTestId('settings-section-time').click();
   const timezone = page.getByTestId('settings-timezone');
   await timezone.click();
-  await expect(page.getByRole('listbox')).toBeVisible();
+  await expect(page.getByRole('listbox', { name: 'Time zone' })).toBeVisible();
   await expect(page.locator('select')).toHaveCount(0);
   await page.keyboard.press('End');
   await page.keyboard.press('Enter');
@@ -117,7 +117,8 @@ test('right-click menus are limited to actionable items and text fields', async 
   await login(page);
   const menu = page.getByTestId('context-menu');
   await page.locator('main.desktop').click({ button: 'right', position: { x: 1200, y: 400 } });
-  await expect(menu).toHaveCount(0);
+  await expect(menu.getByRole('menuitem', { name: 'Open Desktop Folder' })).toBeVisible();
+  await page.keyboard.press('Escape');
   await page.getByTestId('dock-app-files').click();
   await expect(page.getByTestId('app-files')).toBeVisible();
   const row = page.locator('[data-kind="file"]').first();
@@ -182,12 +183,12 @@ test('text and terminal context menus preserve editing and clipboard actions', a
   await expect(page.getByTestId('terminal-input')).toBeFocused();
 });
 
-test('blank desktop has no menu and outside clicks dismiss item menus', async ({ page }) => {
+test('desktop folder menu and item menus dismiss on outside clicks', async ({ page }) => {
   await login(page);
   const menu = page.getByTestId('context-menu');
   const desktop = page.locator('main.desktop');
   await desktop.click({ button: 'right', position: { x: 1150, y: 200 } });
-  await expect(menu).toHaveCount(0);
+  await expect(menu.getByRole('menuitem', { name: 'Folder Settings' })).toBeVisible();
   await desktop.click({ position: { x: 1100, y: 180 } });
   await expect(menu).toHaveCount(0);
   await page.getByTestId('dock-app-files').click();

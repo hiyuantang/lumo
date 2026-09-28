@@ -49,9 +49,9 @@ export interface WebsiteSnapshot { installed: boolean; sites: Website[]; warning
 export interface WebsiteResult { site: Website; rollbackRef: string; reloaded: boolean }
 
 export type ServerAppID = 'docker' | 'nginx';
-export type LibraryAppID = ServerAppID | 'opencode';
+export type LibraryAppID = ServerAppID | 'pi';
 export type AppOperation = 'install' | 'uninstall' | 'update';
-export interface AppCatalog { canInstall: boolean; apps: { id: LibraryAppID; installed: boolean; canUninstall?: boolean }[] }
+export interface AppCatalog { canInstall: boolean; apps: { id: LibraryAppID; installed: boolean; canUninstall?: boolean; canInstall?: boolean; canUpdate?: boolean }[] }
 
 export interface DockerImage { id: string; tags: string[]; created: number; size: number | null; sharedSize: number | null; containers: string[]; revision: string }
 export interface DockerVolume { removable: boolean; name: string; driver: string; scope: string; created: string; size: number | null; containers: string[]; revision: string }

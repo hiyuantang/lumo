@@ -3,6 +3,7 @@ package updates
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -175,5 +176,56 @@ func TestAppUpdateRefusesReinstallAfterEngineRemoved(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("update did not finish")
+	}
+}
+
+func TestCleanupRunsOnlyAfterSuccessfulRemoval(t *testing.T) {
+	for _, scenario := range []string{"success", "changed-plan", "preflight-failed", "cleanup-failed"} {
+		t.Run(scenario, func(t *testing.T) {
+			output := "Remv nginx [1.24.0]\n"
+			runner := &installRunner{fakeRunner: fakeRunner{outputs: map[string]string{"apt-get -s -V -o Dpkg::Use-Pty=0 remove -- nginx": output}}}
+			worker := installWorker(runner)
+			plan, err := worker.CalculateRemovalPlan(context.Background(), "nginx")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if scenario == "changed-plan" {
+				runner.outputs["apt-get -s -V -o Dpkg::Use-Pty=0 remove -- nginx"] += "Remv unexpected [1.0]\n"
+			}
+			cleaned := false
+			hook := ApplyHooks{Before: func(Plan) error {
+				if scenario == "preflight-failed" {
+					return fmt.Errorf("preflight")
+				}
+				return nil
+			}, After: func(Plan) error {
+				if len(runner.streams) != 1 {
+					t.Error("cleanup ran before package removal")
+				}
+				cleaned = true
+				if scenario == "cleanup-failed" {
+					return fmt.Errorf("storage unavailable")
+				}
+				return nil
+			}}
+			done := make(chan Progress, 1)
+			if _, _, err := worker.StartApply(plan.ID, plan.ID, scenario, func(p Progress) { done <- p }, hook); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case p := <-done:
+				if p.Success != (scenario == "success") {
+					t.Fatal(p)
+				}
+				if cleaned != (scenario == "success" || scenario == "cleanup-failed") {
+					t.Fatal("unexpected cleanup")
+				}
+				if scenario == "preflight-failed" && len(runner.streams) != 0 {
+					t.Fatal("removed packages after preflight failed")
+				}
+			case <-time.After(time.Second):
+				t.Fatal("timeout")
+			}
+		})
 	}
 }

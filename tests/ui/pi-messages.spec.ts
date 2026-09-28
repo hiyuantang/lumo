@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+import { expect, test } from '../offline';
+import { piPage } from './pi-fixture';
+
+test('Pi aligns messages, reveals copy and recorded time on hover, and branches natively', async ({ page, context }) => {
+  const fixture = await piPage(page);
+  const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message));
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://localhost:5200' });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-pi').click();
+  const prompt = page.getByTestId('pi-prompt');
+  await expect(prompt).toBeEnabled();
+  const text = 'Review this project and explain how the frontend and backend work together. Keep the explanation focused on the main request flow.';
+  await prompt.fill(text); await page.getByTestId('pi-send').click();
+  await expect(page.getByTestId('pi-messages')).toContainText('Inspecting your project');
+  await expect(page.getByRole('button', { name: 'Branch chat' })).toHaveCount(0);
+  fixture.finish();
+  const user = page.getByRole('article', { name: 'Your message' });
+  const reply = page.getByRole('article', { name: 'Pi response' });
+  await expect(reply).toContainText('React and Go');
+  const userBox = (await user.boundingBox())!; const replyBox = (await reply.boundingBox())!;
+  expect(userBox.width).toBeLessThan(replyBox.width * .8);
+  expect(userBox.x).toBeGreaterThan(replyBox.x + 80);
+  expect(Math.abs(userBox.x + userBox.width - replyBox.x - replyBox.width)).toBeLessThan(1);
+  await page.mouse.move(1400, 900);
+  await expect(reply.locator('.pi-message-actions')).toHaveCSS('opacity', '0');
+  await user.hover();
+  const copyBox = (await user.getByRole('button', { name: 'Copy message' }).boundingBox())!;
+  await page.mouse.move(userBox.x + 2, copyBox.y + copyBox.height / 2);
+  await page.mouse.move(userBox.x - 3, copyBox.y + copyBox.height / 2);
+  await expect(user.locator('.pi-message-actions')).toHaveCSS('pointer-events', 'auto');
+  await user.getByRole('button', { name: 'Copy message' }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(text);
+  await reply.hover();
+  await expect(reply.locator('time')).toHaveText('2:34 PM');
+  await expect(reply.locator('time')).toHaveAttribute('datetime', '2026-09-28T14:34:00.000Z');
+  await reply.getByRole('button', { name: 'Copy message' }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('The project uses **React and Go**.\n\nI found the application entry point.');
+  await page.screenshot({ path: '/tmp/lumo-pi-messages-light.png', animations: 'disabled' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.screenshot({ path: '/tmp/lumo-pi-messages-dark.png', animations: 'disabled' });
+  await reply.getByRole('button', { name: 'Branch chat' }).click();
+  await expect.poll(() => fixture.commands.filter((command) => command.type === 'clone').length).toBe(1);
+  await expect(prompt).toBeEnabled();
+  await expect(reply).toContainText('React and Go');
+  expect(fixture.originals.get('first.jsonl')?.some((message) => message.role === 'user')).toBe(true);
+  expect(fixture.commands.filter((command) => command.type === 'prompt')).toHaveLength(1);
+  await page.mouse.move(1400, 900);
+  await reply.getByRole('button', { name: 'Branch chat' }).focus();
+  await expect(reply.locator('.pi-message-actions')).toHaveCSS('opacity', '1');
+  await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await reply.hover();
+  await page.screenshot({ path: '/tmp/lumo-pi-messages-narrow.png', animations: 'disabled' });
+  expect(await page.getByTestId('pi-messages').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('Pi keeps the original conversation if native branching is cancelled', async ({ page }) => {
+  const fixture = await piPage(page);
+  await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-pi').click();
+  await expect(page.getByTestId('pi-prompt')).toBeEnabled();
+  await page.getByTestId('pi-prompt').fill('Original conversation'); await page.getByTestId('pi-send').click();
+  await expect(page.getByTestId('pi-messages')).toContainText('Inspecting your project');
+  fixture.finish();
+  await page.route('**/api/v1/pi/command', (route) => route.request().postDataJSON().command.type === 'clone'
+    ? route.fulfill({ json: { ok: true, data: { success: true, data: { cancelled: true } } } }) : route.fallback());
+  const reply = page.getByRole('article', { name: 'Pi response' });
+  await reply.hover(); await reply.getByRole('button', { name: 'Branch chat' }).click();
+  await expect(page.getByRole('alert')).toContainText('Pi cancelled the branch');
+  await expect(page.getByTestId('pi-messages')).toContainText('Original conversation');
+  expect(fixture.originals.size).toBe(0);
+  expect(fixture.commands.filter((command) => command.type === 'prompt')).toHaveLength(1);
+});

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { IconRefresh } from '../shell/icons';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAppMenus } from '../shell/appMenus';
 import { useAppPreference } from '../shell/useAppState';
@@ -151,7 +152,7 @@ function PreviewDocument({ path, onOpen }: { path: string[]; onOpen: () => void 
           <button type="button" className="btn" aria-pressed={mode === 'raw'} data-testid="preview-mode-raw" onClick={() => setMode('raw')}>Raw</button>
         </div>}
         <button type="button" className="btn" data-testid="preview-open" disabled={busy !== null} onClick={onOpen}>Open…</button>
-        <button type="button" className="btn" data-testid="preview-refresh" disabled={busy !== null} onClick={requestReload}>Refresh</button>
+        <button aria-label="Refresh" title="Refresh" type="button" className="btn btn-icon" data-testid="preview-refresh" disabled={busy !== null} onClick={requestReload}><IconRefresh size={16}/></button>
         <button type="button" className="btn btn-primary" data-testid="editor-save" disabled={!dirty || busy !== null} onClick={() => void save()}>{busy === 'save' ? 'Saving…' : 'Save'}</button>
       </div>
     </div>

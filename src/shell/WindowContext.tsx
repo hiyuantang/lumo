@@ -10,5 +10,5 @@ export function useCurrentWindow() {
   return win;
 }
 export function windowTitle(win: WindowState) {
-  return win.appId === 'preview' && win.filePath ? `${win.filePath.at(-1)} — Preview` : win.appId === 'opencode' && win.projectPath ? `${win.projectPath.split('/').filter(Boolean).at(-1) ?? '/'} — OpenCode` : APPS[win.appId].title;
+  return win.appId === 'preview' && win.filePath ? `${win.filePath.at(-1)} — Preview` : win.appId === 'pi' && win.projectPath ? `${win.projectPath.split('/').filter(Boolean).at(-1) ?? '/'} — Pi` : APPS[win.appId].title;
 }

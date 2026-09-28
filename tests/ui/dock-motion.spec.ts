@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator } from '../offline';
 
 async function sampleMotion(surface: Locator, expanding: boolean) {
   const sample = await surface.evaluate((element) => {

@@ -164,3 +164,91 @@ func (s *Server) handleFilesCreate(w http.ResponseWriter, r *http.Request) {
 		WriteData(w, result)
 	})
 }
+
+func (s *Server) handleFilesMove(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		From      string `json:"from"`
+		To        string `json:"to"`
+		RequestID string `json:"requestId"`
+	}
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
+		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
+		return
+	}
+	if !validRequestID(req.RequestID) {
+		WriteError(w, NewError(CodeValidationFailed, "requestId is required."))
+		return
+	}
+	s.mutate(w, req.RequestID, func(w http.ResponseWriter) {
+		result, err := files.Move(req.From, req.To)
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		WriteData(w, result)
+	})
+}
+
+func (s *Server) handleFileLocations(w http.ResponseWriter, r *http.Request) {
+	WriteData(w, map[string]any{"locations": files.UserLocations()})
+}
+
+func (s *Server) handleLocationSettings(w http.ResponseWriter, r *http.Request) {
+	result, err := files.GetLocationSettings()
+	if err != nil {
+		WriteError(w, err)
+		return
+	}
+	WriteData(w, result)
+}
+
+func (s *Server) handleSetLocation(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Path             string `json:"path"`
+		ID               string `json:"id"`
+		Remove           bool   `json:"remove"`
+		ExpectedRevision string `json:"expectedRevision"`
+		RequestID        string `json:"requestId"`
+	}
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
+		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
+		return
+	}
+	if !validRequestID(req.RequestID) {
+		WriteError(w, NewError(CodeValidationFailed, "requestId is required."))
+		return
+	}
+	s.mutate(w, req.RequestID, func(w http.ResponseWriter) {
+		s.folderMoves.Add(1)
+		defer s.folderMoves.Add(-1)
+		var result files.LocationSettings
+		var err error
+		if req.ID != "" {
+			result, err = files.SetIndividualLocation(req.ID, req.Path, req.Remove, req.ExpectedRevision)
+		} else if req.Remove {
+			err = NewError(CodeValidationFailed, "Folder id is required.")
+		} else {
+			result, err = files.SetLocationBase(req.Path, req.ExpectedRevision)
+		}
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		WriteData(w, result)
+	})
+}
+
+func (s *Server) handleLocationMovePlan(w http.ResponseWriter, r *http.Request) {
+	var result files.LocationMovePlan
+	var err error
+	if id := r.URL.Query().Get("id"); id != "" {
+		result, err = files.PlanIndividualLocation(id, r.URL.Query().Get("path"), r.URL.Query().Get("revision"))
+	} else {
+		result, err = files.PlanLocationMove(r.URL.Query().Get("path"), r.URL.Query().Get("revision"))
+	}
+	if err != nil {
+		WriteError(w, err)
+		return
+	}
+	WriteData(w, result)
+}

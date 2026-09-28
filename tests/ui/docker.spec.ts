@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../offline';
 async function open(page: Page) {
   await page.goto('/');
   await page.getByTestId('login-username').fill('demo');
@@ -14,6 +14,10 @@ test('Docker shows sizes, references and safe resource management', async ({ pag
   await page.getByTestId('docker-section-images').click();
   await expect(page.getByRole('button', { name: 'Remove image nginx:stable-alpine', exact: true })).toBeDisabled();
   await expect(page.getByTestId('app-containers')).toContainText('51.2 MB');
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.screenshot({ path: `/tmp/lumo-docker-dividers-${colorScheme}.png`, animations: 'disabled' });
+  }
   await page.getByTestId('docker-section-volumes').click();
   await expect(page.getByRole('button', { name: 'Remove volume notes-data' })).toBeDisabled();
   await page.getByRole('button', { name: 'Create volume', exact: true }).click();

@@ -1,12 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { Unsubscribe, UpdatePlan, UpdateProgress, AppUpdateHistoryEntry } from '../api/source';
+import type { PackageCatalog, Unsubscribe, UpdatePlan, UpdateProgress, AppUpdateHistoryEntry } from '../api/source';
+
+let systemUpdated = false;
+
+export async function getPackageCatalog(): Promise<PackageCatalog> {
+  return { checkedAt: new Date().toISOString(), rebootRequired: false, packages: [
+    { name: 'openssl', version: systemUpdated ? '3.0.13-0ubuntu3.5' : '3.0.13-0ubuntu3.4', architecture: 'amd64', summary: 'Secure communication tools', group: 'system', origin: 'Ubuntu', held: false, security: !systemUpdated, ...(!systemUpdated ? { updateVersion: '3.0.13-0ubuntu3.5', updateGroup: 'system' as const, updateOrigin: 'Ubuntu' } : {}) },
+    { name: 'systemd', version: systemUpdated ? '255.4-1ubuntu8.9' : '255.4-1ubuntu8.8', architecture: 'amd64', summary: 'System and service manager', group: 'system', origin: 'Ubuntu', held: false, security: false, ...(!systemUpdated ? { updateVersion: '255.4-1ubuntu8.9', updateGroup: 'system' as const, updateOrigin: 'Ubuntu' } : {}) },
+    { name: 'curl', version: '8.5.0-2ubuntu10.6', architecture: 'amd64', summary: 'Transfer data using URLs', group: 'system', origin: 'Ubuntu', held: false, security: false },
+    { name: 'docker-ce', version: '27.5.1', architecture: 'amd64', summary: 'Container engine', group: 'third-party', origin: 'Docker', held: false, security: false },
+    { name: 'local-tools', version: '1.0', architecture: 'all', summary: 'Local administration tools', group: 'unknown', origin: '', held: true, security: false },
+  ] };
+}
 
 const history: AppUpdateHistoryEntry[] = [];
 export async function getAppUpdateHistory(): Promise<AppUpdateHistoryEntry[]> { return [...history]; }
 
 const progressByRequest = new Map<string, UpdateProgress>();
-const appPlans = new Map<string, { plan: UpdatePlan; done: () => void }>();
-export function rememberAppPlan(plan: UpdatePlan, done: () => void): UpdatePlan { appPlans.set(plan.id, { plan, done }); return plan; }
+const appPlans = new Map<string, { plan: UpdatePlan; done: (clean?: boolean) => void }>();
+export function rememberAppPlan(plan: UpdatePlan, done: (clean?: boolean) => void): UpdatePlan { appPlans.set(plan.id, { plan, done }); return plan; }
 
 const listeners = new Map<string, Set<(progress: UpdateProgress) => void>>();
 
@@ -22,7 +34,7 @@ export async function calculateUpdatePlan(): Promise<UpdatePlan> {
     id: `pln_${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`,
     createdAt: new Date(now).toISOString(),
     expiresAt: new Date(now + 15 * 60_000).toISOString(),
-    packages: [
+    packages: systemUpdated ? [] : [
       {
         name: 'openssl',
         fromVersion: '3.0.13-0ubuntu3.4',
@@ -40,14 +52,14 @@ export async function calculateUpdatePlan(): Promise<UpdatePlan> {
         installedDeltaBytes: 32768,
       },
     ],
-    securityCount: 1,
-    downloadBytes: 4993024,
-    installedDeltaBytes: 32768,
+    securityCount: systemUpdated ? 0 : 1,
+    downloadBytes: systemUpdated ? 0 : 4993024,
+    installedDeltaBytes: systemUpdated ? 0 : 32768,
     rebootRequired: false,
   };
 }
 
-export async function applyUpdatePlan(planId: string): Promise<string> {
+export async function applyUpdatePlan(planId: string, clean = false): Promise<string> {
   const requestId = crypto.randomUUID();
   const progress: UpdateProgress = {
     requestId,
@@ -83,7 +95,8 @@ export async function applyUpdatePlan(planId: string): Promise<string> {
       updatedAt: new Date().toISOString(),
     };
     if (next.done) {
-      appPlan?.done();
+      if (!appPlan) systemUpdated = true;
+      appPlan?.done(clean);
       if (appPlan?.plan.appId && appPlan.plan.operation === 'update') history.unshift({ requestId, appId: appPlan.plan.appId, completedAt: next.updatedAt, success: next.success, packages: appPlan.plan.packages });
     }
     progressByRequest.set(requestId, next);

@@ -22,7 +22,7 @@ const SNAP_DISTANCE = 20;
 const TILE_GAP = 8;
 
 export function dockSpace(viewport: Viewport): number {
-  return viewport.w <= 850 ? Math.min(38, Math.max(20, (viewport.w - 32) / CORE_APP_COUNT - 7)) + 35 : 112;
+  return viewport.w <= 850 ? Math.min(38, Math.max(20, (viewport.w - 32) / (CORE_APP_COUNT + 1) - 7)) + 35 : 96;
 }
 
 export function workArea(viewport: Viewport): Rect {
@@ -40,6 +40,18 @@ export function clampRect(rect: Rect, viewport: Viewport): Rect {
   const h = Math.min(Math.max(0, rect.h), area.h);
   const x = Math.min(Math.max(rect.x, area.x), area.x + area.w - w);
   const y = Math.min(Math.max(rect.y, area.y), area.y + area.h - h);
+  return { x, y, w, h };
+}
+
+export function reachableRect(rect: Rect, viewport: Viewport): Rect {
+  if (viewport.w <= COMPACT_WIDTH) return clampRect(rect, viewport);
+  const area = workArea(viewport);
+  const w = Math.min(Math.max(0, rect.w), area.w);
+  const h = Math.min(Math.max(0, rect.h), area.h);
+  const visibleWidth = Math.min(120, w);
+  const controlsWidth = Math.min(90, Math.max(0, w - visibleWidth));
+  const x = Math.min(Math.max(rect.x, visibleWidth - w), area.w - visibleWidth - controlsWidth);
+  const y = Math.min(Math.max(rect.y, area.y), area.y + area.h - Math.min(24, h));
   return { x, y, w, h };
 }
 
@@ -70,15 +82,15 @@ export function resizeRect(rect: Rect, direction: ResizeDirection, dx: number, d
   const minW = Math.min(minSize.w, area.w);
   const minH = Math.min(minSize.h, area.h);
   let { x, y, w, h } = rect;
-  if (direction.includes('e')) w = Math.min(Math.max(rect.w + dx, minW), area.x + area.w - x);
-  if (direction.includes('s')) h = Math.min(Math.max(rect.h + dy, minH), area.y + area.h - y);
+  if (direction.includes('e')) w = Math.min(Math.max(rect.w + dx, minW), Math.max(rect.w, area.x + area.w - x));
+  if (direction.includes('s')) h = Math.min(Math.max(rect.h + dy, minH), Math.max(rect.h, area.y + area.h - y));
   if (direction.includes('w')) {
-    x = Math.min(Math.max(rect.x + dx, area.x), rect.x + rect.w - minW);
+    x = Math.min(Math.max(rect.x + dx, Math.min(rect.x, area.x)), rect.x + rect.w - minW);
     w = rect.x + rect.w - x;
   }
   if (direction.includes('n')) {
     y = Math.min(Math.max(rect.y + dy, area.y), rect.y + rect.h - minH);
     h = rect.y + rect.h - y;
   }
-  return clampRect({ x, y, w, h }, viewport);
+  return reachableRect({ x, y, w, h }, viewport);
 }

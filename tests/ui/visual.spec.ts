@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../offline';
 import { fileURLToPath } from 'node:url';
 
 for (const theme of ['light', 'dark'] as const) {

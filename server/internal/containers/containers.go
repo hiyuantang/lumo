@@ -398,3 +398,33 @@ func socketAccess(path string, uid uint32) bool {
 	}
 	return false
 }
+
+func (c *Client) CheckCleanUninstall(ctx context.Context) error {
+	raw, err := c.request(ctx, "GET", "/info")
+	if err != nil {
+		return fmt.Errorf("start Docker so its storage location can be checked before a clean uninstall: %w", err)
+	}
+	var info struct {
+		DockerRootDir      string
+		DriverStatus       [][]string
+		LiveRestoreEnabled bool
+		ContainersRunning  int
+	}
+	if err := json.Unmarshal(raw, &info); err != nil {
+		return err
+	}
+	if info.DockerRootDir != "/var/lib/docker" {
+		return errors.New("Docker uses a custom data folder; use normal uninstall and manage that folder separately")
+	}
+	for _, row := range info.DriverStatus {
+		for _, value := range row {
+			if strings.Contains(strings.ToLower(value), "containerd") {
+				return errors.New("Docker uses shared containerd storage; use normal uninstall to preserve other workloads")
+			}
+		}
+	}
+	if info.LiveRestoreEnabled && info.ContainersRunning > 0 {
+		return errors.New("stop running containers before clean uninstall; Docker live restore keeps them running after the engine stops")
+	}
+	return nil
+}

@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+import { expect, test } from '../offline';
+import { piPage } from './pi-fixture';
+
+test('Pi workspace hover controls rename its label, reveal its folder and start a chat there', async ({ page }) => {
+  const fixture = await piPage(page);
+  const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.addInitScript(() => localStorage.setItem('lumo.view.v1:demo:pi:projects', JSON.stringify(['/home/user/second-workspace'])));
+  const folderRequests: string[] = [];
+  await page.route('**/api/v1/files/**', (route) => {
+    const path = new URL(route.request().url()).searchParams.get('path') || '/home/user'; folderRequests.push(path);
+    return route.fulfill({ json: { ok: true, data: { path, entries: [] } } });
+  });
+  await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-pi').click();
+  await expect(page.getByTestId('pi-prompt')).toBeEnabled();
+  const projects = page.getByRole('navigation', { name: 'Pi projects', exact: true });
+  const row = projects.locator('.pi-project-row').filter({ hasText: 'second-workspace' });
+  await row.hover();
+  const options = projects.getByRole('button', { name: 'Workspace options for second-workspace' });
+  const newChat = projects.getByRole('button', { name: 'New chat in second-workspace', exact: true });
+  await expect(options).toHaveCSS('pointer-events', 'auto');
+  expect((await options.boundingBox())!.x).toBeGreaterThan((await row.boundingBox())!.x + 80);
+  expect((await newChat.boundingBox())!.x).toBeGreaterThan((await options.boundingBox())!.x);
+  await options.click();
+  await expect(page.getByRole('menuitem', { name: 'Edit name' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Reveal in Files' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Archive chats' })).toBeVisible();
+  await page.screenshot({ path: '/tmp/lumo-pi-workspace-menu-light.png', animations: 'disabled' });
+  await page.getByRole('menuitem', { name: 'Edit name' }).click();
+  await page.getByRole('textbox', { name: 'Workspace name' }).fill('Research');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(projects.locator('.pi-project-row').filter({ hasText: 'Research' })).toHaveAttribute('title', '/home/user/second-workspace');
+  await page.getByRole('button', { name: 'Workspace options for Research' }).click();
+  await page.getByRole('menuitem', { name: 'Reveal in Files' }).click();
+  await expect.poll(() => folderRequests.includes('/home/user/second-workspace')).toBe(true);
+  await page.getByTestId('dock-app-pi').click();
+  await page.getByTestId('pi-prompt').fill('Keep my current draft');
+  await page.getByRole('button', { name: 'New chat in Research', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('unsent message');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(fixture.starts).toHaveLength(1);
+  await page.getByTestId('pi-prompt').fill('');
+  await page.getByRole('button', { name: 'New chat in Research', exact: true }).click();
+  await expect.poll(() => fixture.starts.at(-1)?.project).toBe('/home/user/second-workspace');
+  expect(fixture.starts.at(-1)?.session).toBe('');
+  await expect(page.getByTestId('pi-project')).toContainText('Research');
+  await page.reload(); await expect(page.getByTestId('pi-prompt')).toBeEnabled();
+  await expect(projects.locator('.pi-project-row').filter({ hasText: 'Research' })).toBeVisible();
+  await projects.locator('.pi-project-row').filter({ hasText: 'Research' }).hover();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: '/tmp/lumo-pi-workspace-dark.png', animations: 'disabled' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: '/tmp/lumo-pi-workspace-narrow.png', animations: 'disabled' });
+  expect(errors).toEqual([]);
+});
+
+test('Pi archives only the selected workspace chats and reopens once without losing its draft', async ({ page }) => {
+  const fixture = await piPage(page); const moved: string[] = [];
+  await page.route('**/api/v1/pi/sessions?**', (route) => route.fulfill({ json: { ok: true, data: { sessions: [{ id: 'first.jsonl', name: 'First', modified: '2026-09-28' }, { id: 'second.jsonl', name: 'Second', modified: '2026-09-27' }].filter((item) => !moved.includes(item.id)) } } }));
+  await page.route('**/api/v1/pi/sessions/archive', (route) => {
+    const body = route.request().postDataJSON(); expect(body.project).toBe('/home/user'); moved.push(body.session);
+    return route.fulfill({ json: { ok: true, data: { moved: true } } });
+  });
+  await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-pi').click();
+  await expect(page.getByTestId('pi-prompt')).toBeEnabled();
+  await page.getByTestId('pi-prompt').fill('Keep this draft');
+  await page.getByRole('button', { name: 'Workspace options for user', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Archive chats', exact: true }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('2 saved conversations');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click(); expect(moved).toEqual([]);
+  await page.getByRole('button', { name: 'Workspace options for user', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Archive chats', exact: true }).click();
+  await page.getByRole('button', { name: 'Archive 2 chats', exact: true }).click();
+  await expect.poll(() => moved.length).toBe(2);
+  await expect(page.getByTestId('pi-prompt')).toBeEnabled();
+  await expect(page.getByTestId('pi-prompt')).toHaveValue('Keep this draft');
+  await expect(page.getByRole('navigation', { name: 'Pi projects', exact: true })).toContainText('No chats yet');
+  await expect(page.getByRole('navigation', { name: 'Recent Pi chats' })).toContainText('No recent chats');
+  expect(fixture.starts).toHaveLength(2); expect(fixture.starts.at(-1)?.session).toBe('');
+});

@@ -1,5 +1,53 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../offline';
+
+for (const width of [1440, 390]) {
+  test(`terminal tabs follow theme changes without losing output at ${width}px`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/');
+    await page.getByTestId('login-username').fill('demo');
+    await page.getByTestId('login-password').fill('demo');
+    await page.getByTestId('login-submit').click();
+    await page.getByTestId('dock-app-terminal').click();
+    const terminal = page.getByTestId('app-terminal');
+    await page.getByTestId('terminal-input').fill('echo KEEP_THEME_SESSION');
+    await page.getByTestId('terminal-input').press('Enter');
+    await expect(terminal).toContainText(/echo KEEP_THEME_SESSION\s*KEEP_THEME_SESSION/);
+    await page.getByTestId('terminal-new-tab').click();
+    await expect(terminal.locator('.xterm')).toHaveCount(2);
+    await page.getByTestId('dock-app-settings').click();
+    await page.getByTestId('settings-section-appearance').click();
+    for (const theme of ['dark', 'light', 'dark'] as const) {
+      await page.getByTestId(`settings-theme-${theme}`).click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(terminal.locator('.xterm-scrollable-element')).toHaveCount(2);
+      for (const viewport of await terminal.locator('.xterm-scrollable-element').all()) {
+        await expect(viewport).toHaveCSS('background-color', theme === 'dark' ? 'rgb(16, 16, 16)' : 'rgb(233, 233, 233)');
+      }
+    }
+    await page.getByTestId('window-close-settings').click();
+    await terminal.locator('.terminal-tab-label').first().click();
+    await expect(terminal.locator('.terminal-pane:not(.hidden)')).toContainText(/echo KEEP_THEME_SESSION\s*KEEP_THEME_SESSION/);
+    await page.getByTestId('terminal-new-tab').click();
+    await expect(terminal.locator('.terminal-pane:not(.hidden) .xterm-scrollable-element')).toHaveCSS('background-color', 'rgb(16, 16, 16)');
+    await page.reload();
+    await expect(terminal.locator('.xterm-scrollable-element')).toHaveCSS('background-color', 'rgb(16, 16, 16)');
+    await page.getByTestId('dock-app-settings').click();
+    await page.getByTestId('settings-section-appearance').click();
+    await page.getByTestId('settings-theme-auto').click();
+    for (const theme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await expect(terminal.locator('.xterm-scrollable-element')).toHaveCSS('background-color', theme === 'dark' ? 'rgb(16, 16, 16)' : 'rgb(233, 233, 233)');
+    }
+    await page.getByTestId('window-close-settings').click();
+    await expect(terminal.locator('.xterm-rows span').first()).toHaveCSS('color', 'rgb(245, 245, 245)');
+    await page.screenshot({ path: `/tmp/lumo-terminal-dark-${width}.png` });
+    expect(errors).toEqual([]);
+  });
+}
 
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme} surfaces and matte buttons keep readable contrast`, async ({ page }) => {

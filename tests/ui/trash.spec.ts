@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../offline';
 
 test('Trash opens from Files, restores items and confirms permanent deletion', async ({ page }) => {
   const errors: string[] = [];

@@ -29,6 +29,7 @@ var (
 
 type Package struct {
 	Name                string `json:"name"`
+	Architecture        string `json:"architecture,omitempty"`
 	FromVersion         string `json:"fromVersion"`
 	ToVersion           string `json:"toVersion"`
 	Security            bool   `json:"security"`
@@ -300,13 +301,23 @@ func parsePlanOutput(output string) []Package {
 			continue
 		}
 		packages = append(packages, Package{
-			Name:        match[1],
-			FromVersion: match[2],
-			ToVersion:   match[3],
-			Security:    strings.Contains(strings.ToLower(match[4]), "-security"),
+			Name:         match[1],
+			Architecture: planArchitecture(match[4]),
+			FromVersion:  match[2],
+			ToVersion:    match[3],
+			Security:     strings.Contains(strings.ToLower(match[4]), "-security"),
 		})
 	}
 	return packages
+}
+
+func planArchitecture(detail string) string {
+	start := strings.LastIndex(detail, "[")
+	end := strings.LastIndex(detail, "]")
+	if start >= 0 && end > start {
+		return detail[start+1 : end]
+	}
+	return ""
 }
 
 var removalLinePattern = regexp.MustCompile(`^Remv\s+(\S+)\s+\[([^\]]+)\]`)
@@ -345,7 +356,12 @@ func (w *Worker) packageSizes(ctx context.Context, pkg Package) (int64, int64) {
 	return download, installedNew - installedOld
 }
 
-func (w *Worker) StartApply(planID, expectedPlanID, requestID string, done func(Progress)) (Progress, bool, error) {
+type ApplyHooks struct {
+	Before func(Plan) error
+	After  func(Plan) error
+}
+
+func (w *Worker) StartApply(planID, expectedPlanID, requestID string, done func(Progress), hooks ...ApplyHooks) (Progress, bool, error) {
 	if !w.Available() {
 		return Progress{}, false, ErrUnavailable
 	}
@@ -379,16 +395,32 @@ func (w *Worker) StartApply(planID, expectedPlanID, requestID string, done func(
 	}
 	w.progress[requestID] = progress
 	w.mu.Unlock()
-	go w.apply(plan, requestID, done)
+	hook := ApplyHooks{}
+	if len(hooks) > 0 {
+		hook = hooks[0]
+	}
+	go w.apply(plan, requestID, done, hook)
 	return progress, false, nil
 }
 
-func (w *Worker) apply(plan Plan, requestID string, done func(Progress)) {
+func (w *Worker) apply(plan Plan, requestID string, done func(Progress), hooks ApplyHooks) {
 	w.opMu.Lock()
 	defer w.opMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 	defer cancel()
+	if hooks.Before != nil {
+		if err := hooks.Before(plan); err != nil {
+			done(w.finish(requestID, false, err.Error()))
+			return
+		}
+	}
 	if len(plan.Packages) == 0 {
+		if hooks.After != nil {
+			if err := hooks.After(plan); err != nil {
+				done(w.finish(requestID, false, err.Error()))
+				return
+			}
+		}
 		progress := w.finish(requestID, true, "")
 		done(progress)
 		return
@@ -435,6 +467,9 @@ func (w *Worker) apply(plan Plan, requestID string, done func(Progress)) {
 	if plan.Operation == "uninstall" {
 		args = []string{"-y", "-o", "Dpkg::Use-Pty=0", "remove", "--"}
 	}
+	if plan.AppID != "" && plan.Operation == "install" {
+		args = append([]string{"-o", "Dpkg::Options::=--force-confmiss"}, args...)
+	}
 	args = append(args, targets...)
 	w.setProgress(requestID, "downloading", 2, "Downloading packages")
 	if plan.Operation == "uninstall" {
@@ -466,6 +501,13 @@ func (w *Worker) apply(plan Plan, requestID string, done func(Progress)) {
 		progress := w.finish(requestID, false, errorText)
 		done(progress)
 		return
+	}
+	if hooks.After != nil {
+		w.setProgress(requestID, "cleaning", 98, "Moving app settings and data to Trash")
+		if err := hooks.After(plan); err != nil {
+			done(w.finish(requestID, false, "App removed, but cleanup could not finish: "+err.Error()))
+			return
+		}
 	}
 	progress := w.finish(requestID, true, "")
 	done(progress)

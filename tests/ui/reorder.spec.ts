@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../offline';
 
 async function login(page: Page) {
   await page.goto('/');
@@ -20,7 +20,7 @@ test('terminal tabs have stable names and reorder without replacing their sessio
   await page.getByTestId('terminal-new-tab').click();
   const secondId = await tabs.last().getAttribute('data-testid');
   const secondName = await tabs.last().getAttribute('aria-label');
-  expect(firstName).not.toMatch(/shell|opencode|\d/);
+  expect(firstName).not.toMatch(/shell|pi|\d/);
   expect(secondName).not.toBe(firstName);
   await page.getByTestId(secondId!).dragTo(page.getByTestId(firstId!));
   await expect(tabs.first()).toHaveAttribute('data-testid', secondId!);

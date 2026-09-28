@@ -1,0 +1,40 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.settings-row + .settings-row,
+.settings-editor + .settings-row,
+.settings-editor + .settings-editor,
+.settings-folder-row + .settings-folder-row,
+.network-detail + .network-detail,
+.server-app-pair,
+.server-app-mount,
+.docker-list-bar,
+.trash-row,
+.services-unit-files pre,
+.services-unit-files details > p {
+  border-image: linear-gradient(to right,
+    transparent 0 var(--divider-inset),
+    var(--border) var(--divider-inset) calc(100% - var(--divider-inset)),
+    transparent calc(100% - var(--divider-inset))) 1;
+}
+
+.docker-table td { position: relative; border-top-color: transparent; }
+.monitor-processes td { position: relative; }
+.monitor-processes th, .monitor-processes td { border-bottom-color: transparent; }
+.docker-table td::after,
+.monitor-processes th::after,
+.monitor-processes td::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+.docker-table td::after { top: -1px; }
+.monitor-processes th::after, .monitor-processes td::after { bottom: 0; }
+.docker-table td:first-child::after,
+.monitor-processes th:first-child::after,
+.monitor-processes td:first-child::after { left: var(--divider-inset); }
+.docker-table td:last-child::after,
+.monitor-processes th:last-child::after,
+.monitor-processes td:last-child::after { right: var(--divider-inset); }

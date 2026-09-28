@@ -14,7 +14,7 @@ func TestProgramAndProjectValidation(t *testing.T) {
 	m := NewManager()
 	for _, opts := range []OpenOptions{
 		{Program: "arbitrary-command"},
-		{Program: "opencode", Shell: "/bin/sh"},
+		{Program: "pi", Shell: "/bin/sh"},
 		{Directory: "relative/project"},
 		{Directory: filepath.Join(t.TempDir(), "missing")},
 	} {

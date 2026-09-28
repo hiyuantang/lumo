@@ -1,0 +1,30 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.desktop-root.overview-active > .desktop > .window { visibility: hidden !important; }
+.window-overview { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; color: var(--text); overflow: hidden; }
+.window-overview::backdrop { background: transparent; }
+.overview-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.overview-done { position: absolute; top: 24px; right: 24px; }
+.overview-empty { position: absolute; top: 45%; width: 100%; text-align: center; color: var(--text-muted); }
+.overview-window { position: absolute; display: block; padding: 0; border: 0; border-radius: 10px; transform-origin: top left; text-align: left; outline: none; }
+.overview-preview { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; pointer-events: none; border-radius: inherit; box-shadow: 0 12px 36px #0003; outline: 2px solid transparent; outline-offset: 4px; transition: outline-color 140ms; }
+.overview-window:hover .overview-preview, .overview-window:focus-within .overview-preview { outline-color: #529bff; }
+.overview-preview > span { display: block; position: relative; flex-shrink: 0; border-radius: inherit; overflow: hidden; }
+.overview-caption { position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); max-width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 5px 10px; min-width: 0; border-radius: 8px; background: var(--surface-raised); box-shadow: 0 2px 12px #0003; opacity: 0; transition: opacity 140ms; pointer-events: none; }
+.overview-window:hover .overview-caption, .overview-window:focus-within .overview-caption { opacity: 1; }
+.overview-icon { width: 22px; height: 22px; flex-shrink: 0; }
+.overview-caption strong { font-size: 12px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.overview-caption small { font-size: 11px; color: var(--text-muted); }
+.window-overview[data-closing] { pointer-events: none; }
+.window-overview[data-closing] .overview-caption { opacity: 0; transition: opacity 100ms; }
+.window-overview[data-closing] .overview-preview { outline-color: transparent; }
+.motion-reduced .overview-caption { transition: none; }
+.motion-reduced .overview-preview { transition: none; }
+.overview-preview .dock-window-snapshot { animation: none; }
+
+.overview-select { display: block; width: 100%; height: 100%; border-radius: inherit; text-align: left; outline: none; }
+.overview-close { position: absolute; top: 6px; right: 6px; z-index: 1; width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface-raised); color: var(--text); box-shadow: 0 2px 8px #0003; opacity: 0; pointer-events: none; transition: opacity 140ms, background-color 140ms; }
+.overview-window:hover .overview-close, .overview-window:focus-within .overview-close { opacity: 1; pointer-events: auto; }
+.overview-close:hover { background: var(--danger); color: white; }
+.window-overview[data-closing] .overview-close { opacity: 0; pointer-events: none; }
+.motion-reduced .overview-close { transition: none; }
+@media (hover: none) { .overview-close { opacity: 1; pointer-events: auto; } }

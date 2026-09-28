@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { IconRefresh } from '../shell/icons';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { AppLogs } from '../api/server-apps';
@@ -34,7 +35,7 @@ export function AppConfirmation({ title, children, confirm, onConfirm, onCancel,
 
 export function AppLogView({ logs, loading, error, onRefresh }: { logs: AppLogs | null; loading: boolean; error: string | null; onRefresh: () => void }) {
   return <section className="server-app-log-section" aria-label="Logs">
-    <div className="server-app-section-heading"><h3>Recent logs</h3><button className="btn" type="button" onClick={onRefresh} disabled={loading}>Refresh</button></div>
+    <div className="server-app-section-heading"><h3>Recent logs</h3><button aria-label="Refresh" title="Refresh" className="btn btn-icon" type="button" onClick={onRefresh} disabled={loading}><IconRefresh size={16}/></button></div>
     {error && <p role="alert" className="server-app-error">{error}</p>}
     <pre className="server-app-logs" data-testid="server-app-logs" tabIndex={0}>{loading && !logs ? 'Loading logs…' : logs?.text || 'No entries.'}</pre>
     {logs?.truncated && <p className="server-app-muted">Log truncated.</p>}

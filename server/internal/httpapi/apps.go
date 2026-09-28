@@ -7,6 +7,7 @@ import (
 	"lumo/server/internal/terminal"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"time"
@@ -20,7 +21,7 @@ func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
 	WriteData(w, map[string]any{"canInstall": exists("/usr/bin/apt-get") && s.deps.BrokerSocket != "", "apps": []any{
 		map[string]any{"id": "docker", "installed": exists("/usr/bin/dockerd")},
 		map[string]any{"id": "nginx", "installed": exists("/usr/sbin/nginx")},
-		map[string]any{"id": "opencode", "installed": terminal.OpenCodePath() != "", "canUninstall": removableOpenCode(terminal.OpenCodePath())},
+		map[string]any{"id": "pi", "installed": terminal.PiPath() != "", "canUninstall": removablePi(terminal.PiPath()), "canInstall": piNPMAvailable(), "canUpdate": removablePi(terminal.PiPath())},
 	}})
 }
 
@@ -41,40 +42,74 @@ func (s *Server) handleAppPlan(w http.ResponseWriter, r *http.Request) {
 	s.forwardBrokerAction(w, r, brokerAction{RequestID: req.RequestID, Action: "apps.plan", Arguments: map[string]any{"appId": req.AppID, "operation": req.Operation}}, 2*time.Minute)
 }
 
-func removableOpenCode(path string) bool {
+func removablePi(path string) bool {
 	u, err := user.Current()
 	if err != nil || path == "" {
 		return false
 	}
-	if path != filepath.Join(u.HomeDir, ".opencode/bin/opencode") && path != filepath.Join(u.HomeDir, ".local/bin/opencode") {
-		return false
-	}
-	resolved, err := filepath.EvalSymlinks(path)
-	return err == nil && resolved == path
+	return path == filepath.Join(u.HomeDir, ".local/share/lumo/pi/bin/pi")
+
 }
 
-func (s *Server) handleOpenCodeUninstall(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePiUninstall(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RequestID string `json:"requestId"`
+		Clean     bool   `json:"clean"`
 	}
 	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil || !validRequestID(req.RequestID) {
 		WriteError(w, NewError(CodeValidationFailed, "requestId is required."))
 		return
 	}
 	s.mutate(w, req.RequestID, func(w http.ResponseWriter) {
-		path := terminal.OpenCodePath()
-		if path == "" {
+		if !s.pi.operation.TryLock() {
+			WriteError(w, NewError(CodeConflict, "Wait for the Pi operation to finish."))
+			return
+		}
+		defer s.pi.operation.Unlock()
+		if s.piRunning() {
+			WriteError(w, NewError(CodeConflict, "Close Pi projects before uninstalling."))
+			return
+		}
+		path := terminal.PiPath()
+		if path == "" && !req.Clean {
 			WriteData(w, map[string]any{"uninstalled": true})
 			return
 		}
-		if !removableOpenCode(path) {
-			WriteError(w, NewError(CodeForbidden, "Uninstall this copy of OpenCode using the package manager that installed it."))
+		if path != "" && !removablePi(path) {
+			WriteError(w, NewError(CodeForbidden, "Uninstall this copy of Pi using the package manager that installed it."))
 			return
 		}
-		if _, err := files.Trash(path); err != nil {
+		paths := []string{filepath.Join(s.pi.home, ".local/share/lumo/pi")}
+		if req.Clean {
+			var err error
+			paths, err = piRemovalPaths(path)
+			if err != nil {
+				WriteError(w, err)
+				return
+			}
+		}
+		if err := files.TrashMany(paths); err != nil {
 			WriteError(w, err)
 			return
 		}
-		WriteData(w, map[string]any{"uninstalled": terminal.OpenCodePath() == ""})
+		WriteData(w, map[string]any{"uninstalled": terminal.PiPath() == ""})
 	})
 }
+
+func piRemovalPaths(binary string) ([]string, error) {
+	u, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+	paths := []string{}
+	for _, path := range []string{filepath.Join(u.HomeDir, ".local/share/lumo/pi"), filepath.Join(u.HomeDir, ".pi/agent"), filepath.Join(u.HomeDir, ".local/state/lumo/pi-sessions")} {
+		if _, err := os.Lstat(path); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+		paths = append(paths, path)
+	}
+	return paths, nil
+}
+func piNPMAvailable() bool { _, err := exec.LookPath("npm"); return err == nil }

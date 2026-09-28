@@ -114,3 +114,28 @@ func TestDockerResourceValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanUninstallChecksActualDockerStorageAndLiveRestore(t *testing.T) {
+	for _, raw := range []string{
+		`{"DockerRootDir":"/var/lib/docker","DriverStatus":[["Backing Filesystem","extfs"]]}`,
+		`{"DockerRootDir":"/srv/docker"}`,
+		`{"DockerRootDir":"/var/lib/docker","DriverStatus":[["driver-type","io.containerd.snapshotter.v1"]]}`,
+		`{"DockerRootDir":"/var/lib/docker","LiveRestoreEnabled":true,"ContainersRunning":1}`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/info" {
+					t.Error(r.URL.Path)
+				}
+				_, _ = w.Write([]byte(raw))
+			}))
+			defer server.Close()
+			client := &Client{base: server.URL, http: server.Client()}
+			err := client.CheckCleanUninstall(context.Background())
+			allowed := strings.Contains(raw, "extfs")
+			if (err == nil) != allowed {
+				t.Fatalf("allowed=%v err=%v", allowed, err)
+			}
+		})
+	}
+}

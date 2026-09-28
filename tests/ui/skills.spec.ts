@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../offline';
 
 test('Skills presents compact descriptions and rendered instructions with a single Edit action', async ({ page }) => {
   await page.goto('/');
@@ -42,7 +42,7 @@ test('App Library keeps refresh in the View menu', async ({ page }) => {
   await page.getByRole('menuitem', { name: 'Refresh', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 780 });
   await expect(refresh).toHaveCount(0);
-  await expect(page.getByTestId('library-opencode')).toBeVisible();
+  await expect(page.getByTestId('library-pi')).toBeVisible();
 });
 
 

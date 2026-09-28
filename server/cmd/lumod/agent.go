@@ -117,7 +117,7 @@ func runAgent(args []string) {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
-			if hub.Connections() > 0 || terminals.Count() > 0 {
+			if hub.Connections() > 0 || terminals.Count() > 0 || api.ActiveOperations() > 0 {
 				continue
 			}
 			if time.Since(time.Unix(lastActivity.Load(), 0)) > agentIdleTimeout {

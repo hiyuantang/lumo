@@ -4,7 +4,9 @@ import { useWindowMenus, type AppCommand } from './appMenus';
 import { editCommands } from './editCommands';
 import { windowTitle } from './WindowContext';
 import { APPS } from '../apps/registry';
-import { useNow, useShell } from './ShellContext';
+import { useServerClock } from './ServerClockContext';
+import { timezoneLabel } from '../utils/timezone';
+import { useShell } from './ShellContext';
 import { canSnap, COMPACT_WIDTH, MENUBAR_H } from './windowGeometry';
 import '../styles/menubar.css';
 
@@ -14,7 +16,7 @@ const order: MenuId[] = ['app', 'file', 'edit', 'view', 'window'];
 export function MenuBar() {
   const { state, actions } = useShell();
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
-  const now = useNow(1000);
+  const { instant, timezone } = useServerClock();
   const barRef = useRef<HTMLElement>(null);
 
   const focusedWindow = state.focused ? state.windows[state.focused] : null;
@@ -84,7 +86,7 @@ export function MenuBar() {
     ] },
     file: { label: 'File', items: [
       ...combine([
-        { id: 'new-window', label: 'New Window', disabled: !focusedWindow || !['preview', 'opencode'].includes(focusedWindow.appId), run: () => focusedWindow?.appId === 'preview' ? actions.newPreviewWindow() : actions.newOpenCodeWindow() },
+        { id: 'new-window', label: 'New Window', disabled: !focusedWindow || !['preview', 'pi'].includes(focusedWindow.appId), run: () => focusedWindow?.appId === 'preview' ? actions.newPreviewWindow() : actions.newPiWindow() },
         disabled('new-file', 'New File'), disabled('new-folder', 'New Folder'),
         { ...(!focusedWindow ? { id: 'open', label: 'Open Files', run: () => actions.openApp('files') } : disabled('open', 'Open File…')), separatorAbove: true },
         disabled('upload', 'Upload File…'), disabled('download', 'Download'), disabled('save', 'Save'),
@@ -224,14 +226,15 @@ export function MenuBar() {
         <button
           type="button"
           className="menubar-button menubar-clock"
+          title={timezone ? `Server time · ${timezoneLabel(timezone)}` : 'Server time unavailable'}
           data-testid="notifications-button"
           aria-label={state.unread > 0 ? `Notifications, ${state.unread} unread` : 'Notifications'}
           aria-expanded={state.notifOpen}
           onClick={() => actions.setNotifOpen(!state.notifOpen)}
         >
-<time dateTime={new Date(now).toISOString()}>
-          <span className="menubar-date">{new Date(now).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}</span>
-          {new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+<time data-testid="server-menubar-clock" dateTime={instant?.toISOString()}>
+          {instant ? <><span className="menubar-date">{instant.toLocaleDateString([], { timeZone: timezone, weekday: 'short', month: 'short', day: 'numeric' })}{' '}</span>
+          {instant.toLocaleTimeString([], { timeZone: timezone, hour: '2-digit', minute: '2-digit' })}</> : '—'}
         </time>
           {state.unread > 0 && (
             <span className="menubar-badge" aria-hidden="true" data-testid="notifications-badge">

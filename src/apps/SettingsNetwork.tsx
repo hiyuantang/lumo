@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { IconRefresh } from '../shell/icons';
 import { useAppMenus } from '../shell/appMenus';
 import { useEffect, useState } from 'react';
 import { describeError, getDataSource, type NetworkInterface, type NetworkSnapshot } from '../api/source';
@@ -61,7 +62,7 @@ export function SettingsNetwork({ active = true }: { active?: boolean }) {
     <div className="settings-network" data-testid="app-network">
       <header className="settings-heading">
         <div><h2>Network</h2></div>
-        <button type="button" className="btn" data-testid="network-refresh" disabled={loading} onClick={() => { setCopyStatus(''); setRefresh((value) => value + 1); }}>{loading ? 'Refreshing…' : 'Refresh'}</button>
+        <button aria-label="Refresh" title="Refresh" type="button" className="btn btn-icon" data-testid="network-refresh" disabled={loading} onClick={() => { setCopyStatus(''); setRefresh((value) => value + 1); }}><IconRefresh size={16}/></button>
       </header>
       <p className="network-note">Manage network settings through SSH or your server’s network tools.</p>
       {error ? <p className="network-error" role="alert">Could not refresh network details. {error}{snapshot ? ' Showing the last available information.' : ''}</p> : null}

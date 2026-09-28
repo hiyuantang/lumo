@@ -6,7 +6,10 @@ const snapshots = new WeakMap<HTMLElement, ShadowRoot>();
 
 function copyWindow(source: HTMLElement, host: HTMLElement) {
   const hidden = source.hidden;
+  const display = source.style.getPropertyValue('display');
+  const displayPriority = source.style.getPropertyPriority('display');
   source.hidden = false;
+  source.style.setProperty('display', 'flex', 'important');
   try {
     const width = source.offsetWidth;
     const height = source.offsetHeight;
@@ -55,15 +58,17 @@ function copyWindow(source: HTMLElement, host: HTMLElement) {
     return fit;
   } finally {
     source.hidden = hidden;
+    if (display) source.style.setProperty('display', display, displayPriority);
+    else source.style.removeProperty('display');
   }
 }
 
-export function WindowThumbnail({ win }: { win: WindowState }) {
+export function WindowThumbnail({ win, overview = false }: { win: WindowState; overview?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
     const host = ref.current;
     const source = document.querySelector<HTMLElement>(`[data-testid="window-${win.id}"]`);
-    if (!host || !source || !win.minimized) return;
+    if (!host || !source || (!win.minimized && !overview)) return;
     let fit = copyWindow(source, host);
     const resize = new ResizeObserver(() => fit?.());
     resize.observe(host.parentElement!);
@@ -74,6 +79,6 @@ export function WindowThumbnail({ win }: { win: WindowState }) {
     });
     observer.observe(source, { childList: true, subtree: true, characterData: true });
     return () => { resize.disconnect(); observer.disconnect(); window.clearTimeout(timer); };
-  }, [win.id, win.minimized]);
+  }, [win.id, win.minimized, win.w, win.h, overview]);
   return <span ref={ref} className="dock-window-snapshot" data-window-thumbnail aria-hidden="true" />;
 }

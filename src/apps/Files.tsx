@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useFileSelection } from './useFileSelection';
+import { useFileDrop, startFileDrag, endFileDrag } from '../shell/fileDrag';
 import { useAppMenus } from '../shell/appMenus';
 import { folderPath } from '../utils/folder-path';
 import { copyText } from '../utils/clipboard';
@@ -7,14 +9,13 @@ import { useReorder } from '../shell/useReorder';
 import { useAppPreference, useAppState } from '../shell/useAppState';
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { base64ToBytes, bytesToBase64 } from '../api/encoding';
-import { describeError, getDataSource, type FsEntry } from '../api/source';
+import { describeError, getDataSource, type FileLocation as StandardLocation, type FsEntry } from '../api/source';
 import { ApiError } from '../api/transport';
 import { FileDetails } from './FileDetails';
 import { Trash } from './Trash';
-import { formatSize } from '../utils/file-format';
 import { useContextMenu } from '../shell/ContextMenu';
 import { useShell } from '../shell/ShellContext';
-import { IconTrash, IconChevronRight, IconFile, IconFolder, IconHome, IconUpload, IconSidebar } from '../shell/icons';
+import { IconTrash, IconChevronRight, IconFile, IconFolder, IconHome, IconUpload, IconSidebar, IconDownload, IconMonitor } from '../shell/icons';
 import '../styles/apps.css';
 import '../styles/files.css';
 
@@ -32,13 +33,14 @@ export function Files() {
   const [sortBy, setSortBy] = useAppPreference<'name' | 'type' | 'size' | 'modified'>('files', 'sort-by', 'name', ['name', 'type', 'size', 'modified']);
   const [sortDirection, setSortDirection] = useAppPreference<'ascending' | 'descending'>('files', 'sort-direction', 'ascending', ['ascending', 'descending']);
   const [entries, setEntries] = useState<FsEntry[]>([]);
+  const [standardLocations, setStandardLocations] = useState<StandardLocation[]>([]);
   const [pinnedFolders, setPinnedFolders] = useAppPreference<string[]>('files', 'pinned-folders', []);
   const reorderPinned = useReorder(pinnedFolders, setPinnedFolders, (path) => path, 'vertical');
   const [location, setLocation] = useAppState<'folder' | 'trash'>('files', 'location', 'folder', ['folder', 'trash']);
   const [navigation, setNavigation] = useState<{ back: FileLocation[]; forward: FileLocation[] }>({ back: [], forward: [] });
   const [listError, setListError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
-  const [selectedName, setSelectedName] = useAppState<string | null>('files', 'selection', null);
+  const drop = useFileDrop();
   const [detailsOpen, setDetailsOpen] = useAppState<boolean>('files', 'details', false);
   const [creation, setCreation] = useState<{ kind: 'file' | 'directory'; name: string; busy: boolean; error: string | null } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useAppPreference<boolean>('files', 'sidebar-collapsed', () => window.innerWidth < 700);
@@ -52,6 +54,12 @@ export function Files() {
     return () => window.clearTimeout(timer);
   }, [copiedPath]);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const navigationNonce = useRef<number>();
+  useEffect(() => {
+    if (state.navigation?.target !== 'files' || state.navigation.nonce === navigationNonce.current) return;
+    navigationNonce.current = state.navigation.nonce;
+    navigateTo(state.navigation.path);
+  }, [state.navigation]);
 
   useEffect(() => {
     if (location === 'trash') return;
@@ -80,13 +88,24 @@ export function Files() {
     };
   }, [source, path, refreshNonce, state.fileRevision, location]);
 
+  useEffect(() => {
+    let alive = true;
+    source.listFileLocations().then((locations) => {
+      if (alive) setStandardLocations(locations);
+    }).catch(() => { if (alive) setStandardLocations([]); });
+    return () => { alive = false; };
+  }, [source, refreshNonce, state.fileRevision]);
+
   const visibleEntries = entries.filter((entry) => showHidden || !entry.name.startsWith('.')).sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1;
     const names = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
     const value = sortBy === 'type' ? fileType(a).localeCompare(fileType(b)) : sortBy === 'size' ? a.size - b.size : sortBy === 'modified' ? (Date.parse(a.modifiedAt ?? a.modified) || 0) - (Date.parse(b.modifiedAt ?? b.modified) || 0) : names;
     return (value || names) * (sortDirection === 'ascending' ? 1 : -1);
   });
-  const selected = visibleEntries.find((e) => e.name === selectedName) ?? null;
+  const selection = useFileSelection(visibleEntries.map((entry) => entry.name));
+  const { selectedNames, selectOne: setSelectedName } = selection;
+  const selectedEntries = visibleEntries.filter((entry) => selectedNames.includes(entry.name));
+  const selected = selectedEntries.length === 1 ? selectedEntries[0] : null;
 
   const absolutePath = source.absolutePath(selected ? [...path, selected.name] : path);
   const pathSegments = absolutePath.split('/').filter(Boolean);
@@ -154,7 +173,7 @@ export function Files() {
       await source.createEntry([...path, name], creation.kind);
       setCreation(null);
       setSelectedName(name);
-      refresh();
+      actions.filesChanged();
     } catch (err) { setCreation({ ...creation, busy: false, error: err instanceof ApiError && err.code === 'conflict' ? 'A file or folder with this name already exists.' : describeError(err) }); }
   }
 
@@ -234,7 +253,7 @@ export function Files() {
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       await source.writeFile([...path, file.name], bytesToBase64(bytes), null);
-      refresh();
+      actions.filesChanged();
     } catch (err) {
       actions.notify('Upload failed', describeError(err));
     } finally {
@@ -288,15 +307,23 @@ export function Files() {
           <button
             type="button"
             className={`files-location${location === 'folder' && path.join('/') === source.homePath().join('/') ? ' selected' : ''}`}
+            {...drop(source.homePath())}
             data-testid="files-location-home" aria-label="Home" title="Home"
             aria-current={location === 'folder' && path.join('/') === source.homePath().join('/') ? 'location' : undefined}
             onClick={() => navigateTo(source.homePath())}
-            onContextMenu={(event) => openContextMenu(event, [{ label: 'Open in OpenCode', run: () => actions.openOpenCode(source.absolutePath(source.homePath())) }])}
+            onContextMenu={(event) => openContextMenu(event, [{ label: 'Open in Pi', run: () => actions.openPi(source.absolutePath(source.homePath())) }])}
           >
             <IconHome size={19} />
             <span>Home</span>
           </button>
-          <button type="button" className={`files-location${location === 'trash' ? ' selected' : ''}`} aria-current={location === 'trash' ? 'location' : undefined} data-testid="files-location-trash" aria-label="Trash" title="Trash" onClick={() => navigateTo(path, 'trash')}><IconTrash size={19}/><span>Trash</span></button>
+          {standardLocations.filter((item) => !pinnedFolders.some((key) => source.absolutePath(key.split('/')) === item.path)).map((item) => {
+            const home = source.absolutePath(source.homePath());
+            const destination = folderPath(item.path, home, home, source.homePath());
+            const active = location === 'folder' && source.absolutePath(path) === item.path;
+            const Icon = item.id === 'documents' ? IconFile : item.id === 'download' ? IconDownload : item.id === 'desktop' ? IconMonitor : IconFolder;
+            return <button type="button" key={item.id} className={`files-location${active ? ' selected' : ''}`} {...drop(destination)} data-testid={`files-location-${item.id}`} aria-label={item.name} title={`${item.name} — ${item.path}`} aria-current={active ? 'location' : undefined} onClick={() => navigateTo(destination)} onContextMenu={(event) => openContextMenu(event, [{ label: 'Open Folder', run: () => navigateTo(destination) }, { label: 'Open in Pi', run: () => actions.openPi(item.path) }, pinAction(destination)])}><Icon size={19}/><span>{item.name}</span></button>;
+          })}
+          <button type="button" className={`files-location${location === 'trash' ? ' selected' : ''}`} aria-current={location === 'trash' ? 'location' : undefined} {...drop('trash')} data-testid="files-location-trash" aria-label="Trash" title="Trash" onClick={() => navigateTo(path, 'trash')}><IconTrash size={19}/><span>Trash</span></button>
           <h2>Pinned</h2>
           {pinnedFolders.length === 0 && !sidebarCollapsed && <p className="files-pinned-hint">Right-click a folder to pin it here.</p>}
           {pinnedFolders.map((key) => {
@@ -307,13 +334,14 @@ export function Files() {
               <button
                 key={key}
                 {...reorderPinned.bind(key)}
+                {...drop(folderPath)}
                 aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
                 type="button"
                 className={`files-location${active ? ' selected' : ''}`}
                 data-testid={`files-pin-${key}`} aria-label={name} title={source.absolutePath(folderPath)}
                 aria-current={active ? 'location' : undefined}
                 onClick={() => navigateTo(folderPath)}
-                onContextMenu={(event) => openContextMenu(event, [{ label: 'Open Folder', run: () => navigateTo(folderPath) }, { label: 'Open in OpenCode', run: () => actions.openOpenCode(source.absolutePath(folderPath)) }, pinAction(folderPath)])}
+                onContextMenu={(event) => openContextMenu(event, [{ label: 'Open Folder', run: () => navigateTo(folderPath) }, { label: 'Open in Pi', run: () => actions.openPi(source.absolutePath(folderPath)) }, pinAction(folderPath)])}
               >
                 <IconFolder size={19} />
                 <span>{name}</span>
@@ -324,9 +352,9 @@ export function Files() {
         <div className="files-main">
           <div className="app-toolbar">
             <div className="files-navigation">
-              <nav className="files-history" aria-label="Folder history">
-                <button type="button" className="btn files-back" data-testid="files-back" aria-label="Back" title="Back" disabled={!navigation.back.length} onClick={() => travel('back')}><IconChevronRight size={18}/></button>
-                <button type="button" className="btn" data-testid="files-forward" aria-label="Forward" title="Forward" disabled={!navigation.forward.length} onClick={() => travel('forward')}><IconChevronRight size={18}/></button>
+              <nav className="app-history" aria-label="Folder history">
+                <button type="button" className="app-history-back" data-testid="files-back" aria-label="Back" title="Back" disabled={!navigation.back.length} onClick={() => travel('back')}><IconChevronRight size={18}/></button>
+                <button type="button" data-testid="files-forward" aria-label="Forward" title="Forward" disabled={!navigation.forward.length} onClick={() => travel('forward')}><IconChevronRight size={18}/></button>
               </nav>
               <div className="files-current-folder" data-testid="files-current-folder" title={location === 'trash' ? 'Trash' : source.absolutePath(path)}>
                 {location === 'trash' ? <IconTrash size={18}/> : source.absolutePath(path) === source.absolutePath(source.homePath()) ? <IconHome size={18}/> : <IconFolder size={18}/>}
@@ -363,34 +391,41 @@ export function Files() {
           <div className="files-table-scroll" data-testid="files-table-scroll" data-view={viewMode}><div className={`files-table${viewMode === 'grid' ? ' files-grid' : ''}`}>
           {viewMode === 'list' && <div className="files-head" role="row" aria-hidden="true">
             <span>Name</span>
-            <span>Size</span>
             <span>Modified</span>
           </div>}
-          <div className="files-list" onClick={(event) => { if (event.target === event.currentTarget) setSelectedName(null); }} onContextMenu={(event) => openContextMenu(event, [
+          <div className="files-list" tabIndex={0} {...selection.bind} {...drop(path)} onContextMenu={(event) => openContextMenu(event, [
             { label: 'New File', run: () => startCreate('file') },
             { label: 'New Folder', run: () => startCreate('directory') },
             { label: 'Upload File', disabled: uploading, run: () => uploadInputRef.current?.click() },
             { label: showHidden ? 'Hide Hidden Files' : 'Show Hidden Files', separator: true, run: () => setShowHidden((value) => !value) },
             { label: 'Refresh', run: refresh },
-            { label: 'Open in OpenCode', run: () => actions.openOpenCode(source.absolutePath(path)) },
+            { label: 'Open in Pi', run: () => actions.openPi(source.absolutePath(path)) },
             pinAction(path),
-          ])} role="listbox" aria-label="Files" aria-activedescendant={selected ? `file-${selected.name}` : undefined}>
+          ])} role="listbox" aria-multiselectable="true" aria-label="Files" aria-activedescendant={selected ? `file-${selected.name}` : undefined}>
             {visibleEntries.map((entry) => (
               <div
                 key={entry.name}
                 id={`file-${entry.name}`}
                 role="option"
-                aria-selected={selectedName === entry.name}
+                aria-selected={selectedNames.includes(entry.name)}
                 tabIndex={0}
                 data-file-row={entry.name}
                 data-testid={`file-row-${entry.name}`}
                 data-kind={entry.kind}
-                className={`file-row${selectedName === entry.name ? ' selected' : ''}`}
+                className={`file-row${selectedNames.includes(entry.name) ? ' selected' : ''}`}
+                draggable
+                onDragStart={(event) => {
+                  const items = selectedNames.includes(entry.name) ? selectedEntries : [entry];
+                  if (!selectedNames.includes(entry.name)) setSelectedName(entry.name);
+                  startFileDrag(event, items.map((item) => ({ path: [...path, item.name], kind: item.kind })));
+                }}
+                onDragEnd={endFileDrag}
+                {...drop(entry.kind === 'dir' ? [...path, entry.name] : null)}
                 onContextMenu={(event) => {
                   setSelectedName(entry.name);
                   openContextMenu(event, [
                     { label: entry.kind === 'dir' ? 'Open Folder' : 'Open in Preview', run: () => activate(entry) },
-                    ...(entry.kind === 'dir' ? [{ label: 'Open in OpenCode', run: () => actions.openOpenCode(source.absolutePath([...path, entry.name])) }, pinAction([...path, entry.name])] : []),
+                    ...(entry.kind === 'dir' ? [{ label: 'Open in Pi', run: () => actions.openPi(source.absolutePath([...path, entry.name])) }, pinAction([...path, entry.name])] : []),
                     ...(entry.kind === 'file' ? [
                       { label: 'Download', run: () => void download(entry) },
                     ] : []),
@@ -399,7 +434,7 @@ export function Files() {
                     { label: 'Move to Trash', separator: true, danger: true, run: () => setDeleteTarget(entry) },
                   ]);
                 }}
-                onClick={() => setSelectedName(entry.name)}
+                onClick={(event) => selection.select(entry.name, event)}
                 onDoubleClick={() => activate(entry)}
                 onKeyDown={(e) => onRowKey(e, entry)}
               >
@@ -407,10 +442,10 @@ export function Files() {
                   {entry.kind === 'dir' ? <IconFolder size={15} /> : <IconFile size={15} />}
                   <span title={entry.name}>{entry.name}</span>
                 </span>
-                <span className="file-size mono">{entry.kind === 'dir' ? '—' : formatSize(entry.size)}</span>
                 <span className="file-modified">{entry.modified}</span>
               </div>
             ))}
+            {selection.box && <div className="files-selection-box" data-testid="files-selection-box" style={selection.box} aria-hidden="true"/>}
             {listError && (
               <p className="files-empty">
                 {listError}{' '}
@@ -423,15 +458,15 @@ export function Files() {
           </div>
           </div></div>
           <footer className="files-status" data-testid="files-status">
-            <span>{listError ? 'Folder unavailable' : `${visibleEntries.length} ${visibleEntries.length === 1 ? 'item' : 'items'}`}</span>
+            <span>{listError ? 'Folder unavailable' : selectedEntries.length > 1 ? `${selectedEntries.length} of ${visibleEntries.length} selected` : `${visibleEntries.length} ${visibleEntries.length === 1 ? 'item' : 'items'}`}</span>
               <nav className="mono files-path-trail" data-testid="files-absolute-path" aria-label="Folder ancestors">
-                <button type="button" className="files-path-segment" title="/" onClick={() => navigateTo([''])}>/</button>
+                <button type="button" className="files-path-segment" {...drop([''])} title="/" onClick={() => navigateTo([''])}>/</button>
                 {pathSegments.map((segment, index) => {
                   const destination = `/${pathSegments.slice(0, index + 1).join('/')}`;
                   const isFile = selected?.kind === 'file' && index === pathSegments.length - 1;
                   return <span className="files-path-part" key={destination}>
                     {index > 0 && <span className="files-path-separator" aria-hidden="true">/</span>}
-                    {isFile ? <span className="files-path-filename" title={destination}>{segment}</span> : <button type="button" className="files-path-segment" title={destination} onClick={() => navigateTo(folderPath(destination, source.absolutePath(path), source.absolutePath(source.homePath()), source.homePath()))}>{segment}</button>}
+                    {isFile ? <span className="files-path-filename" title={destination}>{segment}</span> : <button type="button" className="files-path-segment" {...drop(folderPath(destination, source.absolutePath(path), source.absolutePath(source.homePath()), source.homePath()))} title={destination} onClick={() => navigateTo(folderPath(destination, source.absolutePath(path), source.absolutePath(source.homePath()), source.homePath()))}>{segment}</button>}
                   </span>;
                 })}
               </nav>
@@ -445,7 +480,7 @@ export function Files() {
       {creation && <div className="quicklook-overlay">
         <form className="file-confirm file-create" role="dialog" aria-modal="true" aria-label={creation.kind === 'directory' ? 'New Folder' : 'New File'} data-testid="files-create-dialog" onSubmit={(event) => { event.preventDefault(); void create(); }} onKeyDown={(event) => { if (event.key === 'Escape' && !creation.busy) { event.stopPropagation(); setCreation(null); } }}>
           <h2>{creation.kind === 'directory' ? 'New Folder' : 'New File'}</h2>
-          <label>Name<input autoFocus className="file-create-name" data-testid="files-create-name" value={creation.name} disabled={creation.busy} onChange={(event) => setCreation({ ...creation, name: event.target.value, error: null })} autoComplete="off" /></label>
+          <label>Name<input autoFocus className="input file-create-name" data-testid="files-create-name" value={creation.name} disabled={creation.busy} onChange={(event) => setCreation({ ...creation, name: event.target.value, error: null })} autoComplete="off" /></label>
           {creation.error && <p role="alert">{creation.error}</p>}
           <div className="file-confirm-actions"><button type="button" className="btn" disabled={creation.busy} onClick={() => setCreation(null)}>Cancel</button><button type="submit" className="btn btn-primary" data-testid="files-create-submit" disabled={creation.busy || !creation.name.trim()}>{creation.busy ? 'Creating…' : 'Create'}</button></div>
         </form>

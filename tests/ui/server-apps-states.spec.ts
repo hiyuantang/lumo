@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../offline';
 
 async function fixture(page: Page, installApp: 'docker' | 'nginx' | null = null) {
   let authenticated = false;
@@ -83,31 +83,49 @@ async function fixture(page: Page, installApp: 'docker' | 'nginx' | null = null)
 }
 
 for (const app of ['docker', 'nginx'] as const) {
-test(`App Library reviews ${app} installation, reauthenticates, resumes progress and shows installed app details`, async ({ page }) => {
+test(`App Library starts ${app} installation, reauthenticates, resumes progress and shows installed app details`, async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
   const server = await fixture(page, app);
   await expect(page.getByTestId(app === 'docker' ? 'dock-app-containers' : 'dock-app-websites')).toHaveCount(0);
   await page.getByTestId('dock-app-library').click();
   await page.getByTestId(`library-${app}`).click();
-  await expect(page.getByTestId('library-primary')).toHaveText('Install…');
+  await expect(page.getByTestId('library-primary')).toHaveText('Install');
   await page.getByTestId('library-primary').click();
-  await expect(page.getByTestId('library-plan')).toContainText('1.24.0');
-  expect(server.applies()).toBe(0);
-  await page.getByTestId('library-install-confirm').click();
-  await page.getByTestId('server-app-confirm-ok').click();
+  await expect(page.getByTestId('library-plan')).toHaveCount(0);
   await expect(page.getByTestId('reauth-sheet')).toBeVisible();
   await page.getByTestId('reauth-password').fill('demo');
   await page.getByTestId('reauth-submit').click();
-  await expect(page.getByTestId('library-progress')).toContainText(`Installing ${app}`);
+  await expect(page.getByTestId('library-progress')).toHaveAttribute('aria-label', `Installing ${app === 'docker' ? 'Docker' : 'Nginx'}`);
   await page.getByRole('button', { name: 'Close App Library', exact: true }).click();
   await page.getByTestId('dock-app-library').click();
   await expect(page.getByTestId('library-description')).toBeVisible();
-  await expect(page.getByTestId('library-progress')).toContainText(`Installing ${app}`);
+  await expect(page.getByTestId('library-progress')).toHaveAttribute('aria-label', `Installing ${app === 'docker' ? 'Docker' : 'Nginx'}`);
   expect(server.applies()).toBe(2);
+  await expect(page.getByTestId('library-progress')).toHaveAttribute('aria-valuenow', '30');
+  await page.getByTestId('window-maximize-library').click();
+  await page.screenshot({ animations: 'disabled', path: `/tmp/lumo-install-${app}-light.png` });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ animations: 'disabled', path: `/tmp/lumo-install-${app}-dark.png` });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByTestId('library-progress')).toBeInViewport();
+  expect(await page.locator('.app-library-detail').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.screenshot({ animations: 'disabled', path: `/tmp/lumo-install-${app}-narrow.png` });
+  await page.getByTestId('library-back').click();
+  await page.getByTestId(`library-${app === 'docker' ? 'nginx' : 'docker'}`).click();
+  await expect(page.getByTestId('library-progress')).toHaveCount(0);
+  await page.getByTestId('library-back').click();
+  await page.getByTestId(`library-${app}`).click();
+  await expect(page.getByTestId('library-progress')).toBeVisible();
   server.complete();
-  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall…');
+  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall');
+  await expect(page.getByTestId('library-progress')).toHaveCount(0);
   await expect(page.getByTestId(app === 'docker' ? 'dock-app-containers' : 'dock-app-websites')).toBeVisible();
   await expect(page.getByTestId(app === 'docker' ? 'app-containers' : 'app-websites')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('lumo-app-install'))).toBeNull();
+  expect(errors).toEqual([]);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.screenshot({ animations: 'disabled', path: `/tmp/lumo-installed-${app}-dark.png` });
 });
 }
 
@@ -119,7 +137,7 @@ test('App Library can recover from expired progress without retrying installatio
   await expect(page.getByRole('alert')).toContainText('Progress is no longer available');
   await page.getByRole('button', { name: 'Check installed apps' }).click();
   await expect(page.getByTestId('library-primary')).toBeEnabled();
-  await expect(page.getByTestId('library-primary')).toHaveText('Install…');
+  await expect(page.getByTestId('library-primary')).toHaveText('Install');
   expect(server.applies()).toBe(0);
   expect(await page.evaluate(() => localStorage.getItem('lumo-app-install'))).toBeNull();
 });

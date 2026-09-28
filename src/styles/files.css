@@ -105,7 +105,7 @@
 .files-head,
 .file-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 90px 110px;
+  grid-template-columns: minmax(0, 1fr) 110px;
   gap: var(--space-3);
   align-items: center;
   padding: 8px 20px;
@@ -229,7 +229,6 @@
 .files-head { position: sticky; top: 0; z-index: 1; }
 .files-details-panel { --details-width: clamp(180px, 26cqw, 260px); flex: 0 0 0; min-width: 0; overflow: hidden; opacity: 0; transition: flex-basis 220ms var(--ease-out), opacity 220ms var(--ease-out); }
 .files-details-panel.open { flex-basis: var(--details-width); opacity: 1; }
-.file-create-name { height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface); color: var(--text); }
 @container (max-width: 780px) {
   .files-sidebar:not(.collapsed) { flex-basis: 150px; }
   .files-main > .app-toolbar { padding: 10px; gap: 6px; }
@@ -268,9 +267,9 @@
 .files-grid .files-empty { grid-column: 1 / -1; }
 
 .files-navigation { display: flex; align-items: center; gap: 14px; flex: 1 1 150px; min-width: 0; }
-.files-history { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.files-history .btn { padding: 6px; }
-.files-back svg { transform: rotate(180deg); }
 .files-current-folder { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; }
 .files-current-folder svg { flex-shrink: 0; }
 .files-current-folder span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.files-list { position: relative; user-select: none; }
+.files-selection-box { position: absolute; pointer-events: none; z-index: 2; border: 1px solid var(--folder); background: color-mix(in srgb, var(--folder) 15%, transparent); }

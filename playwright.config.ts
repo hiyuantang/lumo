@@ -8,6 +8,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
+    serviceWorkers: 'block',
     baseURL: 'http://localhost:5199',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',

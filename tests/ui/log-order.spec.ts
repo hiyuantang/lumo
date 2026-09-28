@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../offline';
 
 test('Logs puts newest entries first and keeps older entries steady while streaming', async ({ page }) => {
   const now = Date.now();

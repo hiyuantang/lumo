@@ -5,6 +5,8 @@ import type { FsEntry } from '../api/source';
 import { ApiError } from '../api/transport';
 import { mockSkills } from './skills';
 
+const agentTestContent = "import assert from 'node:assert/strict';\nimport { test } from 'node:test';\nimport { collectMetrics } from './agent';\n\ntest('collectMetrics reports host metrics', async () => {\n  const metrics = await collectMetrics();\n  assert.ok(metrics.load);\n  assert.ok(metrics.mem);\n  assert.ok(Number.isFinite(Date.parse(metrics.at)));\n});\n";
+
 const HOME: FsEntry = {
   name: 'user',
   kind: 'dir',
@@ -83,7 +85,7 @@ const HOME: FsEntry = {
               content:
                 'export async function collectMetrics() {\n  const load = await readLoadavg();\n  const mem = await readMeminfo();\n  return { load, mem, at: new Date().toISOString() };\n}\n',
             },
-            { name: 'agent.test.ts', kind: 'file', size: 3120, modified: 'Jul 15 09:12' },
+            { name: 'agent.test.ts', kind: 'file', size: new TextEncoder().encode(agentTestContent).length, modified: 'Jul 15 09:12', content: agentTestContent },
           ],
         },
         {
@@ -126,6 +128,7 @@ const HOME: FsEntry = {
 const ROOT: FsEntry = {
   name: '', kind: 'dir', size: 4096, modified: 'Jul 12 09:14', children: [
     { name: 'home', kind: 'dir', size: 4096, modified: 'Jul 12 09:14', children: [HOME] },
+    { name: 'data', kind: 'dir', size: 4096, modified: 'Jul 12 09:14', children: [] },
     { name: 'tmp', kind: 'dir', size: 4096, modified: 'Jul 12 09:14', children: [] },
   ],
 };
@@ -251,4 +254,37 @@ export function restoreTrashed(item: TrashSelection): string {
 export function removeTrashed(items: TrashSelection[]): void {
   if (items.some((item) => trashed.get(item.id)?.item.revision !== item.revision)) throw new ApiError('stale_revision', 'Refresh Trash and try again.');
   for (const item of items) trashed.delete(item.id);
+}
+
+export function moveEntry(from: string[], to: string[]): void {
+  const sourceParent = getEntry(from.slice(0, -1));
+  const targetParent = getEntry(to.slice(0, -1));
+  const entry = getEntry(from);
+  const name = to.at(-1) ?? '';
+  if (!sourceParent || !entry || !targetParent) throw new ApiError('not_found', 'Folder or file unavailable.');
+  if (targetParent.kind !== 'dir' || !name || /[\/\x00]/.test(name) || name === '.' || name === '..') throw new ApiError('validation_failed', 'Choose a valid destination.');
+  if (sourceParent === targetParent && entry.name === name) return;
+  const absolute = (path: string[]) => path[0] === '' ? path.join('/') : '/home/' + path.join('/');
+  if (absolute(to).startsWith(absolute(from) + '/')) throw new ApiError('validation_failed', 'A folder cannot be moved inside itself.');
+  if (targetParent.children?.some((item) => item.name === name)) throw new ApiError('conflict', 'A file or folder with this name already exists.');
+  sourceParent.children = sourceParent.children?.filter((item) => item !== entry);
+  entry.name = name;
+  targetParent.children ??= [];
+  targetParent.children.push(entry);
+  revisions.delete(pathKey(from));
+  revisions.delete(pathKey(to));
+}
+
+const appFolders: Record<string, string[][]> = {
+  docker: [['', 'etc', 'docker'], ['', 'var', 'lib', 'docker']],
+  nginx: [['', 'etc', 'nginx'], ['', 'var', 'cache', 'nginx'], ['', 'var', 'log', 'nginx']],
+  pi: [['user', '.pi', 'agent'], ['user', '.local', 'state', 'lumo', 'pi-sessions']],
+};
+export function appFileFixtures(app: string): void {
+  for (const path of appFolders[app] ?? []) {
+    for (let i = 2; i <= path.length; i++) if (!getEntry(path.slice(0, i))) createEntry(path.slice(0, i), 'directory');
+  }
+}
+export function cleanAppFiles(app: string): void {
+  for (const path of appFolders[app] ?? []) if (getEntry(path)) deleteEntry(path);
 }

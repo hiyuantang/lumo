@@ -248,3 +248,31 @@ func TestTrashMissingMetadataAndStorageFailure(t *testing.T) {
 		t.Fatal("file lost on metadata failure")
 	}
 }
+
+func TestTrashManyRollsBackAndKeepsNestedSymlinkTargets(t *testing.T) {
+	home := setupTrashHome(t)
+	first := filepath.Join(home, "settings")
+	if err := os.WriteFile(first, []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := TrashMany([]string{first, filepath.Join(home, "missing")}); err == nil {
+		t.Fatal("missing source accepted")
+	}
+	if _, err := os.Stat(first); err != nil {
+		t.Fatal(err)
+	}
+	items, err := ListTrash()
+	if err != nil || len(items) != 0 {
+		t.Fatalf("rollback: %v %v", items, err)
+	}
+	link := filepath.Join(home, "cache")
+	if err := os.Symlink(first, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := TrashMany([]string{link}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(first); err != nil {
+		t.Fatal("symlink target removed")
+	}
+}

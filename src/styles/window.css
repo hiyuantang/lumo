@@ -76,7 +76,7 @@
 
 .window-titlebar {
   position: relative;
-  flex: 0 0 36px;
+  flex: 0 0 28px;
   display: flex;
   align-items: center;
   gap: var(--space-2);

@@ -1,0 +1,246 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+package httpapi
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestPiRPCFixtureProcess(t *testing.T) {
+	if os.Getenv("LUMO_PI_RPC_FIXTURE") != "1" {
+		return
+	}
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		var command map[string]any
+		if json.Unmarshal(scanner.Bytes(), &command) != nil {
+			os.Exit(2)
+		}
+		kind, _ := command["type"].(string)
+		if kind == "prompt" {
+			event, _ := json.Marshal(map[string]any{"type": "message_update", "assistantMessageEvent": map[string]any{"type": "text_delta", "contentIndex": 0, "delta": command["message"]}})
+			fmt.Println(string(event))
+		}
+		response, _ := json.Marshal(map[string]any{"type": "response", "id": command["id"], "command": kind, "success": true, "data": map[string]any{"cwd": mustWorkingDirectory(), "home": os.Getenv("HOME")}})
+		fmt.Println(string(response))
+	}
+	os.Exit(0)
+}
+func mustWorkingDirectory() string { value, _ := os.Getwd(); return value }
+func TestPiRPCTransportStreamsUnicodeAndCleansUp(t *testing.T) {
+	t.Setenv("LUMO_PI_RPC_FIXTURE", "1")
+	home := t.TempDir()
+	project := filepath.Join(home, "project with spaces")
+	if err := os.Mkdir(project, 0700); err != nil {
+		t.Fatal(err)
+	}
+	process, err := startPiProcess(os.Args[0], []string{"-test.run=^TestPiRPCFixtureProcess$"}, project, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer process.cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	text := "first\nsecond\u2028third\u2029end"
+	raw, err := process.command(ctx, map[string]any{"type": "prompt", "message": text})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reply struct {
+		Command string `json:"command"`
+		Data    struct {
+			Cwd  string `json:"cwd"`
+			Home string `json:"home"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(raw, &reply) != nil || reply.Command != "prompt" || reply.Data.Home != home {
+		t.Fatalf("response: %s", raw)
+	}
+	resolved, _ := filepath.EvalSymlinks(project)
+	if reply.Data.Cwd != resolved {
+		t.Fatalf("wrong project: %s", raw)
+	}
+	process.mu.Lock()
+	events := append([]json.RawMessage{}, process.events...)
+	process.mu.Unlock()
+	if len(events) != 1 {
+		t.Fatalf("events: %s", events)
+	}
+	var event struct {
+		Delta struct {
+			Text string `json:"delta"`
+		} `json:"assistantMessageEvent"`
+	}
+	_ = json.Unmarshal(events[0], &event)
+	if event.Delta.Text != text {
+		t.Fatalf("JSONL framing split content: %q", event.Delta.Text)
+	}
+	process.cancel()
+	select {
+	case <-process.done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("process did not stop")
+	}
+}
+func TestPiCommandsRejectExtraExecutionAndMalformedFields(t *testing.T) {
+	for _, body := range []string{`{"type":"bash","command":"id"}`, `{"type":"prompt","message":"hello","shell":"sh"}`, `{"type":"prompt","message":"/login"}`, `{"type":"prompt","message":false}`, `{"type":"prompt","message":" "}`, `{"type":"switch_session","sessionPath":"/etc/shadow"}`, `{"type":"clone","sessionPath":"/tmp/other"}`, `{"type":"clone","entryId":"abc"}`} {
+		var raw map[string]json.RawMessage
+		_ = json.Unmarshal([]byte(body), &raw)
+		if _, err := validatePiCommand(raw); err == nil {
+			t.Fatalf("accepted %s", body)
+		}
+	}
+}
+func TestPiSessionsUseProjectScopeAndIgnoreSymlinks(t *testing.T) {
+	server := NewServer(Deps{})
+	server.pi.home = t.TempDir()
+	project := filepath.Join(server.pi.home, "project")
+	os.Mkdir(project, 0700)
+	_, dir, err := server.piFolder(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(dir, 0700)
+	body := `{"type":"session","cwd":"` + project + `"}` + "\n" + `{"type":"message","message":{"role":"user","content":[{"type":"text","text":"First task"}]}}` + "\n" + `{"type":"session_info","name":"Renamed task"}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "one.jsonl"), []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	os.Symlink(filepath.Join(dir, "one.jsonl"), filepath.Join(dir, "linked.jsonl"))
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, httptest.NewRequest("GET", "/api/v1/pi/sessions?project="+project, nil))
+	if response.Code != 200 || !strings.Contains(response.Body.String(), "Renamed task") || strings.Contains(response.Body.String(), "linked.jsonl") {
+		t.Fatalf("sessions: %d %s", response.Code, response.Body.String())
+	}
+	response = httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/pi/start", strings.NewReader(`{"requestId":"traversal","project":"`+project+`","session":"../secret.jsonl"}`)))
+	if response.Code != 400 {
+		t.Fatalf("traversal accepted: %d", response.Code)
+	}
+	response = httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/pi/start", strings.NewReader(`{"requestId":"symlink","project":"`+project+`","session":"linked.jsonl"}`)))
+	if response.Code != 404 {
+		t.Fatalf("symlink accepted: %d", response.Code)
+	}
+}
+func TestPiEventsDetectGapAndIsolateProcessIDs(t *testing.T) {
+	server := NewServer(Deps{})
+	p := &piProcess{base: 10, events: []json.RawMessage{json.RawMessage(`{"type":"agent_start"}`)}, wake: make(chan struct{}, 1), done: make(chan struct{})}
+	server.piRPC.processes["known"] = p
+	for _, item := range []struct {
+		query  string
+		status int
+	}{{"id=known&after=0", 409}, {"id=unknown&after=0", 404}, {"id=known&after=-1", 400}, {"id=known&after=10", 200}} {
+		response := httptest.NewRecorder()
+		server.Handler().ServeHTTP(response, httptest.NewRequest("GET", "/api/v1/pi/events?"+item.query, nil))
+		if response.Code != item.status {
+			t.Fatalf("%s: %d", item.query, response.Code)
+		}
+	}
+}
+func TestPiNodeVersionRequirement(t *testing.T) {
+	for value, want := range map[string]bool{"v22.19.0": true, "v24.0.0": true, "v22.18.0": false, "v20.19.0": false, "invalid": false} {
+		if supportedPiNode(value) != want {
+			t.Fatalf("wrong support for %s", value)
+		}
+	}
+}
+
+func TestPiForkValidationAndEventBoundary(t *testing.T) {
+	for _, body := range []string{`{"type":"fork"}`, `{"type":"fork","entryId":""}`, `{"type":"fork","entryId":"../session"}`, `{"type":"fork","entryId":false}`, `{"type":"fork","entryId":"abc","sessionPath":"/tmp/other"}`, `{"type":"get_fork_messages","path":"/tmp/other"}`} {
+		var raw map[string]json.RawMessage
+		_ = json.Unmarshal([]byte(body), &raw)
+		if _, err := validatePiCommand(raw); err == nil {
+			t.Fatalf("accepted %s", body)
+		}
+	}
+	for _, body := range []string{`{"type":"fork","entryId":"abc-123"}`, `{"type":"get_fork_messages"}`, `{"type":"clone"}`} {
+		var raw map[string]json.RawMessage
+		_ = json.Unmarshal([]byte(body), &raw)
+		if _, err := validatePiCommand(raw); err != nil {
+			t.Fatalf("rejected %s: %v", body, err)
+		}
+	}
+	t.Setenv("LUMO_PI_RPC_FIXTURE", "1")
+	home := t.TempDir()
+	process, err := startPiProcess(os.Args[0], []string{"-test.run=^TestPiRPCFixtureProcess$"}, home, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer process.cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := process.command(ctx, map[string]any{"type": "prompt", "message": "old output"}); err != nil {
+		t.Fatal(err)
+	}
+	s := NewServer(Deps{})
+	s.piRPC.processes["fixture"] = process
+	body := `{"requestId":"fork-boundary","id":"fixture","command":{"type":"fork","entryId":"abc-123"}}`
+	response := httptest.NewRecorder()
+	s.Handler().ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/pi/command", strings.NewReader(body)))
+	var result struct {
+		Data struct {
+			Success bool `json:"success"`
+			Cursor  int  `json:"eventCursor"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(response.Body.Bytes(), &result) != nil || !result.Data.Success || result.Data.Cursor != 1 {
+		t.Fatalf("fork boundary: %s", response.Body.String())
+	}
+	if _, err := process.command(ctx, map[string]any{"type": "prompt", "message": "new output"}); err != nil {
+		t.Fatal(err)
+	}
+	cloned := httptest.NewRecorder()
+	s.Handler().ServeHTTP(cloned, httptest.NewRequest("POST", "/api/v1/pi/command", strings.NewReader(`{"requestId":"clone-boundary","id":"fixture","command":{"type":"clone"}}`)))
+	if cloned.Code != 200 || !strings.Contains(cloned.Body.String(), `"eventCursor":2`) {
+		t.Fatalf("clone boundary: %s", cloned.Body.String())
+	}
+	history, err := process.command(ctx, map[string]any{"type": "get_messages"})
+	if err != nil || !strings.Contains(string(history), `"eventCursor":2`) {
+		t.Fatalf("missing history boundary: %s %v", history, err)
+	}
+	repeated := httptest.NewRecorder()
+	s.Handler().ServeHTTP(repeated, httptest.NewRequest("POST", "/api/v1/pi/command", strings.NewReader(body)))
+	if repeated.Body.String() != response.Body.String() {
+		t.Fatal("fork retry was not idempotent")
+	}
+}
+
+func TestPiReconnectResumesOnlyMatchingLiveProcess(t *testing.T) {
+	s := NewServer(Deps{})
+	s.pi.home = t.TempDir()
+	project, _, err := s.piFolder("~")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &piProcess{project: project, touched: time.Now().Add(-time.Minute)}
+	s.piRPC.processes["existing"] = p
+	response := httptest.NewRecorder()
+	s.Handler().ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/pi/start", strings.NewReader(`{"requestId":"resume-existing","project":"~","resume":"existing"}`)))
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `"id":"existing"`) || time.Since(p.touched) > time.Second {
+		t.Fatalf("did not resume existing process: %d %s", response.Code, response.Body.String())
+	}
+	if len(s.piRPC.processes) != 1 {
+		t.Fatal("created an extra process")
+	}
+	p.closed = true
+	response = httptest.NewRecorder()
+	s.Handler().ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/pi/start", strings.NewReader(`{"requestId":"resume-closed","project":"~","resume":"existing","session":"missing.jsonl"}`)))
+	if strings.Contains(response.Body.String(), `"id":"existing"`) {
+		t.Fatal("resumed a closed process")
+	}
+	p.closed = false
+	p.project = project + "/other"
+	response = httptest.NewRecorder()
+	s.Handler().ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/pi/start", strings.NewReader(`{"requestId":"resume-wrong-project","project":"~","resume":"existing","session":"missing.jsonl"}`)))
+	if strings.Contains(response.Body.String(), `"id":"existing"`) {
+		t.Fatal("resumed another project")
+	}
+}

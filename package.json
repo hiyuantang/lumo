@@ -11,11 +11,13 @@
     "build:mock": "VITE_LUMO_LIVE=0 npm run build",
     "preview": "vite preview",
     "test": "npm run test:ui",
-    "test:ui": "playwright test",
-    "test:ui:production": "npm run build && LUMO_UI_PRODUCTION=1 playwright test tests/ui/opencode.spec.ts",
+    "test:ui": "npm_config_offline=true playwright test",
+    "test:ui:production": "npm run build && LUMO_UI_PRODUCTION=1 playwright test tests/ui/pi.spec.ts",
     "test:docker": "bash scripts/integration-test.sh",
     "test:unit": "bash scripts/unit-test.sh",
-    "test:all": "npm run build && npm run test:unit && npm run test:ui && npm run test:docker"
+    "test:all": "npm run build && npm run test:unit && npm run test:ui && npm run test:docker",
+    "test:docker:prepare": "bash scripts/prepare-test-deps.sh",
+    "test:online": "bash scripts/integration-test.sh --online"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.1.0",

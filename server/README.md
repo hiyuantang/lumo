@@ -94,13 +94,16 @@ produces `server/bin/lumod` with `dist/` embedded via `go:embed`
 scripts/integration-test.sh
 ```
 
-Builds `docker/Dockerfile.ubuntu24` (Ubuntu 24.04, systemd as PID 1), starts
-it privileged with cgroup v2 mounted, then runs 66 REST, WebSocket, broker,
-audit and repair assertions. The Phase 5 exit gate starts with a failed HTTP
+Builds `docker/Dockerfile.ubuntu24` offline from prepared dependency images
+(Ubuntu 24.04, systemd as PID 1), starts it privileged with cgroup v2 mounted
+and external networking blocked, then runs REST, WebSocket, broker, audit and
+repair assertions. Uninstall tests use a local package fixture. See
+[testing](../docs/TESTING.md) for explicit dependency setup and the separate
+online checks. The Phase 5 exit gate starts with a failed HTTP
 service, finds its error through Services and Logs, validates and writes its
 protected configuration, restarts it, confirms the endpoint, and checks the
-audit and rollback records. The script removes the container and image on
-exit.
+audit and rollback records. The script removes temporary containers and the network on exit, keeping
+local cached images.
 
 ## Design decisions and deviations
 

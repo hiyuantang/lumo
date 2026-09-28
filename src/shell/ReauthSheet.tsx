@@ -106,7 +106,7 @@ export function ReauthProvider({ children }: { children: ReactNode }) {
               Confirm password
             </h2>
             <form onSubmit={onSubmit}>
-              <input
+              <input className="input"
                 ref={inputRef}
                 type="password"
                 data-testid="reauth-password"

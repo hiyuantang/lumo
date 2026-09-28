@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../offline';
 import type { NetworkSnapshot } from '../../src/api/source';
 
 async function signIn(page: Page) {
@@ -36,7 +36,8 @@ for (const width of [1440, 390]) {
     await expect(network.getByTestId('network-apply')).toHaveCount(0);
     await expect(network.getByTestId('network-mode-static')).toHaveCount(0);
     await network.getByTestId('network-refresh').click();
-    await expect(network.getByTestId('network-refresh')).toHaveText('Refresh');
+    await expect(network.getByTestId('network-refresh')).toHaveAccessibleName('Refresh');
+    await expect(network.getByTestId('network-refresh').locator('svg')).toBeVisible();
     await network.getByTestId('network-refresh').scrollIntoViewIfNeeded();
     expect(await network.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false);
     await expect(page.locator('vite-error-overlay')).toHaveCount(0);

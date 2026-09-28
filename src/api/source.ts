@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { PiProvider, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiArchivedSession, PiSession, PiCommand, PiReply, PiEvents } from './pi';
 import type { SkillCatalog, SkillDetail } from './skills';
 import type { TrashItem, TrashSelection } from './trash';
 import { LiveDataSource } from './client';
 import { ApiError } from './transport';
 import { MockDataSource } from '../mock/source';
-import type { DockerResources, DockerResourceRequest, AppOperation, AppCatalog, AppLogs, ContainerAction, ContainerDetail, ContainerSnapshot, ServerAppID, WebsiteDefinition, WebsiteResult, WebsiteSnapshot } from './server-apps';
+import type { DockerResources, DockerResourceRequest, AppOperation, AppCatalog, AppLogs, ContainerAction, ContainerDetail, ContainerSnapshot, LibraryAppID, WebsiteDefinition, WebsiteResult, WebsiteSnapshot } from './server-apps';
 
 export type ServiceState = 'active' | 'inactive' | 'failed';
 export type ServiceAction = 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'disable';
@@ -146,11 +147,24 @@ export interface SystemOverview {
   network: { interface: string; rxBytesPerSec: number; txBytesPerSec: number }[];
 }
 
+export interface FileLocationSettings {
+  locations: (FileLocation & { defaultPath: string; exists: boolean; enabled: boolean })[];
+  choices: FileLocation[];
+  revision: string;
+}
+
+export interface FileLocation {
+  id: string;
+  name: string;
+  path: string;
+}
+
 export interface SystemIdentity {
   hostname: string;
   os: string;
   kernel: string;
   architecture: string;
+  cpuModel?: string;
   bootId: string;
   serverTime: string;
 }
@@ -223,6 +237,29 @@ export interface PrivilegedFileWrite extends FileWrite {
   restart: { success: boolean; error?: string } | null;
 }
 
+export type PackageGroup = 'system' | 'third-party' | 'unknown';
+
+export interface InstalledPackage {
+  name: string;
+  version: string;
+  architecture: string;
+  summary: string;
+  group: PackageGroup;
+  origin: string;
+  held: boolean;
+  updateVersion?: string;
+  updateGroup?: PackageGroup;
+  updateOrigin?: string;
+  security: boolean;
+}
+
+export interface PackageCatalog {
+  updateError?: string;
+  packages: InstalledPackage[];
+  checkedAt: string;
+  rebootRequired: boolean;
+}
+
 export interface UpdatePackage {
   name: string;
   fromVersion: string;
@@ -233,7 +270,7 @@ export interface UpdatePackage {
 }
 
 export interface UpdatePlan {
-  appId?: ServerAppID;
+  appId?: LibraryAppID;
   operation?: AppOperation;
   id: string;
   createdAt: string;
@@ -247,7 +284,7 @@ export interface UpdatePlan {
 
 export interface AppUpdateHistoryEntry {
   requestId: string;
-  appId: ServerAppID;
+  appId: LibraryAppID;
   completedAt: string;
   success: boolean;
   error?: string;
@@ -267,7 +304,7 @@ export interface UpdateProgress {
 }
 
 export interface TerminalOpenOptions {
-  program?: 'opencode';
+  program?: 'pi';
   directory?: string;
   cols: number;
   rows: number;
@@ -305,11 +342,27 @@ export interface SessionUser {
 export type Unsubscribe = () => void;
 
 export interface DataSource {
+  piProviders(): Promise<{ providers: PiProvider[] }>;
+  piAuthStart(provider: string, method: PiAuthMethod, operation: 'login' | 'logout'): Promise<PiAuthState>;
+  piAuthState(id: string): Promise<PiAuthState>;
+  piAuthReply(id: string, promptId: string, value: string): Promise<void>;
+  piAuthCancel(id: string): Promise<void>;
+  piSettings(kind: PiInstructionKind): Promise<PiInstruction>;
+  piSaveSettings(kind: PiInstructionKind, content: string, revision: string): Promise<PiInstruction>;
+  piSessions(project: string): Promise<PiSession[]>;
+  piDeleteSession(project: string, session: string): Promise<void>;
+  piArchivedSessions(): Promise<PiArchivedSession[]>;
+  piArchiveSession(project: string, session: string): Promise<void>;
+  piRestoreSession(project: string, session: string): Promise<void>;
+  piStart(project: string, session?: string, resume?: string): Promise<{ id: string; project: string }>;
+  piCommand(id: string, command: PiCommand): Promise<PiReply>;
+  piEvents(id: string, after: number): Promise<PiEvents>;
+  piStop(id: string): Promise<void>;
   listSkills(): Promise<SkillCatalog>;
   readSkill(id: string): Promise<SkillDetail>;
   getAppCatalog(): Promise<AppCatalog>;
-  uninstallOpenCode(): Promise<void>;
-  planAppInstall(id: ServerAppID, operation?: AppOperation): Promise<UpdatePlan>;
+  uninstallPi(clean?: boolean): Promise<void>;
+  planAppInstall(id: LibraryAppID, operation?: AppOperation): Promise<UpdatePlan>;
   getDockerResources(): Promise<DockerResources>;
   runDockerResourceAction(request: DockerResourceRequest): Promise<void>;
   getContainers(): Promise<ContainerSnapshot>;
@@ -352,6 +405,11 @@ export interface DataSource {
   streamJournal(onEntry: (entry: LogLine) => void, onError?: (err: Error) => void): Unsubscribe;
   listJournalUnits(): Promise<string[]>;
 
+  listFileLocations(): Promise<FileLocation[]>;
+  getFileLocationSettings(): Promise<FileLocationSettings>;
+  planFileLocationMove(path: string, revision: string, id?: string): Promise<{ files: number; bytes: number; create: number }>;
+  setFileLocation(id: string, path: string, revision: string, remove?: boolean): Promise<FileLocationSettings>;
+  setFileLocationBase(path: string, revision: string): Promise<FileLocationSettings>;
   homePath(): string[];
   absolutePath(path: string[]): string;
   createEntry(path: string[], kind: 'file' | 'directory'): Promise<void>;
@@ -364,11 +422,13 @@ export interface DataSource {
   restoreTrash(item: TrashSelection): Promise<string>;
   deleteTrash(items: TrashSelection[]): Promise<void>;
   deleteFile(path: string[]): Promise<void>;
+  moveFile(from: string[], to: string[]): Promise<void>;
 
+  getPackageCatalog(): Promise<PackageCatalog>;
   refreshUpdates(): Promise<string>;
   getAppUpdateHistory(): Promise<AppUpdateHistoryEntry[]>;
   calculateUpdatePlan(): Promise<UpdatePlan>;
-  applyUpdatePlan(planId: string): Promise<string>;
+  applyUpdatePlan(planId: string, clean?: boolean): Promise<string>;
   subscribeUpdateProgress(requestId: string, onProgress: (progress: UpdateProgress) => void, onError?: (err: Error) => void): Unsubscribe;
 
   openTerminal(opts: TerminalOpenOptions, handlers: TerminalHandlers): TerminalSession;

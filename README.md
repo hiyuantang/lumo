@@ -13,7 +13,7 @@ permissions. Service changes made over SSH also appear in Lumo.
 | Monitor | View server health, per-core CPU, memory, network traffic, running processes, services and searchable logs |
 | Trash | Restore deleted files or permanently remove them |
 | Files | Browse folders and Trash, pin favorite folders, create files, inspect details, upload, download and edit text |
-| OpenCode | Use the installed OpenCode CLI in a project terminal, with sessions and provider setup handled by OpenCode |
+| Pi | Native coding chat, streamed tool activity, model selection and saved project sessions |
 | Preview | Read and edit text files; switch Markdown between rendered and raw views |
 | Terminal | Run commands as your Linux user |
 | Skills | Browse account skills from `~/.agents/skills`, search descriptions and read their instructions |
@@ -85,19 +85,24 @@ Files creates separate Preview windows. Right-click Preview’s Dock icon and
 choose **New Window** to open another, or select an existing document from the
 same menu.
 
-To use **OpenCode**, install its CLI for your Linux account following the
-[official installation guide](https://opencode.ai/docs/). Open **App Library →
-OpenCode** for setup instructions. After installing, refresh App Library,
-then open OpenCode from the Dock and choose a project folder. Its Dock icon
-appears once installation is detected. The app uses a terminal connection;
-provider sign-in, model selection and permission prompts stay inside OpenCode.
-Right-click its Dock icon and choose **New Window** to open another workspace.
-OpenCode processes stop when their terminal tab or app window closes.
+To use **Pi**, install it in **App Library → Pi**. Lumo uses the
+[official npm package](https://pi.dev/docs/latest/quickstart), requiring Node.js
+22.19 or newer with npm on the server. Open Pi from the Dock, choose a project
+folder or drag one from Files, and select **Open project**. **Connect provider**
+opens Pi's setup terminal; enter `/login`, follow the prompts, and select Done.
+
+The native workspace provides streamed chat and tool output, model and thinking
+selection, saved sessions, rename, context compaction, steering, follow-up, and
+Stop. Extensions and prompt-template menus are deferred. Pi runs as your Linux
+account and can read, edit, and execute commands. Closing its window stops the
+process; saved sessions can be resumed later. Existing OpenCode files and
+conversations are not deleted by switching the Lumo integration.
+
 
 In **App Library**, select an app to read its description and manage its
 installation. Installed apps offer **Uninstall**; open them from the Dock.
 Uninstalling Docker or Nginx stops their services but keeps data and configuration.
-Uninstalling a standalone OpenCode CLI moves its executable to Trash and keeps
+Uninstalling Lumo-managed Pi moves its installation directory to Trash and keeps
 projects, conversations and settings. Copies managed by another installer must
 be removed with that installer.
 
@@ -107,7 +112,7 @@ are never overwritten. **Delete Permanently** and **Empty Trash** ask for
 confirmation; these actions cannot be undone. Lumo uses your Linux account's
 home Trash; files on other filesystems cannot currently be moved there.
 
-Files hides dot-prefixed files and folders by default. Use **View → Show Hidden Files** or **Ctrl/Cmd+Shift+H** to reveal them. Right-click a folder and choose **Open in OpenCode** to use it as a coding workspace.
+Files hides dot-prefixed files and folders by default. Use **View → Show Hidden Files** or **Ctrl/Cmd+Shift+H** to reveal them. Right-click a folder and choose **Open in Pi** to use it as a coding workspace.
 
 Package updates are in **Settings → Updates**. Monitor’s **Activity** section shows current processes; **Logs** shows server event history.
 

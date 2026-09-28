@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../offline';
 
 async function login(page: Page) {
   await page.goto('/');
@@ -39,6 +39,42 @@ test('Files separates metadata, Preview and management actions', async ({ page }
   await expect(page.getByTestId('preview-rendered').getByRole('listitem')).toHaveCount(4);
   await page.reload();
   await expect(page.getByTestId('preview-rendered')).toContainText('Atlas server notes');
+});
+
+test('TypeScript source and test files open as editable text and retain saved edits', async ({ page }) => {
+  await login(page);
+  await page.getByTestId('file-row-projects').dblclick();
+  await page.getByTestId('file-row-lumo-agent').dblclick();
+  for (const name of ['agent.ts', 'agent.test.ts']) {
+    await page.getByTestId(`file-row-${name}`).dblclick();
+    await expect(page.getByTestId('editor-input')).toHaveValue(/collectMetrics/);
+    await expect(page.getByTestId('editor-input')).toBeEditable();
+    await page.getByTestId('window-close-preview').click();
+  }
+  await page.getByTestId('file-row-agent.test.ts').dblclick();
+  for (const [width, colorScheme] of [[1440, 'light'], [390, 'dark']] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ colorScheme });
+    const input = page.getByTestId('editor-input');
+    await input.focus();
+    const outline = await input.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const input = element.getBoundingClientRect();
+      const container = element.parentElement!.getBoundingClientRect();
+      const reach = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
+      return { gaps: [input.left - container.left, container.right - input.right, input.top - container.top, container.bottom - input.bottom], reach };
+    });
+    expect(outline.reach).toBeGreaterThan(0);
+    expect(Math.min(...outline.gaps)).toBeGreaterThan(outline.reach);
+    await page.screenshot({ path: `/tmp/lumo-preview-focus-${colorScheme}.png`, animations: 'disabled' });
+  }
+  const content = `${await page.getByTestId('editor-input').inputValue()}\nexport const sample = true;\n`;
+  await page.getByTestId('editor-input').fill(content);
+  await page.getByTestId('editor-save').click();
+  await expect(page.getByTestId('preview-save-status')).toHaveText('Saved');
+  await page.getByTestId('window-close-preview').click();
+  await page.getByTestId('file-row-agent.test.ts').dblclick();
+  await expect(page.getByTestId('editor-input')).toHaveValue(content);
 });
 
 test('creation handles empty files and duplicate names without changing existing content', async ({ page }) => {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../offline';
 
 test('phase 1 shell: login, services, notifications, layout restore', async ({ page }) => {
   await page.goto('/');

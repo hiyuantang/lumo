@@ -44,7 +44,7 @@ function readTheme(): ITheme {
 
 export function Terminal() { return <TerminalWorkspace />; }
 
-export function TerminalWorkspace({ program, directory }: { program?: 'opencode'; directory?: string }) {
+export function TerminalWorkspace({ program, directory }: { program?: 'pi'; directory?: string }) {
   const { capabilities } = getDataSource();
   if (!capabilities.canTerminal) {
     return (
@@ -59,7 +59,7 @@ export function TerminalWorkspace({ program, directory }: { program?: 'opencode'
   return <TerminalTabs program={program} directory={directory} />;
 }
 
-function TerminalTabs({ program, directory }: { program?: 'opencode'; directory?: string }) {
+function TerminalTabs({ program, directory }: { program?: 'pi'; directory?: string }) {
   const win = useCurrentWindow();
   const openContextMenu = useContextMenu();
   const { state, actions } = useShell();
@@ -98,7 +98,7 @@ function TerminalTabs({ program, directory }: { program?: 'opencode'; directory?
   ] });
 
   return (
-    <div className="app terminal" data-testid={program ? 'opencode-terminal' : 'app-terminal'}>
+    <div className="app terminal" data-testid={program ? 'pi-terminal' : 'app-terminal'}>
       <div className="terminal-tabs" role="tablist" aria-label="Terminal tabs">
         {tabs.map((tab) => (
           <div
@@ -153,7 +153,7 @@ function TerminalTabs({ program, directory }: { program?: 'opencode'; directory?
 }
 
 interface PaneProps {
-  program?: 'opencode';
+  program?: 'pi';
   directory?: string;
   tab: TabState;
   user: string;
@@ -222,7 +222,7 @@ function TerminalPane({ tab, user, program, directory, visible, onExit, onError,
   useEffect(() => {
     const textarea = hostRef.current?.querySelector('textarea');
     if (textarea) {
-      if (visible) textarea.setAttribute('data-testid', program ? 'opencode-input' : 'terminal-input');
+      if (visible) textarea.setAttribute('data-testid', program ? 'pi-input' : 'terminal-input');
       else textarea.removeAttribute('data-testid');
     }
     if (visible) termRef.current?.focus();

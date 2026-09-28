@@ -127,6 +127,10 @@ export function IconX(p: IconProps) {
   return base(p, <path d="m6 6 12 12M18 6 6 18" />);
 }
 
+export function IconPlus(p: IconProps) {
+  return base(p, <path d="M12 5v14M5 12h14" />);
+}
+
 export function IconMinus(p: IconProps) {
   return base(p, <path d="M5.5 12h13" />);
 }
@@ -206,6 +210,12 @@ export function IconCode(p: IconProps) {
   return base(p, <><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m9 9-3 3 3 3m6-6 3 3-3 3"/></>);
 }
 
+export function IconMore(p: IconProps) {
+  return base(p, <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>);
+}
+export function IconArchive(p: IconProps) {
+  return base(p, <path d="M4 8h16v12H4zM3 4h18v4H3zM9 12h6"/>);
+}
 export function IconTrash(p: IconProps) {
   return base(p, <><path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7" /></>);
 }
@@ -228,4 +238,12 @@ export function IconDownload(p: IconProps) {
 
 export function IconSidebar(p: IconProps) {
   return base(p, <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></>);
+}
+
+export function IconCopy(p: IconProps) {
+  return base(p, <><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M15 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></>);
+}
+
+export function IconBranch(p: IconProps) {
+  return base(p, <><circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10M18 7v2a4 4 0 0 1-4 4h-4a4 4 0 0 0-4 4"/></>);
 }

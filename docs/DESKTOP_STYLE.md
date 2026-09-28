@@ -14,6 +14,9 @@ the foundation. No third-party implementation code or assets are used.
 - Dark: content `#161616`, grouped surfaces `#202020`, sidebar near
   `#121212`, text `#f5f5f5`.
 - Neutral shadows and fine borders separate windows, menus and panels.
+- Content-row dividers stop short of both edges, aligned to the surrounding
+  content padding (normally 16px). Preserve already-inset separators. Window,
+  toolbar and sidebar boundaries retain their structural borders.
 - Matte buttons use opaque neutral fills and fine borders, without gradients,
   inset highlights or bevel shadows. Labels use 13px medium-weight type.
   Hover changes the fill; pressing moves the button by one pixel.
@@ -44,6 +47,7 @@ the foundation. No third-party implementation code or assets are used.
 
 ## Window behavior
 
+- All app title bars are 28px high, with vertically centered titles and controls.
 - Controls run left to right: close, minimize, maximize/restore.
 - Minimize shrinks the window into its own Dock icon; selecting that icon
   reverses the motion and restores the existing window, including its

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { mockPi } from './pi';
 import { mockSkills } from './skills';
 import type { SkillCatalog, SkillDetail } from '../api/skills';
 import type { TrashItem, TrashSelection } from '../api/trash';
@@ -6,6 +7,8 @@ import { base64ToText, textToBase64 } from '../api/encoding';
 import type {
   DataSource,
   FileRead,
+  FileLocation,
+  FileLocationSettings,
   FileWrite,
   FsEntry,
   JournalPage,
@@ -37,9 +40,9 @@ import type {
 } from '../api/source';
 import { ApiError } from '../api/transport';
 import { MockServerApps } from './server-apps';
-import type { DockerResourceRequest, AppOperation, AppCatalog, ContainerAction, ServerAppID, WebsiteDefinition } from '../api/server-apps';
+import type { DockerResourceRequest, AppOperation, AppCatalog, ContainerAction, LibraryAppID, WebsiteDefinition } from '../api/server-apps';
 import {
-  deleteEntry, listTrashed, restoreTrashed, removeTrashed,
+  moveEntry, deleteEntry, appFileFixtures, cleanAppFiles, listTrashed, restoreTrashed, removeTrashed,
   entryRevision,
   getEntry,
   homePath as mockHomePath,
@@ -65,17 +68,42 @@ import {
   rememberAppPlan,
   calculateUpdatePlan,
   refreshUpdates,
+  getPackageCatalog,
   subscribeUpdateProgress,
 } from './updates';
 
 const TICK_MS = 2000;
 
 export class MockDataSource implements DataSource {
-  async getAppCatalog(): Promise<AppCatalog> { return { canInstall: true, apps: [{ id: 'docker', installed: true }, { id: 'nginx', installed: true }] }; }
-  async uninstallOpenCode(): Promise<void> {}
-  async planAppInstall(id: ServerAppID, operation: AppOperation = 'install'): Promise<UpdatePlan> {
+  piProviders = mockPi.providers;
+  piAuthStart = mockPi.authStart;
+  piAuthState = mockPi.authState;
+  piAuthReply = mockPi.authReply;
+  piAuthCancel = mockPi.authCancel;
+  piSettings = mockPi.settings;
+  piSaveSettings = mockPi.saveSettings;
+  piSessions = mockPi.sessions;
+  piDeleteSession = mockPi.deleteSession;
+  piArchivedSessions = mockPi.archivedSessions;
+  piArchiveSession = mockPi.archiveSession;
+  piRestoreSession = mockPi.restoreSession;
+  piStart = mockPi.start;
+  piCommand = mockPi.command;
+  piEvents = mockPi.events;
+  piStop = mockPi.stop;
+
+  constructor() { appFileFixtures('docker'); appFileFixtures('nginx'); }
+  private removedApps = new Set<LibraryAppID>();
+  async getAppCatalog(): Promise<AppCatalog> { return { canInstall: true, apps: [{ id: 'docker', installed: !this.removedApps.has('docker') }, { id: 'nginx', installed: !this.removedApps.has('nginx') }, { id: 'pi', installed: Boolean(this.piVersion), canInstall: true, canUpdate: Boolean(this.piVersion), canUninstall: true }] }; }
+  private piVersion = '';
+  async uninstallPi(clean = false): Promise<void> { this.piVersion = ''; if (clean) { cleanAppFiles('pi'); mockPi.clear(); } }
+  async planAppInstall(id: LibraryAppID, operation: AppOperation = 'install'): Promise<UpdatePlan> {
+    if (id === 'pi') {
+      const packages = this.piVersion !== '1.2.1' ? [{ name: 'pi', fromVersion: this.piVersion, toVersion: '1.2.1', security: false, downloadBytes: 0, installedDeltaBytes: 0 }] : [];
+      return rememberAppPlan({ ...await calculateUpdatePlan(), appId: id, operation, packages, downloadBytes: 0 }, () => { this.piVersion = '1.2.1'; appFileFixtures('pi'); });
+    }
     const updated = id === 'docker' ? this.serverApps.engineVersion === '27.5.2' : this.updatedNginx;
-    return rememberAppPlan({ ...await calculateUpdatePlan(), appId: id, operation, packages: operation === 'update' && !updated ? [{ name: id === 'docker' ? 'docker.io' : 'nginx', fromVersion: id === 'docker' ? this.serverApps.engineVersion : '1.24.0', toVersion: id === 'docker' ? '27.5.2' : '1.24.1', security: false, downloadBytes: 24000000, installedDeltaBytes: 1200000 }] : [], downloadBytes: operation === 'update' && !updated ? 24000000 : 0 }, () => { if (operation === 'update') { if (id === 'docker') this.serverApps.engineVersion = '27.5.2'; else this.updatedNginx = true; } });
+    return rememberAppPlan({ ...await calculateUpdatePlan(), appId: id, operation, packages: operation !== 'update' || !updated ? [{ name: id === 'docker' ? 'docker.io' : 'nginx', fromVersion: id === 'docker' ? this.serverApps.engineVersion : '1.24.0', toVersion: id === 'docker' ? '27.5.2' : '1.24.1', security: false, downloadBytes: 24000000, installedDeltaBytes: 1200000 }] : [], downloadBytes: operation === 'update' && !updated ? 24000000 : 0 }, (clean) => { if (operation === 'uninstall') { this.removedApps.add(id); if (clean) cleanAppFiles(id); } else { this.removedApps.delete(id); appFileFixtures(id); if (operation === 'update') { if (id === 'docker') this.serverApps.engineVersion = '27.5.2'; else this.updatedNginx = true; } } });
   }
   private updatedNginx = false;
   private serverApps = new MockServerApps();
@@ -125,6 +153,7 @@ export class MockDataSource implements DataSource {
       os: overview.os,
       kernel: overview.kernel,
       architecture: 'x86_64',
+      cpuModel: 'AMD EPYC 7763 64-Core Processor',
       bootId: 'mock',
       serverTime: new Date().toISOString(),
     };
@@ -271,6 +300,79 @@ export class MockDataSource implements DataSource {
     return { ...skill, name: name || skill.id, description, raw, body: header ? raw.slice(header[0].length) : raw, issue: name && description ? undefined : 'The YAML header needs a name and description.' };
   }
 
+  private folderBase = '/home/user';
+  private folderRevision = 0;
+  private folderPaths: Record<string, string | null> = {};
+
+  async getFileLocationSettings(): Promise<FileLocationSettings> {
+    const names = [['desktop', 'Desktop'], ['documents', 'Documents'], ['download', 'Downloads'], ['pictures', 'Pictures'], ['music', 'Music'], ['videos', 'Videos'], ['templates', 'Templates'], ['publicshare', 'Public']];
+    return { revision: String(this.folderRevision), choices: [{ id: 'home', name: 'Home', path: '/home/user' }, { id: 'data', name: 'Data storage', path: '/data' }].filter((choice) => getEntry(choice.path.split('/'))?.kind === 'dir'), locations: names.map(([id, name]) => {
+      const path = this.folderPaths[id] ?? `${this.folderBase === '/' ? '' : this.folderBase}/${name}`;
+      return { id, name, path, defaultPath: `/home/user/${name}`, exists: getEntry(path.split('/'))?.kind === 'dir', enabled: this.folderPaths[id] !== null };
+    }) };
+  }
+
+  async listFileLocations(): Promise<FileLocation[]> {
+    return (await this.getFileLocationSettings()).locations.filter((item) => item.exists && item.enabled);
+  }
+
+  async planFileLocationMove(base: string, revision: string, id?: string): Promise<{ files: number; bytes: number; create: number }> {
+    if (revision !== String(this.folderRevision)) throw new ApiError('stale_revision', 'Folder locations changed. Refresh and try again.');
+    const parent = id ? base.slice(0, base.lastIndexOf('/')) || '/' : base;
+    if (!base.startsWith('/') || /[\x00\r\n]/.test(base) || getEntry(parent === '/' ? [''] : parent.split('/'))?.kind !== 'dir') throw new ApiError('validation_failed', 'Choose an existing parent folder.');
+    let files = 0, bytes = 0, create = 0;
+    const count = (entry: FsEntry) => { if (entry.kind === 'file') { files++; bytes += entry.size; } else entry.children?.forEach(count); };
+    for (const item of (await this.getFileLocationSettings()).locations) {
+      if (id && item.id !== id) continue;
+      const target = id ? base : `${base === '/' ? '' : base}/${item.name}`;
+      if (!getEntry(target.split('/'))) create++;
+      if (target === item.path) continue;
+      if (base === item.path || base.startsWith(`${item.path}/`)) throw new ApiError('validation_failed', 'Choose a parent outside the folders being moved.');
+      const destination = getEntry(target.split('/'));
+      if (destination && destination.kind !== 'dir') throw new ApiError('validation_failed', `${item.name} already exists and is not a folder.`);
+      if (!item.enabled) continue;
+      for (const entry of getEntry(item.path.split('/'))?.children ?? []) {
+        if (destination?.children?.some((child) => child.name === entry.name)) throw new ApiError('conflict', `${entry.name} already exists. Nothing was moved.`);
+        count(entry);
+      }
+    }
+    return { files, bytes, create };
+  }
+
+  async setFileLocation(id: string, path: string, revision: string, remove = false): Promise<FileLocationSettings> {
+    if (revision !== String(this.folderRevision)) throw new ApiError('stale_revision', 'Folder locations changed. Refresh and try again.');
+    const item = (await this.getFileLocationSettings()).locations.find((item) => item.id === id);
+    if (!item) throw new ApiError('validation_failed', 'Unknown standard folder.');
+    if (remove) {
+      if (item.enabled && item.exists) await this.deleteFile(item.path.split('/'));
+      this.folderPaths[id] = null;
+    } else {
+      await this.planFileLocationMove(path, revision, id);
+      const destination = path.split('/');
+      if (!getEntry(destination)) mockCreateEntry(destination, 'directory');
+      if (item.enabled && path !== item.path) for (const entry of [...(getEntry(item.path.split('/'))?.children ?? [])]) moveEntry([...item.path.split('/'), entry.name], [...destination, entry.name]);
+      this.folderPaths[id] = path;
+    }
+    this.folderRevision++;
+    return this.getFileLocationSettings();
+  }
+
+  async setFileLocationBase(base: string, revision: string): Promise<FileLocationSettings> {
+    base = base.replace(/\/+$/, '') || '/';
+    await this.planFileLocationMove(base, revision);
+    const settings = await this.getFileLocationSettings();
+    for (const item of settings.locations) {
+      const destination = `${base === '/' ? '' : base}/${item.name}`.split('/');
+      if (!getEntry(destination)) mockCreateEntry(destination, 'directory');
+      if (this.absolutePath(destination) === item.path) continue;
+      for (const entry of [...(getEntry(item.path.split('/'))?.children ?? [])]) moveEntry([...item.path.split('/'), entry.name], [...destination, entry.name]);
+    }
+    this.folderPaths = {};
+    this.folderBase = base;
+    this.folderRevision++;
+    return this.getFileLocationSettings();
+  }
+
   homePath(): string[] {
     return mockHomePath();
   }
@@ -317,11 +419,14 @@ export class MockDataSource implements DataSource {
   async listTrash(): Promise<TrashItem[]> { return listTrashed(); }
   async restoreTrash(item: TrashSelection): Promise<string> { return restoreTrashed(item); }
   async deleteTrash(items: TrashSelection[]): Promise<void> { removeTrashed(items); }
+  async moveFile(from: string[], to: string[]): Promise<void> { moveEntry(from, to); }
   async deleteFile(path: string[]): Promise<void> {
     deleteEntry(path);
   }
 
   getAppUpdateHistory = getAppUpdateHistory;
+
+  getPackageCatalog() { return getPackageCatalog(); }
 
   refreshUpdates(): Promise<string> {
     return refreshUpdates();
@@ -331,8 +436,8 @@ export class MockDataSource implements DataSource {
     return calculateUpdatePlan();
   }
 
-  applyUpdatePlan(planId: string): Promise<string> {
-    return applyUpdatePlan(planId);
+  applyUpdatePlan(planId: string, clean = false): Promise<string> {
+    return applyUpdatePlan(planId, clean);
   }
 
   subscribeUpdateProgress(requestId: string, onProgress: (progress: UpdateProgress) => void): Unsubscribe {

@@ -3,7 +3,6 @@
 .agents
 .codex
 node_modules
-dist
 server/bin
 server/internal/static/dist
 docker/.build

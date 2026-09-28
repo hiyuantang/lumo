@@ -1,0 +1,89 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+import { expect, test } from '../offline';
+import { piPage } from './pi-fixture';
+
+test('Pi combines model and effort with a keyboard accessible slider and provider-aware model picker', async ({ page }) => {
+  const fixture = await piPage(page);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-pi').click();
+  await expect(page).toHaveTitle('Lumo');
+  const trigger = page.getByTestId('pi-model');
+  await expect(trigger).toBeEnabled();
+  await expect(trigger).toHaveText('BalancedMedium');
+  await expect(trigger).not.toContainText('Fixture');
+  await page.getByTestId('pi-prompt').fill('Keep my draft');
+  await trigger.click();
+  const card = page.getByRole('dialog', { name: 'Model and effort' });
+  const slider = card.getByRole('slider', { name: 'Effort', exact: true });
+  await expect(slider).toBeFocused();
+  await expect(slider).toHaveAttribute('aria-valuetext', 'Medium');
+  await card.evaluate(async (node) => { await Promise.all(node.parentElement!.getAnimations({ subtree: true }).map((animation) => animation.finished)); });
+  const bounds = (await card.boundingBox())!; const button = (await trigger.boundingBox())!;
+  expect(bounds.y + bounds.height).toBeLessThan(button.y);
+  await slider.press('End');
+  await expect(trigger).toContainText('High');
+  expect(fixture.commands).toContainEqual({ type: 'set_thinking_level', level: 'high' });
+  await expect(slider).toBeEnabled();
+  await expect(slider).toBeFocused();
+  await page.screenshot({ path: '/tmp/lumo-pi-effort-light.png', animations: 'disabled' });
+  await card.getByRole('button', { name: 'Choose model' }).click();
+  await expect(page.getByRole('textbox', { name: 'Search models' })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Balanced · Fixture' })).toBeFocused();
+  await expect(page.getByRole('option')).toHaveCount(2);
+  await page.screenshot({ path: '/tmp/lumo-pi-models-light.png', animations: 'disabled' });
+  await page.getByRole('option', { name: 'Balanced · Fixture' }).press('ArrowDown');
+  await page.getByRole('option', { name: 'Fast · Fixture' }).press('Enter');
+  await expect(trigger).toHaveText('FastOff');
+  await expect(slider).toBeDisabled();
+  expect(fixture.commands).toContainEqual({ type: 'set_model', modelId: 'fast', provider: 'Fixture' });
+  await expect(page.getByTestId('pi-prompt')).toHaveValue('Keep my draft');
+  await card.getByRole('button', { name: 'Choose model' }).click();
+  await page.getByRole('option', { name: 'Balanced · Fixture' }).click();
+  await expect(slider).toBeEnabled();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: '/tmp/lumo-pi-effort-dark.png', animations: 'disabled' });
+  await slider.press('Escape');
+  await expect(card).toHaveCount(0); await expect(trigger).toBeFocused();
+  await trigger.click(); await page.getByTestId('pi-prompt').click();
+  await expect(card).toHaveCount(0); await expect(page.getByTestId('pi-prompt')).toBeFocused();
+  await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await trigger.click();
+  await expect(card).toHaveCSS('animation-name', 'none');
+  await expect.poll(async () => { const small = (await card.boundingBox())!; return small.x >= 0 && small.x + small.width <= 390; }).toBe(true);
+  expect(await page.locator('.pi-main').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/lumo-pi-effort-narrow.png', animations: 'disabled' });
+  await slider.press('Tab');
+  await expect(card).toHaveCount(0); await expect(trigger).toBeFocused();
+  expect(errors).toEqual([]);
+});
+
+test('Pi commits pointer effort once and keeps the confirmed value when a change fails', async ({ page }) => {
+  const fixture = await piPage(page);
+  let reject = true;
+  await page.route('**/api/v1/pi/command', (route) => {
+    if (reject && route.request().postDataJSON().command.type === 'set_thinking_level') {
+      reject = false; return route.fulfill({ json: { ok: true, data: { success: false, error: 'Could not change effort' } } });
+    }
+    return route.fallback();
+  });
+  await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-pi').click();
+  const trigger = page.getByTestId('pi-model'); await expect(trigger).toBeEnabled(); await trigger.click();
+  const slider = page.getByRole('slider', { name: 'Effort', exact: true });
+  await slider.press('Home');
+  await expect(page.getByRole('alert')).toContainText('Could not change effort');
+  await expect(slider).toHaveAttribute('aria-valuetext', 'Medium');
+  await expect(trigger).toContainText('Medium');
+  const bounds = (await slider.boundingBox())!;
+  await page.mouse.move(bounds.x + 11 + (bounds.width - 22) * 2 / 3, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 11, bounds.y + bounds.height / 2, { steps: 5 });
+  expect(fixture.commands.filter((command) => command.type === 'set_thinking_level')).toHaveLength(0);
+  await page.mouse.up();
+  await expect(trigger).toContainText('Off');
+  expect(fixture.commands.filter((command) => command.type === 'set_thinking_level')).toEqual([{ type: 'set_thinking_level', level: 'off' }]);
+});

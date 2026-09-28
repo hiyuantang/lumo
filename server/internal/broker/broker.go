@@ -21,7 +21,9 @@ import (
 	"sync"
 	"time"
 
+	"lumo/server/internal/apptrash"
 	"lumo/server/internal/containers"
+	"lumo/server/internal/files"
 	"lumo/server/internal/hostsettings"
 	"lumo/server/internal/ipc"
 	"lumo/server/internal/network"
@@ -41,6 +43,9 @@ const (
 	containersManageActionID = "os.lumo.containers.manage"
 	websitesManageActionID   = "os.lumo.websites.manage"
 )
+
+var appTrashIDPattern = regexp.MustCompile(`^apptrash_[a-f0-9]{24}$`)
+var appTrashRevisionPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 var unitNamePattern = regexp.MustCompile(`^[a-zA-Z0-9@:._\-]+\.service$`)
 
@@ -93,6 +98,9 @@ type ActionRequest struct {
 		SiteID            string                     `json:"siteId"`
 		AppID             string                     `json:"appId"`
 		Operation         string                     `json:"operation"`
+		Clean             bool                       `json:"clean"`
+		Item              files.TrashSelection       `json:"item"`
+		Items             []files.TrashSelection     `json:"items"`
 		Website           websites.Definition        `json:"website"`
 	} `json:"arguments"`
 	Expected *struct {
@@ -149,6 +157,7 @@ type Server struct {
 	authz      Authorizer
 	sys        systemdIface
 	updates    *updates.Worker
+	appTrash   *apptrash.Store
 	files      *privfiles.Writer
 	power      powerIface
 	network    networkIface
@@ -195,6 +204,7 @@ func New(cfg Config) (*Server, error) {
 		authz:      authz,
 		sessiond:   ipc.HTTPClient(cfg.SessiondSocket),
 		updates:    updates.NewWorker(),
+		appTrash:   apptrash.New(filepath.Join(filepath.Dir(cfg.DBPath), "app-trash")),
 		files:      privfiles.NewWriter(rollbackDir),
 		containers: containers.NewClient(),
 		websites:   websites.NewStore(),
@@ -230,6 +240,7 @@ func (s *Server) Run() error {
 	mux.HandleFunc("POST /action", s.handleAction)
 	mux.HandleFunc("GET /updates/progress", s.handleUpdateProgress)
 	mux.HandleFunc("GET /apps/update-history", s.handleAppUpdateHistory)
+	mux.HandleFunc("GET /apps/trash", s.handleAppTrashList)
 	srv := &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
@@ -331,6 +342,10 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 
 	if serviceActions[req.Action] {
 		s.handleServiceAction(w, r, req, uid, userName, polkitResult)
+		return
+	}
+	if req.Action == "apps.trashRestore" || req.Action == "apps.trashDelete" {
+		s.handleAppTrashAction(w, r, req, uid, userName, polkitResult)
 		return
 	}
 	if updateActions[req.Action] {
@@ -551,6 +566,24 @@ func (s *Server) handleUpdateAction(w http.ResponseWriter, r *http.Request, req 
 		s.audit.End(beginID, req, uid, userName, polkitResult, "success", "", data, time.Since(started))
 		s.writeData(w, data)
 	case "packages.applyPlan":
+		hooks := updates.ApplyHooks{}
+		if req.Arguments.Clean {
+			hooks.Before = func(plan updates.Plan) error {
+				if plan.Operation != "uninstall" {
+					return errors.New("Clean uninstall requires an app removal plan")
+				}
+				if err := s.appTrash.Check(plan.AppID); err != nil {
+					return err
+				}
+				if plan.AppID == "docker" {
+					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+					defer cancel()
+					return containers.NewClient().CheckCleanUninstall(ctx)
+				}
+				return nil
+			}
+			hooks.After = func(plan updates.Plan) error { return s.appTrash.Move(plan.AppID, uid) }
+		}
 		progress, _, err := s.updates.StartApply(req.Arguments.PlanID, req.Expected.PlanID, req.RequestID, func(progress updates.Progress) {
 			outcome := "failed"
 			if progress.Success {
@@ -558,7 +591,7 @@ func (s *Server) handleUpdateAction(w http.ResponseWriter, r *http.Request, req 
 			}
 			result := map[string]any{"requestId": progress.RequestID, "planId": progress.PlanID, "progress": progress}
 			s.audit.End(beginID, req, uid, userName, polkitResult, outcome, progress.Error, result, time.Since(started))
-		})
+		}, hooks)
 		if err != nil {
 			s.writeUpdateError(w, beginID, req, uid, userName, polkitResult, started, err)
 			return
@@ -620,7 +653,7 @@ func (s *Server) handleUpdateProgress(w http.ResponseWriter, r *http.Request) {
 func (s *Server) authorize(ctx context.Context, uid, pid uint32, req ActionRequest) (string, *apiError) {
 	actionID := servicesManageActionID
 	details := map[string]string{"unit": req.Arguments.Unit}
-	if updateActions[req.Action] {
+	if updateActions[req.Action] || req.Action == "apps.trashRestore" || req.Action == "apps.trashDelete" {
 		actionID = packagesApplyActionID
 		details = map[string]string{"planId": req.Arguments.PlanID}
 	}
@@ -714,8 +747,22 @@ func (req *ActionRequest) validate() *apiError {
 	if req.RequestID == "" || len(req.RequestID) > 128 {
 		return &apiError{Code: "validation_failed", Message: "requestId is required."}
 	}
-	if !serviceActions[req.Action] && !updateActions[req.Action] && !fileActions[req.Action] && !powerActions[req.Action] && !networkActions[req.Action] && req.Action != "system.settings" && !containerAction(req.Action) && req.Action != "docker.resource" && req.Action != "websites.save" {
+	if !serviceActions[req.Action] && !updateActions[req.Action] && !fileActions[req.Action] && !powerActions[req.Action] && !networkActions[req.Action] && req.Action != "system.settings" && !containerAction(req.Action) && req.Action != "docker.resource" && req.Action != "websites.save" && req.Action != "apps.trashRestore" && req.Action != "apps.trashDelete" {
 		return &apiError{Code: "validation_failed", Message: "unknown action."}
+	}
+	if req.Action == "apps.trashRestore" || req.Action == "apps.trashDelete" {
+		items := req.Arguments.Items
+		if req.Action == "apps.trashRestore" {
+			items = []files.TrashSelection{req.Arguments.Item}
+		}
+		if len(items) == 0 || len(items) > 10000 {
+			return &apiError{Code: "validation_failed", Message: "Choose app Trash items."}
+		}
+		for _, item := range items {
+			if !appTrashIDPattern.MatchString(item.ID) || !appTrashRevisionPattern.MatchString(item.Revision) {
+				return &apiError{Code: "validation_failed", Message: "Invalid app Trash selection."}
+			}
+		}
 	}
 	if serviceActions[req.Action] && !unitNamePattern.MatchString(req.Arguments.Unit) {
 		return &apiError{Code: "validation_failed", Message: "invalid unit name."}

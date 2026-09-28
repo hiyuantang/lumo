@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../offline';
 
 async function login(page: Page) {
   await page.goto('/');
@@ -14,7 +14,7 @@ test('Containers opens from the dock and confirms lifecycle changes without losi
   await login(page);
   await page.getByTestId('dock-app-library').click();
   await page.getByTestId('library-docker').click();
-  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall…');
+  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall');
   await expect(page.getByTestId('app-containers')).toHaveCount(0);
   await page.getByTestId('dock-app-containers').click();
   await expect(page.getByTestId('app-containers')).toBeVisible();
@@ -100,7 +100,7 @@ test('App Library entries show descriptions and management actions without launc
   for (const [id, appId, description] of [
     ['docker', 'containers', 'Run apps in isolated containers'],
     ['nginx', 'websites', 'Serve websites'],
-    ['opencode', 'opencode', 'AI coding assistant'],
+    ['pi', 'pi', 'coding agent'],
   ]) {
     await page.getByTestId(`library-${id}`).click();
     await expect(page.locator('.library-discovery-grid')).toHaveCount(0);
@@ -112,7 +112,7 @@ test('App Library entries show descriptions and management actions without launc
     await page.getByTestId('library-back').click();
   }
   await page.getByTestId('library-nginx').click();
-  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall…');
+  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall');
   await page.screenshot({ path: '/tmp/lumo-library-desktop.png' });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByTestId('app-library')).toContainText('Serve websites');

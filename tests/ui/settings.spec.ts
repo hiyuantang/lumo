@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../offline';
 
 test('settings confirms and schedules a restart', async ({ page }) => {
   await page.goto('/');
@@ -37,6 +37,10 @@ test('settings displays hostname and saves time settings while preserving drafts
   await page.getByTestId('settings-section-time').click();
   await expect(page.getByRole('switch', { name: 'Set time automatically' })).toHaveCount(0);
   await expect(page.locator('select')).toHaveCount(0);
+  await expect(page.getByTestId('settings-timezone')).toHaveText('UTC');
+  await expect(page.getByTestId('settings-timezone')).toHaveAttribute('value', 'Etc/UTC');
+  await expect(page.locator('.settings-clock small')).toHaveText('UTC');
+  await expect(page.getByTestId('settings-timezone').locator('svg')).toBeVisible();
   await page.getByTestId('settings-timezone').click();
   await page.getByRole('option', { name: 'America/New York', exact: true }).click();
   await page.getByTestId('settings-section-system').click();
@@ -149,5 +153,77 @@ test('motion menu supports keyboard selection, dismissal, and compact window res
   expect(menuBounds!.y + menuBounds!.height).toBeLessThanOrEqual(body!.y + body!.height);
   await page.getByTestId('window-minimize-settings').click();
   await expect(menu).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('menu bar and Settings share server time and follow saved time-zone changes', async ({ page }) => {
+  let timezone = 'Etc/UTC';
+  let changed: unknown;
+  const snapshot = () => ({ timezone, serverTime: '2028-01-02T03:04:05Z', revision: timezone, runtimeHostname: 'clock-test', canEdit: true, available: true, ntpSynchronized: true });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
+  await page.route('**/api/v1/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const data = (value: unknown) => route.fulfill({ json: { ok: true, data: value } });
+    if (path.endsWith('/auth/session')) return data({ user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/user' } });
+    if (path.endsWith('/system/settings')) {
+      if (route.request().method() === 'POST') { changed = route.request().postDataJSON().change; timezone = (changed as { timezone: string }).timezone; }
+      return data(snapshot());
+    }
+    if (path.endsWith('/system/timezones')) return data({ timezones: ['Etc/UTC', 'America/New_York'] });
+    if (path.endsWith('/apps')) return data({ canInstall: false, apps: [] });
+    return data({});
+  });
+  await page.goto('http://localhost:5200');
+  await expect(page.getByTestId('server-menubar-clock')).toContainText('Jan 2');
+  await expect(page.getByTestId('server-menubar-clock')).toContainText('03:04 AM');
+  await page.getByTestId('dock-app-settings').click();
+  await page.getByTestId('settings-section-time').click();
+  await expect(page.locator('.settings-clock strong')).toContainText('03:04:');
+  await expect(page.locator('.settings-clock small')).toHaveText('UTC');
+  await page.screenshot({ path: '/tmp/lumo-server-clock-utc.png' });
+  await page.getByTestId('settings-timezone').click();
+  await page.getByRole('option', { name: 'America/New York', exact: true }).click();
+  await page.getByTestId('settings-save-timezone').click();
+  await expect(page.getByTestId('settings-editor-timezone')).toContainText('Saved');
+  expect(changed).toEqual({ timezone: 'America/New_York' });
+  await expect(page.getByTestId('server-menubar-clock')).toContainText('Jan 1');
+  await expect(page.getByTestId('server-menubar-clock')).toContainText('10:04 PM');
+  await expect(page.locator('.settings-clock strong')).toContainText('10:04:');
+  await expect(page.locator('.settings-clock small')).toHaveText('America/New York');
+  await page.screenshot({ path: '/tmp/lumo-server-clock-new-york.png' });
+});
+
+test('system summary shows hardware totals and compact details in both themes', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/');
+  await page.getByTestId('login-username').fill('demo');
+  await page.getByTestId('login-password').fill('demo');
+  await page.getByTestId('login-submit').click();
+  await page.getByTestId('dock-app-settings').click();
+  const app = page.getByTestId('app-settings');
+  for (const theme of ['light', 'dark'] as const) {
+    await page.getByTestId('settings-section-appearance').click();
+    await page.getByTestId(`settings-theme-${theme}`).click();
+    await page.getByTestId('settings-section-system').click();
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(app.locator('.settings-stat').filter({ hasText: 'CPUs' })).toHaveText('CPUs8');
+      await expect(app.locator('.settings-stat').filter({ hasText: 'Memory' })).toHaveText('Memory8 GB');
+      await expect(app.locator('.settings-stat').filter({ hasText: 'Storage' })).toHaveText('Storage240 GB');
+      await expect(app.getByRole('meter')).toHaveCount(0);
+      await expect(app.getByRole('region', { name: 'System details' })).toContainText('AMD EPYC 7763');
+      await expect(app.getByText('Ubuntu 24.04.1 LTS', { exact: true })).toHaveCount(1);
+      expect(await app.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(false);
+      const stats = await app.locator('.settings-stats').boundingBox();
+      const cards = await app.locator('.settings-stat').all();
+      for (const card of cards) {
+        const bounds = await card.boundingBox();
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(stats!.x + stats!.width + 1);
+      }
+      await page.screenshot({ path: `/tmp/lumo-system-summary-${theme}-${width}.png` });
+    }
+  }
   expect(errors).toEqual([]);
 });

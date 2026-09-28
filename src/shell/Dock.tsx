@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useFileDrop } from './fileDrag';
 import { useEffect, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import overviewIcon from '../assets/lumo-overview.png';
 import { AppIcon } from './AppIcon';
 import { useContextMenu } from './ContextMenu';
 import { APPS, CORE_APP_COUNT, type AppId } from '../apps/registry';
@@ -12,7 +14,8 @@ import { useReorder } from './useReorder';
 import { useDockLayout } from './useDockLayout';
 import '../styles/dock.css';
 
-export function Dock() {
+export function Dock({ onOverview }: { onOverview: () => void }) {
+  const drop = useFileDrop();
   const openContextMenu = useContextMenu();
   const { state, actions, reducedMotion } = useShell();
   const minimized = Object.values(state.windows).filter((win): win is WindowState => !!win?.minimized);
@@ -56,9 +59,9 @@ export function Dock() {
 
   return (
     <nav className="dock" data-testid="dock" aria-label="Dock" onKeyDown={onKeyDown}>
-      <div ref={tray} className="dock-tray" style={{ '--dock-app-count': CORE_APP_COUNT, '--dock-count': visible.length + 1 + Math.min(dockWindows.length, 3) } as CSSProperties}>
+      <div ref={tray} className="dock-tray" style={{ '--dock-app-count': CORE_APP_COUNT + 1, '--dock-count': visible.length + 2 + Math.min(dockWindows.length, 3) } as CSSProperties}>
         <div className="dock-surface" data-testid="dock-surface" aria-hidden="true" />
-        <div className="dock-apps" aria-label="Applications">{visible.map((appId) => {
+        <div className="dock-apps" aria-label="Applications"><button type="button" className="dock-app" data-testid="dock-overview" aria-label="Overview" aria-haspopup="dialog" title="Overview" onClick={onOverview}><span className="dock-icon"><svg className="app-icon" viewBox="75 78 1105 1105" aria-hidden="true"><image href={overviewIcon} width="1254" height="1254"/></svg></span><span className="dock-label" aria-hidden="true">Overview</span><span className="dock-dot" aria-hidden="true"/></button>{visible.map((appId) => {
           const meta = APPS[appId];
           const appWindows = Object.values(state.windows).filter((item): item is WindowState => item?.appId === appId).sort((a, b) => b.z - a.z);
           const win = appWindows[0];
@@ -76,9 +79,9 @@ export function Dock() {
               title={meta.title}
               aria-description="Drag to reorder, or use Alt and the left or right arrow key."
               {...reorder.bind(appId)}
-              onContextMenu={(event) => openContextMenu(event, !running && appId !== 'opencode' && appId !== 'preview' ? [] : [
+              onContextMenu={(event) => openContextMenu(event, !running && appId !== 'pi' && appId !== 'preview' ? [] : [
                 { label: minimized ? 'Restore' : running ? 'Show Window' : 'Open', run: () => onAppClick(appId) },
-                ...(appId === 'opencode' ? [{ label: 'New Window', run: actions.newOpenCodeWindow }, ...appWindows.map((item) => ({ label: windowTitle(item), run: () => actions.focusApp(item.id) }))] : []),
+                ...(appId === 'pi' ? [{ label: 'New Window', run: actions.newPiWindow }, ...appWindows.map((item) => ({ label: windowTitle(item), run: () => actions.focusApp(item.id) }))] : []),
                 ...(appId === 'preview' ? [{ label: 'New Window', run: actions.newPreviewWindow }, ...appWindows.map((item, index) => ({ label: `${windowTitle(item)}${item.filePath ? '' : ` ${index + 1}`}`, run: () => actions.focusApp(item.id) }))] : []),
                 ...(running ? [
                   { label: 'Close Window', run: () => actions.closeApp(win.id) },
@@ -110,7 +113,7 @@ export function Dock() {
             })}
           </div>
         </>}
-        <button type="button" className={`dock-app${state.focused === 'trash' ? ' active' : ''}`} data-app="trash" data-testid="dock-app-trash" aria-label="Trash" title="Trash" onClick={() => onAppClick('trash')} onContextMenu={(event) => openContextMenu(event, [{ label: 'Open Trash', run: () => onAppClick('trash') }, { label: 'Empty Trash…', separator: true, danger: true, run: actions.emptyTrash }])}>
+        <button type="button" className={`dock-app${state.focused === 'trash' ? ' active' : ''}`} {...drop('trash')} data-app="trash" data-testid="dock-app-trash" aria-label="Trash" title="Trash" onClick={() => onAppClick('trash')} onContextMenu={(event) => openContextMenu(event, [{ label: 'Open Trash', run: () => onAppClick('trash') }, { label: 'Empty Trash…', separator: true, danger: true, run: actions.emptyTrash }])}>
           <span className="dock-icon"><AppIcon appId="trash" /></span><span className="dock-label" aria-hidden="true">Trash</span><span className={`dock-dot${state.windows.trash ? ' on' : ''}`} aria-hidden="true"/>
         </button>
       </div>

@@ -236,17 +236,17 @@ func (m *Manager) Open(opts OpenOptions) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	if opts.Program != "" && opts.Program != "shell" && opts.Program != "opencode" {
+	if opts.Program != "" && opts.Program != "shell" && opts.Program != "pi" {
 		return nil, fmt.Errorf("%w: unsupported terminal program", ErrValidation)
 	}
 	command := shell
-	if opts.Program == "opencode" {
+	if opts.Program == "pi" {
 		if opts.Shell != "" {
-			return nil, fmt.Errorf("%w: shell cannot be set for OpenCode", ErrValidation)
+			return nil, fmt.Errorf("%w: shell cannot be set for Pi", ErrValidation)
 		}
-		command = OpenCodePath()
+		command = PiPath()
 		if command == "" {
-			return nil, fmt.Errorf("%w: OpenCode is not installed for this account", ErrNotFound)
+			return nil, fmt.Errorf("%w: Pi is not installed for this account", ErrNotFound)
 		}
 	}
 	directory := homeDir()
@@ -263,10 +263,10 @@ func (m *Manager) Open(opts OpenOptions) (*Session, error) {
 	cmd := exec.Command(command)
 	cmd.Env = cleanEnv(shell)
 	cmd.Dir = directory
-	if opts.Program == "opencode" {
+	if opts.Program == "pi" {
 		for index, value := range cmd.Env {
 			if len(value) > 5 && value[:5] == "PATH=" {
-				cmd.Env[index] = "PATH=" + filepath.Join(homeDir(), ".opencode/bin") + ":" + filepath.Join(homeDir(), ".local/bin") + ":" + value[5:]
+				cmd.Env[index] = "PATH=" + filepath.Join(homeDir(), ".local/share/lumo/pi/bin") + ":" + filepath.Join(homeDir(), ".local/bin") + ":" + value[5:]
 			}
 		}
 	}
@@ -314,8 +314,8 @@ func (m *Manager) Count() int {
 	return len(m.sessions)
 }
 
-func OpenCodePath() string {
-	for _, path := range []string{filepath.Join(homeDir(), ".opencode/bin/opencode"), filepath.Join(homeDir(), ".local/bin/opencode"), "/usr/local/bin/opencode", "/usr/bin/opencode"} {
+func PiPath() string {
+	for _, path := range []string{filepath.Join(homeDir(), ".local/share/lumo/pi/bin/pi"), filepath.Join(homeDir(), ".local/bin/pi"), "/usr/local/bin/pi", "/usr/bin/pi"} {
 		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
 			return path
 		}

@@ -19,7 +19,8 @@ import (
 var trashMu sync.Mutex
 
 type TrashResult struct {
-	Trashed bool `json:"trashed"`
+	Trashed bool   `json:"trashed"`
+	ItemID  string `json:"-"`
 }
 type TrashItem struct {
 	ID           string `json:"id"`
@@ -39,6 +40,10 @@ type TrashSelection struct {
 func Trash(p string) (TrashResult, error) {
 	trashMu.Lock()
 	defer trashMu.Unlock()
+	return trashLocked(p)
+}
+
+func trashLocked(p string) (TrashResult, error) {
 	clean, err := cleanPath(p)
 	if err != nil {
 		return TrashResult{}, err
@@ -104,7 +109,7 @@ func Trash(p string) (TrashResult, error) {
 			}
 			return TrashResult{}, &os.LinkError{Op: "trash", Old: real, New: dir, Err: err}
 		}
-		return TrashResult{Trashed: true}, nil
+		return TrashResult{Trashed: true, ItemID: id}, nil
 	}
 }
 
@@ -280,7 +285,7 @@ func RestoreTrash(selection TrashSelection) (string, error) {
 	if within(target, dir) || within(dir, target) {
 		return "", fmt.Errorf("%w: invalid restore location", ErrValidation)
 	}
-	if err := renameExclusive(filepath.Join(dir, "files", item.ID), target); err != nil {
+	if err := restoreTrashPath(filepath.Join(dir, "files", item.ID), target, renameExclusive); err != nil {
 		return "", &os.LinkError{Op: "restore", Old: item.ID, New: target, Err: err}
 	}
 	_ = root.Remove("info/" + item.ID + ".trashinfo")
@@ -326,3 +331,31 @@ func DeleteTrash(selections []TrashSelection) error {
 }
 
 func trashEscape(p string) string { return strings.ReplaceAll(url.PathEscape(p), "%2F", "/") }
+
+func TrashMany(paths []string) error {
+	trashMu.Lock()
+	defer trashMu.Unlock()
+	root, dir, err := openTrash(true)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	type movedItem struct{ path, id string }
+	moved := []movedItem{}
+	for _, path := range paths {
+		result, err := trashLocked(path)
+		if err != nil {
+			for i := len(moved) - 1; i >= 0; i-- {
+				item := moved[i]
+				if rollbackErr := renameExclusive(filepath.Join(dir, "files", item.id), item.path); rollbackErr != nil {
+					err = errors.Join(err, fmt.Errorf("could not restore %s; it remains in Trash: %w", item.path, rollbackErr))
+				} else {
+					_ = root.Remove("info/" + item.id + ".trashinfo")
+				}
+			}
+			return err
+		}
+		moved = append(moved, movedItem{path, result.ItemID})
+	}
+	return nil
+}

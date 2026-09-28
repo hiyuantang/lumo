@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../offline';
 
 async function rect(page: Page, app: string) {
   await expect(page.getByTestId(`window-${app}`)).toHaveCSS('transform', 'none');
@@ -50,7 +50,7 @@ test('slim title bars animate both maximizing and restoring', async ({ page }) =
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const window = page.getByTestId('window-files');
   const original = await rect(page, 'files');
-  expect((await page.getByTestId('window-titlebar-files').boundingBox())!.height).toBeLessThanOrEqual(37);
+  expect((await page.getByTestId('window-titlebar-files').boundingBox())!.height).toBe(28);
   for (const placement of ['maximized', 'floating']) {
     await page.getByTestId('window-maximize-files').click();
     const motion = await window.evaluate((element) => {
@@ -70,6 +70,10 @@ test('slim title bars animate both maximizing and restoring', async ({ page }) =
     await rect(page, 'files');
   }
   expect(await rect(page, 'files')).toEqual(original);
+  await page.screenshot({ animations: 'disabled', path: '/tmp/lumo-titlebar-light.png' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.screenshot({ animations: 'disabled', path: '/tmp/lumo-titlebar-dark.png' });
 });
 
 test('controls have the expected order; maximizing clears the dock and dragging restores the saved size', async ({ page }) => {
@@ -269,4 +273,49 @@ test('windows regain their minimum size after a very small viewport', async ({ p
   expect(recovered.height).toBeGreaterThanOrEqual(340);
   await expect(page.getByTestId('file-row-notes.txt')).toBeVisible();
   await expectDockClear(page, 'files');
+});
+
+test('floating windows can leave the desktop on three sides and keep a draggable title bar', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const original = await rect(page, 'files');
+  await startDrag(page, 'files', 90, 160);
+  await page.mouse.up();
+  const left = await rect(page, 'files');
+  expect(left.x).toBeLessThan(0);
+  expect(left.x + left.width).toBeGreaterThan(100);
+  expect(left.width).toBe(original.width);
+  await page.reload();
+  expect((await rect(page, 'files')).x).toBe(left.x);
+  await page.mouse.move(180, left.y + 18);
+  await page.mouse.down();
+  await page.mouse.move(1300, 200, { steps: 12 });
+  await page.mouse.up();
+  const right = await rect(page, 'files');
+  expect(right.x + right.width).toBeGreaterThan(1440);
+  expect(right.x + 120).toBeLessThan(1440);
+  await page.mouse.move(right.x + 150, right.y + 18);
+  await page.mouse.down();
+  await page.mouse.move(800, 880, { steps: 12 });
+  await page.mouse.up();
+  const down = await rect(page, 'files');
+  expect(down.y + down.height).toBeGreaterThan(900);
+  const dock = (await page.getByTestId('dock').boundingBox())!;
+  expect(down.y + 20).toBeLessThan(dock.y);
+  await page.screenshot({ animations: 'disabled', path: '/tmp/lumo-window-below-desktop.png' });
+  await page.getByTestId('dock-overview').click();
+  await expect(page.getByTestId('overview-window-files')).toBeInViewport();
+  await page.getByTestId('overview-window-files').click();
+  expect(await rect(page, 'files')).toEqual(down);
+  await page.mouse.move(800, down.y + 18);
+  await page.mouse.down();
+  await page.mouse.move(600, 230, { steps: 12 });
+  await page.mouse.up();
+  const recovered = await rect(page, 'files');
+  expect(recovered.y).toBeLessThan(300);
+  await page.mouse.move(600, recovered.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(600, 54, { steps: 12 });
+  await page.mouse.up();
+  expect((await rect(page, 'files')).y).toBe(32);
+  await expect(page.getByTestId('window-files')).toHaveAttribute('data-window-placement', 'floating');
 });

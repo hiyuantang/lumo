@@ -5,6 +5,7 @@ import {
   useCallback,
   useRef,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   type ReactNode,
@@ -13,9 +14,9 @@ import { clearWindowState } from './appStateStorage';
 import { getDataSource } from '../api/source';
 import type { ServerAppID } from '../api/server-apps';
 import { APPS, APP_ORDER, type AppId, type SettingsSection } from '../apps/registry';
-import { canSnap, clampRect, snapRect, workArea, MENUBAR_H, type Rect, type SnapTarget, type Viewport } from './windowGeometry';
+import { canSnap, clampRect, reachableRect, snapRect, workArea, MENUBAR_H, type Rect, type SnapTarget, type Viewport } from './windowGeometry';
 
-export type WindowId = AppId | `preview:${string}` | `opencode:${string}`;
+export type WindowId = AppId | `preview:${string}` | `pi:${string}`;
 
 export interface WindowState extends Rect {
   id: WindowId;
@@ -48,6 +49,7 @@ export type MotionPref = 'system' | 'reduced' | 'full';
 
 type NavigationIntent = (
   | { target: 'logs' | 'services'; unit: string }
+  | { target: 'files'; path: string[] }
   | { target: 'settings'; section: SettingsSection }
   | { target: 'library'; appId: ServerAppID; checkUpdates?: boolean }
   | { target: 'trash'; empty: true }
@@ -79,14 +81,15 @@ type Action =
   | { type: 'auth-ready' }
   | { type: 'open-app'; appId: AppId }
   | { type: 'empty-trash' }
-  | { type: 'opencode-project'; id: WindowId; path: string | null }
+  | { type: 'pi-project'; id: WindowId; path: string | null }
   | { type: 'new-preview' }
-  | { type: 'open-opencode'; path: string }
-  | { type: 'new-opencode' }
+  | { type: 'open-pi'; path: string }
+  | { type: 'new-pi' }
   | { type: 'preview-mode'; id: WindowId; mode: 'rendered' | 'raw' }
   | { type: 'open-preview'; path: string[]; edit: boolean; windowId?: WindowId }
   | { type: 'files-changed' }
   | { type: 'open-related'; target: 'logs' | 'services'; unit: string }
+  | { type: 'open-folder'; path: string[] }
   | { type: 'open-settings'; section: SettingsSection }
   | { type: 'open-library'; appId: ServerAppID; checkUpdates?: boolean }
   | { type: 'close-app'; appId: WindowId }
@@ -131,7 +134,7 @@ function localStorageAvailable(key: string): boolean {
 
 function fitFloatingRect(rect: Rect, appId: AppId, viewport: Viewport): Rect {
   const { minSize, defaultSize } = APPS[appId];
-  return clampRect({
+  return reachableRect({
     x: Number.isFinite(rect.x) ? rect.x : 96,
     y: Number.isFinite(rect.y) ? rect.y : MENUBAR_H + 40,
     w: Math.max(minSize.w, Number.isFinite(rect.w) && rect.w > 1 ? rect.w : defaultSize.w),
@@ -155,9 +158,9 @@ function fitWindow(win: WindowState, viewport: Viewport): WindowState {
 function createWindow(state: ShellState, appId: AppId, id: WindowId): ShellState {
   const saved = state.remembered[appId];
   const count = Object.keys(state.windows).length;
-  const rect = clampRect(saved ?? { x: 96 + count * 40, y: MENUBAR_H + 40 + count * 32, ...APPS[appId].defaultSize }, state.viewport);
+  const rect = saved ? fitFloatingRect(saved, appId, state.viewport) : clampRect({ x: 96 + count * 40, y: MENUBAR_H + 40 + count * 32, ...APPS[appId].defaultSize }, state.viewport);
   const win = fitWindow({ ...(saved ? windowLayout(saved) : {}), ...rect, appId, id, z: state.zTop + 1, minimized: false, maximized: saved?.maximized ?? false, snapped: saved?.snapped ?? null, restore: saved?.restore ?? null }, state.viewport);
-  if ((appId === 'preview' || appId === 'opencode') && !win.maximized && !win.snapped && Object.values(state.windows).some((item) => item?.appId === appId)) {
+  if ((appId === 'preview' || appId === 'pi') && !win.maximized && !win.snapped && Object.values(state.windows).some((item) => item?.appId === appId)) {
     Object.assign(win, clampRect({ ...win, x: 96 + count * 40, y: MENUBAR_H + 40 + count * 32 }, state.viewport));
   }
   return { ...state, windows: { ...state.windows, [id]: win }, focused: id, zTop: win.z };
@@ -186,8 +189,8 @@ function reducer(state: ShellState, action: Action): ShellState {
       return { ...state, authReady: true };
     case 'files-changed':
       return { ...state, fileRevision: state.fileRevision + 1 };
-    case 'new-opencode':
-      return createWindow(state, 'opencode', state.windows.opencode ? `opencode:${state.zTop + 1}` : 'opencode');
+    case 'new-pi':
+      return createWindow(state, 'pi', state.windows.pi ? `pi:${state.zTop + 1}` : 'pi');
     case 'new-preview':
       return createWindow(state, 'preview', state.windows.preview ? `preview:${state.zTop + 1}` : 'preview');
     case 'preview-mode': {
@@ -206,15 +209,15 @@ function reducer(state: ShellState, action: Action): ShellState {
       const next = reducer(state, { type: 'open-app', appId: 'trash' });
       return { ...next, navigation: { target: 'trash', empty: true, nonce: (state.navigation?.nonce ?? 0) + 1 } };
     }
-    case 'opencode-project': {
+    case 'pi-project': {
       const win = state.windows[action.id];
       return win ? { ...state, windows: { ...state.windows, [action.id]: { ...win, projectPath: action.path ?? undefined } } } : state;
     }
-    case 'open-opencode': {
-      const existing = Object.values(state.windows).find((win) => win?.appId === 'opencode' && win.projectPath === action.path);
+    case 'open-pi': {
+      const existing = Object.values(state.windows).find((win) => win?.appId === 'pi' && win.projectPath === action.path);
       if (existing) return reducer(state, { type: 'focus-app', appId: existing.id });
-      const id: WindowId = state.windows.opencode ? `opencode:${state.zTop + 1}` : 'opencode';
-      const next = createWindow(state, 'opencode', id);
+      const id: WindowId = state.windows.pi ? `pi:${state.zTop + 1}` : 'pi';
+      const next = createWindow(state, 'pi', id);
       return { ...next, windows: { ...next.windows, [id]: { ...next.windows[id]!, projectPath: action.path } } };
     }
     case 'open-app': {
@@ -231,6 +234,10 @@ function reducer(state: ShellState, action: Action): ShellState {
           nonce: (state.navigation?.nonce ?? 0) + 1,
         },
       };
+    }
+    case 'open-folder': {
+      const opened = reducer(state, { type: 'open-app', appId: 'files' });
+      return { ...opened, navigation: { target: 'files', path: action.path, nonce: (state.navigation?.nonce ?? 0) + 1 } };
     }
     case 'open-settings': {
       const opened = reducer(state, { type: 'open-app', appId: 'settings' });
@@ -382,7 +389,8 @@ function reducer(state: ShellState, action: Action): ShellState {
       const windows: Partial<Record<WindowId, WindowState>> = {};
       for (const [id, win] of Object.entries(state.windows)) {
         if (!win) continue;
-        windows[id as WindowId] = fitWindow(win, action.viewport);
+        const fitted = fitWindow(win, action.viewport);
+        windows[id as WindowId] = { ...fitted, ...clampRect(fitted, action.viewport), restore: fitted.restore ? clampRect(fitted.restore, action.viewport) : null };
       }
       return { ...state, viewport: action.viewport, windows };
     }
@@ -409,7 +417,7 @@ function initState(account?: string): ShellState {
   const windows: Partial<Record<WindowId, WindowState>> = {};
   if (stored?.windows) {
     for (const [id, win] of Object.entries(stored.windows)) {
-      const appId = (id === 'network' || id === 'updates') ? 'settings' : (id === 'logs' || id === 'services') ? 'home' : id.startsWith('preview:') ? 'preview' : id.startsWith('opencode:') ? 'opencode' : id as AppId;
+      const appId = (id === 'network' || id === 'updates') ? 'settings' : (id === 'logs' || id === 'services') ? 'home' : id.startsWith('preview:') ? 'preview' : id.startsWith('pi:') ? 'pi' : id as AppId;
       const windowId = ((id === 'network' || id === 'updates') ? 'settings' : (id === 'logs' || id === 'services') ? 'home' : id) as WindowId;
       if (!win || !APPS[appId] || ((id === 'network' || id === 'updates') && stored.windows.settings) || ((id === 'logs' || id === 'services') && stored.windows.home)) continue;
       windows[windowId] = fitWindow({ ...restorePreviewMode(win), id: windowId, appId }, viewport);
@@ -445,19 +453,20 @@ export interface ShellActions {
   logout(): void;
   openApp(appId: AppId): void;
   emptyTrash(): void;
-  setOpenCodeProject(id: WindowId, path: string | null): void;
-  openOpenCode(path: string): void;
+  setPiProject(id: WindowId, path: string | null): void;
+  openPi(path: string): void;
   openPreview(path: string[], edit?: boolean, windowId?: WindowId): void;
   newPreviewWindow(): void;
-  newOpenCodeWindow(): void;
+  newPiWindow(): void;
   setPreviewMode(id: WindowId, mode: 'rendered' | 'raw'): void;
   filesChanged(): void;
   registerWindowGuard(appId: WindowId, guard: (proceed: () => void) => void): () => void;
+  openFolder(path: string[]): void;
   openSettings(section: SettingsSection): void;
   openLibrary(appId: ServerAppID, checkUpdates?: boolean): void;
   openLogs(unit: string): void;
   openService(unit: string): void;
-  closeApp(appId: WindowId): void;
+  closeApp(appId: WindowId): boolean;
   quitApp(appId: AppId): void;
   focusApp(appId: WindowId): void;
   focusDesktop(): void;
@@ -494,8 +503,14 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const windowGuards = useRef(new Map<WindowId, (proceed: () => void) => void>());
   const requestWindowAction = useCallback((appId: WindowId, proceed: () => void) => {
     const guard = windowGuards.current.get(appId);
-    if (guard) { dispatch({ type: 'focus-app', appId }); guard(proceed); }
-    else proceed();
+    if (guard) {
+      dispatch({ type: 'focus-app', appId });
+      let accepted = false;
+      guard(() => { accepted = true; proceed(); });
+      return accepted;
+    }
+    proceed();
+    return true;
   }, []);
 
   const closeWindow = useCallback((appId: WindowId) => requestWindowAction(appId, () => {
@@ -533,7 +548,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     return source.onSessionExpired(() => dispatch({ type: 'logout' }));
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
   }, [resolvedTheme]);
 
@@ -614,16 +629,17 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       registerWindowGuard: (appId, guard) => { windowGuards.current.set(appId, guard); return () => { if (windowGuards.current.get(appId) === guard) windowGuards.current.delete(appId); }; },
       filesChanged: () => dispatch({ type: 'files-changed' }),
       newPreviewWindow: () => dispatch({ type: 'new-preview' }),
-      newOpenCodeWindow: () => dispatch({ type: 'new-opencode' }),
+      newPiWindow: () => dispatch({ type: 'new-pi' }),
       setPreviewMode: (id, mode) => dispatch({ type: 'preview-mode', id, mode }),
       emptyTrash: () => dispatch({ type: 'empty-trash' }),
-      setOpenCodeProject: (id, path) => dispatch({ type: 'opencode-project', id, path }),
-      openOpenCode: (path) => dispatch({ type: 'open-opencode', path }),
+      setPiProject: (id, path) => dispatch({ type: 'pi-project', id, path }),
+      openPi: (path) => dispatch({ type: 'open-pi', path }),
       openPreview: (path, edit = false, windowId) => {
         const open = () => dispatch({ type: 'open-preview', path, edit, windowId });
         if (windowId) requestWindowAction(windowId, open); else open();
       },
       openApp: (appId) => dispatch({ type: 'open-app', appId }),
+      openFolder: (path) => dispatch({ type: 'open-folder', path }),
       openSettings: (section) => dispatch({ type: 'open-settings', section }),
       openLibrary: (appId, checkUpdates) => dispatch({ type: 'open-library', appId, checkUpdates }),
       openLogs: (unit) => dispatch({ type: 'open-related', target: 'logs', unit }),

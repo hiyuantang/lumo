@@ -1,51 +1,18 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-FROM node:22-bookworm AS web
-WORKDIR /src
-COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
-COPY index.html tsconfig.json vite.config.ts playwright.config.ts playwright.docker.config.ts ./
-COPY src/ src/
-COPY tests/ tests/
-RUN VITE_LUMO_LIVE=1 npm run build
-
-FROM golang:1.26-bookworm AS build
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpam0g-dev gcc \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /src
-COPY server/go.mod server/go.sum ./
-RUN go mod download
+FROM lumo-test-build:deps AS build
+WORKDIR /lumo-test-src
 COPY server/ ./
-COPY --from=web /src/dist ./internal/static/dist
+COPY dist/ ./internal/static/dist/
+ENV GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local
 RUN CGO_ENABLED=1 go test -tags pam ./...
 RUN CGO_ENABLED=1 go build -tags pam,webdist -o /out/lumod ./cmd/lumod
 
-FROM ubuntu:24.04
-
+FROM lumo-test-runtime:deps
 ENV DEBIAN_FRONTEND=noninteractive
 ENV container=docker
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        systemd \
-        systemd-sysv \
-        dbus \
-        cron \
-        curl \
-        ca-certificates \
-        policykit-1 \
-        libpam-runtime \
-        libpam-modules \
-        sqlite3 \
-        openssh-server \
-        python3 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN useradd --system --no-create-home --shell /usr/sbin/nologin lumo-gw \
-    && useradd --create-home --shell /bin/bash --groups systemd-journal alice \
+RUN (id lumo-gw >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin lumo-gw) \
+    && (id alice >/dev/null 2>&1 || useradd --create-home --shell /bin/bash --groups systemd-journal alice) \
     && echo 'alice:alice-pass' | chpasswd
 
 COPY --from=build /out/lumod /usr/local/bin/lumod
@@ -60,6 +27,10 @@ RUN printf 'd /run/sshd 0755 root root -\n' > /etc/tmpfiles.d/lumo-testbed.conf 
     && printf '{"port":-1}\n' > /etc/lumo-test-web.json \
     && chmod 0644 /etc/lumo-test-web.json /usr/local/lib/lumo-test-web.py \
     && systemctl enable lumod-gateway.service lumod-sessiond.service lumod-broker.service lumo-test-web.service
+
+COPY docker/test-relay.py /opt/lumo-test/test-relay.py
+COPY docker/test-fixtures.py /opt/lumo-test/test-fixtures.py
+RUN python3 /opt/lumo-test/test-fixtures.py
 
 STOPSIGNAL SIGRTMIN+3
 

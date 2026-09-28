@@ -6,6 +6,7 @@ import (
 	"lumo/server/internal/broker"
 	"net/http"
 	"regexp"
+	"sort"
 	"time"
 
 	"lumo/server/internal/strictjson"
@@ -53,6 +54,7 @@ func (s *Server) handleUpdatesApply(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RequestID string `json:"requestId"`
 		PlanID    string `json:"planId"`
+		Clean     bool   `json:"clean"`
 	}
 	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, "Body must be a JSON object."))
@@ -69,7 +71,7 @@ func (s *Server) handleUpdatesApply(w http.ResponseWriter, r *http.Request) {
 	s.forwardBrokerAction(w, r, brokerAction{
 		RequestID: req.RequestID,
 		Action:    "packages.applyPlan",
-		Arguments: map[string]any{"planId": req.PlanID},
+		Arguments: map[string]any{"planId": req.PlanID, "clean": req.Clean},
 		Expected:  map[string]any{"planId": req.PlanID},
 	}, 30*time.Second)
 }
@@ -90,16 +92,36 @@ func decodeUpdateRequest(w http.ResponseWriter, r *http.Request) (string, bool) 
 }
 
 func (s *Server) handleAppUpdateHistory(w http.ResponseWriter, r *http.Request) {
-	if s.deps.BrokerSocket == "" {
-		s.handleUnavailable(w, r)
-		return
+	entries := []broker.AppUpdateHistoryEntry{}
+	if s.deps.BrokerSocket != "" {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		result, err := broker.AppUpdateHistory(ctx, s.deps.BrokerSocket)
+		if err != nil {
+			WriteError(w, NewError(CodeUnavailable, "Update history is unavailable."))
+			return
+		}
+		entries = append(entries, result...)
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	entries, err := broker.AppUpdateHistory(ctx, s.deps.BrokerSocket)
+	s.pi.mu.Lock()
+	entries = append(entries, s.pi.saved.History...)
+	err := s.pi.loadError
+	s.pi.mu.Unlock()
 	if err != nil {
-		WriteError(w, NewError(CodeUnavailable, "Update history is unavailable."))
+		WriteError(w, NewError(CodeUnavailable, "Pi update history is unavailable."))
 		return
 	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].CompletedAt > entries[j].CompletedAt })
 	WriteData(w, map[string]any{"entries": entries})
+}
+
+func (s *Server) handleInstalledPackages(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	defer cancel()
+	catalog, err := s.deps.Packages.Catalog(ctx)
+	if err != nil {
+		WriteError(w, NewError(CodeUnavailable, err.Error()))
+		return
+	}
+	WriteData(w, catalog)
 }

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { PiProvider, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiArchivedSession, PiSession, PiCommand, PiReply, PiEvents } from './pi';
 import type { SkillCatalog, SkillDetail } from './skills';
 import type { ProcessInfo } from './source';
 import type { TrashItem, TrashSelection } from './trash';
@@ -30,6 +31,8 @@ import type {
 import type {
   DataSource,
   FileRead,
+  FileLocation,
+  FileLocationSettings,
   FileWrite,
   FsEntry,
   JournalPage,
@@ -58,12 +61,13 @@ import type {
   TerminalSession,
   Unsubscribe,
   UpdatePlan,
+  PackageCatalog,
   UpdateProgress,
   AppUpdateHistoryEntry,
 } from './source';
 import { ApiError, apiGet, apiPost, apiPut, csrfToken, onSessionExpired as onSessionExpiredListener } from './transport';
 import { LumoSocket } from './ws';
-import type { DockerResources, DockerResourceRequest, AppOperation, AppCatalog, AppLogs, ContainerAction, ContainerDetail, ContainerSnapshot, ServerAppID, WebsiteDefinition, WebsiteResult, WebsiteSnapshot } from './server-apps';
+import type { DockerResources, DockerResourceRequest, AppOperation, AppCatalog, AppLogs, ContainerAction, ContainerDetail, ContainerSnapshot, LibraryAppID, WebsiteDefinition, WebsiteResult, WebsiteSnapshot } from './server-apps';
 
 const MB = 1024 * 1024;
 const GB = 1024 * 1024 * 1024;
@@ -153,10 +157,28 @@ function resolveFilePath(homeDir: string, path: string[]): string {
 }
 
 export class LiveDataSource implements DataSource {
-  getAppCatalog() { return apiGet<AppCatalog>('/apps'); }
-  async uninstallOpenCode(): Promise<void> { await apiPost('/apps/opencode/uninstall', { requestId: crypto.randomUUID() }); }
+  piProviders(): Promise<{ providers: PiProvider[] }> { return apiGet('/pi/providers'); }
+  piAuthStart(provider: string, method: PiAuthMethod, operation: 'login' | 'logout'): Promise<PiAuthState> { return apiPost('/pi/auth/start', { requestId: crypto.randomUUID(), provider, method, operation }); }
+  piAuthState(id: string): Promise<PiAuthState> { return apiGet('/pi/auth', { id }); }
+  piAuthReply(id: string, promptId: string, value: string): Promise<void> { return apiPost('/pi/auth/reply', { requestId: crypto.randomUUID(), id, promptId, value }); }
+  piAuthCancel(id: string): Promise<void> { return apiPost('/pi/auth/cancel', { requestId: crypto.randomUUID(), id }); }
+  piSettings(kind: PiInstructionKind): Promise<PiInstruction> { return apiGet('/pi/settings', { kind }); }
+  piSaveSettings(kind: PiInstructionKind, content: string, revision: string): Promise<PiInstruction> { return apiPost('/pi/settings', { requestId: crypto.randomUUID(), kind, content, revision }); }
+  async piSessions(project: string): Promise<PiSession[]> { return (await apiGet<{ sessions: PiSession[] }>('/pi/sessions', { project })).sessions; }
+  async piDeleteSession(project: string, session: string): Promise<void> { await apiPost('/pi/sessions/delete', { requestId: crypto.randomUUID(), project, session }); }
+  async piArchivedSessions(): Promise<PiArchivedSession[]> { return (await apiGet<{ sessions: PiArchivedSession[] }>('/pi/sessions/archived')).sessions; }
+  async piArchiveSession(project: string, session: string): Promise<void> { await apiPost('/pi/sessions/archive', { requestId: crypto.randomUUID(), project, session }); }
+  async piRestoreSession(project: string, session: string): Promise<void> { await apiPost('/pi/sessions/restore', { requestId: crypto.randomUUID(), project, session }); }
+  piStart(project: string, session = '', resume?: string): Promise<{ id: string; project: string }> { return apiPost('/pi/start', { requestId: crypto.randomUUID(), project, session, resume }); }
+  piCommand(id: string, command: PiCommand): Promise<PiReply> { return apiPost('/pi/command', { requestId: crypto.randomUUID(), id, command }); }
+  piEvents(id: string, after: number): Promise<PiEvents> { return apiGet('/pi/events', { id, after }); }
+  async piStop(id: string): Promise<void> { await apiPost('/pi/stop', { id }); }
 
-  async planAppInstall(id: ServerAppID, operation: AppOperation = 'install'): Promise<UpdatePlan> {
+  getAppCatalog() { return apiGet<AppCatalog>('/apps'); }
+  async uninstallPi(clean = false): Promise<void> { await apiPost('/apps/pi/uninstall', { requestId: crypto.randomUUID(), clean }); }
+
+  async planAppInstall(id: LibraryAppID, operation: AppOperation = 'install'): Promise<UpdatePlan> {
+    if (id === 'pi') return (await apiPost<{ plan: UpdatePlan }>('/apps/pi/plan', { requestId: crypto.randomUUID(), operation })).plan;
     return (await apiPost<{ plan: UpdatePlan }>('/apps/plan', { requestId: crypto.randomUUID(), appId: id, operation })).plan;
   }
   getDockerResources() { return apiGet<DockerResources>('/docker/resources'); }
@@ -236,6 +258,7 @@ export class LiveDataSource implements DataSource {
         os: data.os.prettyName,
         kernel: data.os.kernel,
         architecture: data.architecture,
+        cpuModel: data.cpuModel,
         bootId: data.bootId,
         serverTime: data.serverTime,
       };
@@ -493,6 +516,27 @@ export class LiveDataSource implements DataSource {
   listSkills(): Promise<SkillCatalog> { return apiGet('/skills'); }
   readSkill(id: string): Promise<SkillDetail> { return apiGet('/skills/detail', { id }); }
 
+  getFileLocationSettings(): Promise<FileLocationSettings> {
+    return apiGet('/files/locations/settings');
+  }
+
+  planFileLocationMove(path: string, revision: string, id?: string): Promise<{ files: number; bytes: number; create: number }> {
+    return apiGet('/files/locations/plan', { path, revision, ...(id ? { id } : {}) });
+  }
+
+  setFileLocation(id: string, path: string, revision: string, remove = false): Promise<FileLocationSettings> {
+    return apiPost('/files/locations/settings', { id, path, remove, expectedRevision: revision, requestId: crypto.randomUUID() });
+  }
+
+  setFileLocationBase(path: string, revision: string): Promise<FileLocationSettings> {
+    return apiPost('/files/locations/settings', { path, expectedRevision: revision, requestId: crypto.randomUUID() });
+  }
+
+  async listFileLocations(): Promise<FileLocation[]> {
+    const data = await apiGet<{ locations: FileLocation[] }>('/files/locations');
+    return data.locations ?? [];
+  }
+
   homePath(): string[] {
     const segment = this.homeDir.split('/').filter(Boolean).pop();
     return [segment ?? 'user'];
@@ -563,6 +607,10 @@ export class LiveDataSource implements DataSource {
   async restoreTrash(item: TrashSelection): Promise<string> { return (await apiPost<{ path: string }>('/trash/restore', { requestId: crypto.randomUUID(), item })).path; }
   async deleteTrash(items: TrashSelection[]): Promise<void> { await apiPost('/trash/delete', { requestId: crypto.randomUUID(), items }); }
 
+  async moveFile(from: string[], to: string[]): Promise<void> {
+    await apiPost('/files/move', { from: this.absolutePath(from), to: this.absolutePath(to), requestId: crypto.randomUUID() });
+  }
+
   async deleteFile(path: string[]): Promise<void> {
     await apiPost<{ trashed: boolean }>('/files/delete', {
       path: resolveFilePath(this.homeDir, path),
@@ -571,6 +619,8 @@ export class LiveDataSource implements DataSource {
   }
 
   async getAppUpdateHistory(): Promise<AppUpdateHistoryEntry[]> { return (await apiGet<{ entries: AppUpdateHistoryEntry[] }>('/apps/update-history')).entries; }
+
+  getPackageCatalog(): Promise<PackageCatalog> { return apiGet('/updates/packages'); }
 
   async refreshUpdates(): Promise<string> {
     const data = await apiPost<{ refreshedAt: string }>('/updates/refresh', { requestId: crypto.randomUUID() });
@@ -582,9 +632,10 @@ export class LiveDataSource implements DataSource {
     return data.plan;
   }
 
-  async applyUpdatePlan(planId: string): Promise<string> {
-    const requestId = crypto.randomUUID();
-    const data = await apiPost<{ requestId: string }>('/updates/apply', { requestId, planId });
+  async applyUpdatePlan(planId: string, clean = false): Promise<string> {
+    const pi = planId.startsWith('pi_');
+    const requestId = `${pi ? 'pi_' : ''}${crypto.randomUUID()}`;
+    const data = await apiPost<{ requestId: string }>(pi ? '/apps/pi/apply' : '/updates/apply', { requestId, planId, ...(!pi ? { clean } : {}) });
     return data.requestId;
   }
 
@@ -593,6 +644,20 @@ export class LiveDataSource implements DataSource {
     onProgress: (progress: UpdateProgress) => void,
     onError?: (err: Error) => void,
   ): Unsubscribe {
+    if (requestId.startsWith('pi_')) {
+      let active = true;
+      let timer: ReturnType<typeof setTimeout>;
+      const poll = async () => {
+        try {
+          const progress = await apiGet<UpdateProgress>('/apps/pi/progress', { requestId });
+          if (!active) return;
+          onProgress(progress);
+          if (!progress.done && active) timer = setTimeout(() => { void poll(); }, 800);
+        } catch (err) { if (active) onError?.(err instanceof Error ? err : new Error(String(err))); }
+      };
+      void poll();
+      return () => { active = false; clearTimeout(timer); };
+    }
     const handle = this.socket.subscribe({
       capability: 'updates.progress',
       params: () => ({ requestId }),

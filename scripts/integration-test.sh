@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-only
 set -uo pipefail
+export GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local
+export npm_config_offline=true
+ONLINE=0
+if [[ "${1:-}" == "--online" && $# == 1 ]]; then
+    ONLINE=1
+elif [[ $# != 0 ]]; then
+    echo "Usage: $0 [--online]"
+    exit 1
+fi
+export LUMO_TEST_ONLINE="$ONLINE"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GO="$ROOT/.tools/go/bin/go"
@@ -10,9 +20,18 @@ export GOPATH="$ROOT/.tools/gopath"
 
 docker info >/dev/null 2>&1 || { echo "Docker is unavailable. Start Docker Desktop, then retry."; exit 1; }
 
+for dependency in lumo-test-build:deps lumo-test-runtime:deps; do
+    docker image inspect "$dependency" >/dev/null 2>&1 || {
+        echo "Missing local test dependency: $dependency. No download was attempted."
+        echo "Prepare dependencies explicitly with npm run test:docker:prepare when network access is appropriate."
+        exit 1
+    }
+done
 IMAGE="lumo-integration:test"
 BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/lumo-docker.XXXXXX")"
 CONTAINER="$(basename "$BUILD_DIR" | tr '[:upper:]' '[:lower:]')"
+NETWORK="$CONTAINER-offline"
+RELAY="$CONTAINER-relay"
 PORT="${PORT:-}"
 if [[ -n "$PORT" && ! "$PORT" =~ ^[0-9]+$ ]]; then
     echo "PORT must be a numeric host port, or unset for an automatically assigned port."
@@ -84,6 +103,10 @@ cleanup() {
         docker exec "$CONTAINER" journalctl --no-pager -n 300 >"$BUILD_DIR/system-journal.log" 2>&1 || true
         docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
     fi
+    if [[ "$ONLINE" == 0 ]]; then
+        docker rm -f "$RELAY" >/dev/null 2>&1 || true
+        docker network rm "$NETWORK" >/dev/null 2>&1 || true
+    fi
     rm -f "$COOKIE_JAR"
     echo "Test artifacts: $BUILD_DIR"
     return "$status"
@@ -92,35 +115,69 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+echo "== building frontend from installed local dependencies =="
+(cd "$ROOT" && npm run build) >"$BUILD_DIR/frontend.log" 2>&1 || { cat "$BUILD_DIR/frontend.log"; exit 1; }
+
 echo "== building wscheck (host) =="
 mkdir -p "$BUILD_DIR/host"
 (cd "$ROOT/server" && CGO_ENABLED=0 "$GO" build -o "$BUILD_DIR/host/wscheck" ./cmd/wscheck) || exit 1
 
 echo "== building image $IMAGE (compiles lumod with PAM inside) =="
-docker build -t "$IMAGE" -f "$ROOT/docker/Dockerfile.ubuntu24" "$ROOT" >"$BUILD_DIR/build.log" 2>&1 || {
+docker build --pull=false --network=none -t "$IMAGE" -f "$ROOT/docker/Dockerfile.ubuntu24" "$ROOT" >"$BUILD_DIR/build.log" 2>&1 || {
     echo "FAIL: docker build failed"
     tail -60 "$BUILD_DIR/build.log"
     exit 1
 }
 
-echo "== starting container $CONTAINER =="
-docker run -d --name "$CONTAINER" \
+NETWORK_ARGS=()
+PORT_ARGS=(-p "127.0.0.1:${PORT}:8080")
+PORT_CONTAINER="$CONTAINER"
+if [[ "$ONLINE" == 0 ]]; then
+    docker network create --internal "$NETWORK" >/dev/null || exit 1
+    NETWORK_ARGS=(--network "$NETWORK" --dns 127.0.0.1)
+    PORT_ARGS=()
+fi
+echo "== starting container $CONTAINER (online=$ONLINE) =="
+docker run --pull=never -d "${NETWORK_ARGS[@]}" --name "$CONTAINER" \
     --privileged --cgroupns=host \
     -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
     --tmpfs /run --tmpfs /run/lock \
-    -p "127.0.0.1:${PORT}:8080" \
+    "${PORT_ARGS[@]}" \
     "$IMAGE" >/dev/null || {
     echo "FAIL: docker run failed"
     exit 1
 }
 
-PORT="$(docker inspect --format '{{(index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort}}' "$CONTAINER")"
+if [[ "$ONLINE" == 0 ]]; then
+    docker exec "$CONTAINER" sh -eu -c '
+        mkdir -p /opt/lumo-test/saved-sources
+        for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            [ ! -e "$source" ] || mv "$source" /opt/lumo-test/saved-sources/
+        done
+        printf "deb [trusted=yes] file:/opt/lumo-test/packages ./\n" > /etc/apt/sources.list
+        apt-get update >/dev/null
+    ' || exit 1
+    if [[ "$(docker network inspect --format '{{.Internal}}' "$NETWORK")" != true ]]; then
+        echo "FAIL: test container must have external networking disabled"
+        exit 1
+    fi
+    docker run --pull=never -d --name "$RELAY" --network bridge \
+        --read-only --cap-drop=ALL --security-opt no-new-privileges --user 65534:65534 \
+        -p "127.0.0.1:${PORT}:8080" --entrypoint python3 \
+        "$IMAGE" /opt/lumo-test/test-relay.py "$CONTAINER" >/dev/null || exit 1
+    docker network connect "$NETWORK" "$RELAY" || exit 1
+    PORT_CONTAINER="$RELAY"
+    ok "external networking disabled; APT uses only local fixtures"
+fi
+
+PORT="$(docker inspect --format '{{(index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort}}' "$PORT_CONTAINER")"
+if [[ ! "$PORT" =~ ^[0-9]+$ ]]; then echo "FAIL: local test port was not assigned"; exit 1; fi
 BASE="http://127.0.0.1:${PORT}"
 WSURL="ws://127.0.0.1:${PORT}/api/v1/ws"
 echo "== waiting for the gateway at $BASE =="
 healthy=0
 for _ in $(seq 1 120); do
-    if curl -fsS "$BASE/api/v1/meta/version" >/dev/null 2>&1; then
+    if curl --connect-timeout 1 --max-time 2 -fsS "$BASE/api/v1/meta/version" >/dev/null 2>&1; then
         healthy=1
         break
     fi

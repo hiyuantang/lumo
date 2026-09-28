@@ -66,6 +66,8 @@ Apply these rules to every UI change. See [DESKTOP_STYLE.md](docs/DESKTOP_STYLE.
 for visual details and [DESIGN_PRINCIPLES.md](docs/DESIGN_PRINCIPLES.md) for
 interaction and accessibility requirements.
 
+- **Organize compact areas deliberately.** Place each piece of information where
+  it supports the relevant action. Avoid repeated labels, values, and explanations.
 - **Use space efficiently.** Keep actions beside the heading or content they
   affect. A single Edit or Refresh button must not consume a whole row.
   Avoid duplicate information, redundant controls and unnecessary metadata.
@@ -73,8 +75,9 @@ interaction and accessibility requirements.
   the current page or folder name. Move lengthy details to a separate page.
   Use distinct icons for navigation, sidebar toggling and other actions.
 - **Scope controls locally.** Search belongs above the list it filters. Put
-  compact Refresh controls in the left panel or card header; App Library uses
-  View → Refresh. Do not add unexplained refresh icons or extra update buttons.
+  compact icon-only Refresh controls with tooltips in the left panel or card
+  header; App Library uses View → Refresh. Do not add unexplained refresh icons
+  or extra update buttons.
 - **Size cards consistently.** Use adaptive grids: typically two app cards
   across, with more or fewer as the window changes. Cap card height and clamp
   long descriptions with an ellipsis; keep full content on the details page.
@@ -91,6 +94,13 @@ interaction and accessibility requirements.
 - **Use direct update flows.** App Library has Discovery and Updates. Offer
   Update per app and Update all. Completed updates move to installed history,
   showing old version → new version without an extra disclosure step.
+- **Keep installation direct.** Install starts from one button, which becomes
+  compact progress in the same place, then Uninstall on completion. Avoid extra
+  review screens, success cards and ellipses on these action labels. Preserve
+  server-required authentication and uninstall choices.
+- **Keep uninstall choices explicit.** Offer normal Uninstall (default, keeps
+  settings and data) and Clean uninstall (moves app settings, caches and stored
+  data to recoverable Trash). Preserve project and website files.
 - **Use consistent names.** Match names across the dock, menus and App Library
   (for example, Docker and Nginx). Omit incidental engine/demo labels from
   everyday controls; show version details where they help with updates.
@@ -99,8 +109,19 @@ interaction and accessibility requirements.
   glossy gradients, bevels or plastic highlights. App icons are colorful,
   minimalist and original. The desktop menu bar is transparent with no bottom
   separator.
+- **Inset content dividers.** Leave space at both ends of separators between
+  content rows, aligned with the card's inner padding (normally 16px). Preserve
+  existing inset lines. Keep structural window, toolbar and sidebar borders
+  distinct from content dividers.
+- **Share input styling.** Search boxes use `app-search`; ordinary text fields
+  use `input`. Keep font size, line height, caret spacing and field height
+  consistent, with flat borders and one outer focus outline.
 - **Keep window controls small and clear.** Circular coral, amber and green
   controls belong at the top left, with readable, sufficiently bold glyphs.
+- **Keep floating windows reachable.** They may extend left, right or below
+  the desktop, but never above the menu bar; retain a draggable title-bar area.
+  Overview offers a top-right close control on hover or keyboard focus and
+  preserves unsaved-change prompts.
 - **Coordinate motion.** Transitions should feel smooth and explain state.
   A dock thumbnail disappears as its window restores, without lingering as
   a duplicate. Preserve window state and respect reduced motion. Verify UI
@@ -125,7 +146,12 @@ Frontend:
   to live mode; `npm run build:mock` forces mock.
 - `npm test` / `npm run test:ui` — visual and interaction tests with simulated
   data (Chromium; one-time setup via `npx playwright install chromium`).
-- `npm run test:docker` — real Ubuntu operations and browser-to-Ubuntu workflows.
+- `npm run test:docker` — offline Ubuntu operations and browser workflows using
+  local package fixtures and cached dependency images. Missing dependencies fail
+  instead of downloading; `npm run test:docker:prepare` is explicit setup.
+- `npm run test:online` — real external installer/package checks. Run only when
+  absolutely necessary to verify upstream behavior, never for routine edits.
+  Default tests must not contact external services or download apps.
 - `npm run test:unit` — Go and installer unit checks.
 - `npm run test:all` — build, unit, interface and Docker gates.
 - See `docs/TESTING.md` for coverage boundaries and screenshot baselines.
@@ -165,6 +191,19 @@ Layout:
 
 UI checks use `data-testid` hooks; keep existing testids stable and add
 new ones for new interactive elements.
+
+## Writing tests
+
+- Write new tests to run offline by default. Use mocks, fake command runners,
+  local package fixtures and cached dependencies; never repeatedly download,
+  install or uninstall real third-party apps during routine development.
+- Browser tests must import `test` and `expect` from `tests/offline.ts` (using
+  the appropriate relative path), which blocks unexpected external requests.
+- Missing dependencies must fail clearly, without triggering automatic downloads.
+  Dependency preparation is an explicit, separate step.
+- Add a real online check only when local fixtures cannot verify the necessary
+  upstream behavior. Tag it `@online`, keep it out of default suites and
+  `test:all`, and run it only when absolutely necessary.
 
 ## Project mission
 

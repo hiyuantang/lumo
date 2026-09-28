@@ -2,7 +2,7 @@
 import type { ComponentType } from 'react';
 import { Skills } from './Skills';
 import { Trash } from './Trash';
-import { OpenCode } from './OpenCode';
+import { Pi } from './Pi';
 import { Preview } from './Preview';
 import { Files } from './Files';
 import { Monitor } from './Monitor';
@@ -17,7 +17,7 @@ export const APP_COMPONENTS: Record<AppId, ComponentType> = {
   skills: Skills,
   trash: Trash,
   preview: Preview,
-  opencode: OpenCode,
+  pi: Pi,
   library: AppLibrary,
   containers: Containers,
   websites: Websites,

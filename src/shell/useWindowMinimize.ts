@@ -49,7 +49,7 @@ export function useWindowMinimize(win: WindowState, viewport: Viewport, reducedM
       }
     };
 
-    if (reducedMotion || !changed) {
+    if (reducedMotion || !changed || element.closest('.overview-active')) {
       settle();
       return;
     }

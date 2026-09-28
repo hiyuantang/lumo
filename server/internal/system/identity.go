@@ -25,6 +25,7 @@ type UserInfo struct {
 }
 
 type Identity struct {
+	CPUModel     string   `json:"cpuModel,omitempty"`
 	Hostname     string   `json:"hostname"`
 	OS           OSInfo   `json:"os"`
 	Architecture string   `json:"architecture"`
@@ -53,6 +54,7 @@ func ReadIdentity() Identity {
 			Kernel:     kernelRelease(),
 		},
 		Architecture: machineArch(),
+		CPUModel:     readCPUModel(),
 		BootID:       readBootID(),
 		ServerTime:   time.Now().UTC().Format(time.RFC3339),
 		User:         currentUser(),
@@ -135,4 +137,29 @@ func readBootID() string {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
+}
+
+func readCPUModel() string {
+	data, err := os.ReadFile("/proc/cpuinfo")
+	if err != nil {
+		return ""
+	}
+	return parseCPUModel(string(data))
+}
+
+func parseCPUModel(content string) string {
+	models := []string{}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(content, "\n") {
+		key, value, found := strings.Cut(line, ":")
+		if !found || strings.TrimSpace(key) != "model name" {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if value != "" && !seen[value] {
+			models = append(models, value)
+			seen[value] = true
+		}
+	}
+	return strings.Join(models, "; ")
 }

@@ -13,8 +13,7 @@
 .file-picker-location nav button { flex-shrink: 0; padding: 5px 7px; border-radius: 6px; color: var(--text-muted); }
 .file-picker-location nav button:hover { background: var(--accent-soft); color: var(--accent); }
 .file-picker-location nav button + button::before { content: '/'; margin-right: 12px; color: var(--text-faint); }
-.file-picker-filter .input { appearance: none; flex: 1; min-width: 0; height: 32px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-sunken); color: var(--text); font-size: 12px; }
-.file-picker-filter .input::placeholder { color: var(--text-faint); }
+.file-picker-filter .input { flex: 1; }
 .file-picker-filter .input::-webkit-search-cancel-button { display: none; }
 .file-picker-filter .btn { flex-shrink: 0; }
 .file-picker-filter [aria-pressed='true'] { color: var(--accent); background: var(--accent-soft); }

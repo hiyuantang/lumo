@@ -1,19 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useFileDrop } from '../shell/fileDrag';
 import { useAppMenus } from '../shell/appMenus';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api/transport';
-import { describeError, getDataSource } from '../api/source';
+import { describeError, getDataSource, isReauthRequired } from '../api/source';
 import type { TrashItem } from '../api/trash';
+import { useReauth } from '../shell/ReauthSheet';
 import { useShell } from '../shell/ShellContext';
 import { useCurrentWindow } from '../shell/WindowContext';
 import { useContextMenu } from '../shell/ContextMenu';
-import { IconFile, IconFolder, IconTrash } from '../shell/icons';
+import { IconRefresh, IconFile, IconFolder, IconTrash } from '../shell/icons';
 import { formatModified, formatSize } from '../utils/file-format';
 import { AppConfirmation } from './ServerAppUI';
 import '../styles/trash.css';
 
 export function Trash({ embedded = false }: { embedded?: boolean }) {
   const source = getDataSource();
+  const reauth = useReauth();
+  const drop = useFileDrop();
   const { state, actions } = useShell();
   const win = useCurrentWindow();
   const contextMenu = useContextMenu();
@@ -60,7 +64,7 @@ export function Trash({ embedded = false }: { embedded?: boolean }) {
       actions.filesChanged();
       actions.notify(`${entry.name} restored`, entry.originalPath);
       setSelected(null);
-    } catch (err) { setError(err instanceof ApiError && err.code === 'conflict' ? 'An item already exists at the original location. Move or rename it before restoring.' : err instanceof ApiError && err.code === 'not_found' ? 'The original folder or Trash item is no longer available.' : describeError(err)); }
+    } catch (err) { if (isReauthRequired(err)) { reauth(() => { void restore(entry); }); return; } setError(err instanceof ApiError && err.code === 'conflict' ? 'An item already exists at the original location. Move or rename it before restoring.' : err instanceof ApiError && err.code === 'not_found' ? 'The original folder or Trash item is no longer available.' : describeError(err)); }
     finally { await refresh(); setBusy(false); }
   }
 
@@ -70,7 +74,7 @@ export function Trash({ embedded = false }: { embedded?: boolean }) {
       await source.deleteTrash(entries.map(({ id, revision }) => ({ id, revision })));
       actions.filesChanged();
       setSelected(null);
-    } catch (err) { setError(describeError(err)); }
+    } catch (err) { if (isReauthRequired(err)) reauth(() => { void remove(entries); }); else setError(describeError(err)); }
     finally { setConfirm(null); await refresh(); setBusy(false); }
   }
 
@@ -79,10 +83,10 @@ export function Trash({ embedded = false }: { embedded?: boolean }) {
     view: [{ id: 'refresh', label: 'Refresh', disabled: busy, run: () => { void refresh(); } }],
   });
 
-  return <div className="app trash" data-testid="app-trash">
+  return <div className="app trash" {...drop('trash')} data-testid="app-trash">
     <div className="app-toolbar">
       <span className="trash-intro">Deleted items stay here until you empty Trash.</span>
-      <div className="app-toolbar-actions"><button className="btn" type="button" data-testid="trash-refresh" disabled={busy} onClick={() => { setError(null); void refresh(); }}>Refresh</button>
+      <div className="app-toolbar-actions"><button aria-label="Refresh" title="Refresh" className="btn btn-icon" type="button" data-testid="trash-refresh" disabled={busy} onClick={() => { setError(null); void refresh(); }}><IconRefresh size={16}/></button>
       <button className="btn" type="button" data-testid="trash-restore" disabled={busy || !item?.canRestore} onClick={() => item && void restore(item)}>Restore</button>
       <button className="btn btn-danger" type="button" data-testid="trash-empty" disabled={busy || !items.length} onClick={() => setConfirm([...items])}>Empty Trash…</button>
     </div></div>

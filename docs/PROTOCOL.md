@@ -51,18 +51,24 @@ GET  /api/v1/services
 GET  /api/v1/services/detail             Phase 5
 POST /api/v1/services/action             Phase 4
 GET  /api/v1/journal
+GET  /api/v1/files/locations
 GET  /api/v1/files/list
 GET  /api/v1/files/read
 PUT  /api/v1/files/write                 Phase 3
 POST /api/v1/files/create                Create file or folder
+POST /api/v1/files/move                  Move file or folder
 POST /api/v1/files/delete                Phase 3
 POST /api/v1/files/write-privileged      Phase 5
+GET  /api/v1/updates/packages            Phase 5
 POST /api/v1/updates/refresh             Phase 5
 POST /api/v1/updates/plan                Phase 5
 POST /api/v1/updates/apply               Phase 5
 GET  /api/v1/apps
 POST /api/v1/apps/plan
-POST /api/v1/apps/opencode/uninstall
+POST /api/v1/apps/pi/uninstall
+POST /api/v1/apps/pi/plan
+POST /api/v1/apps/pi/apply
+GET  /api/v1/apps/pi/progress
 GET  /api/v1/containers
 GET  /api/v1/containers/detail
 GET  /api/v1/containers/logs
@@ -307,13 +313,13 @@ by cursor. `after: null` starts at the tail.
 #### Terminal (PTY)
 
 Opened by subscribing with capability `terminal.open` and params
-`{ "cols": 80, "rows": 24, "shell": null }`. Optional `program: "opencode"`
-launches the installed OpenCode CLI directly, with no shell interpolation or
+`{ "cols": 80, "rows": 24, "shell": null }`. Optional `program: "pi"`
+launches the installed Pi CLI directly, with no shell interpolation or
 extra command arguments. `directory` accepts an absolute project directory
 or `~` (the account's home). Other programs and a shell override combined
-with OpenCode are rejected. Processes run as the authenticated Linux user.
-The server checks `~/.opencode/bin`, `~/.local/bin`, `/usr/local/bin` and
-`/usr/bin` for OpenCode. Reattachment uses the existing session token and
+with Pi are rejected. Processes run as the authenticated Linux user.
+The server checks `~/.local/share/lumo/pi/bin`, `~/.local/bin`, `/usr/local/bin` and
+`/usr/bin` for Pi. Reattachment uses the existing session token and
 does not restart the CLI. The server answers with a
 `subscribed` frame that carries the session token in `data`:
 
@@ -389,6 +395,7 @@ endpoints; streams are WS channel kinds; mutations are POST/PUT with
 | `files.read` | GET | 2 | no |
 | `files.write` | PUT | 3 | yes |
 | `files.delete` | POST | 3 | yes |
+| `files.move` | POST | 3 | yes |
 | `files.write-privileged` | POST | 5 | yes |
 | `terminal.open` / io / resize / close | WS channel | 3 | yes |
 | `updates.refresh` | POST | 5 | yes |
@@ -404,6 +411,9 @@ called before its phase returns `unavailable`.
 
 `GET /api/v1/system/identity`
 
+`cpuModel` is the model name reported by `/proc/cpuinfo`; it is omitted when
+unavailable. CPU counts in metrics represent logical CPUs visible to the server.
+
 ```json
 {
   "ok": true,
@@ -416,6 +426,7 @@ called before its phase returns `unavailable`.
       "kernel": "7.0.0-12-generic"
     },
     "architecture": "x86_64",
+    "cpuModel": "AMD EPYC 7763 64-Core Processor",
     "bootId": "1e4c9a…",
     "serverTime": "2026-07-19T00:12:44Z",
     "user": {
@@ -698,6 +709,23 @@ files, folders, and symbolic links with `409 conflict`; it never overwrites them
 The same request ID replays the original response. Success returns the created
 `path` and `kind`.
 
+### `files.move`
+
+`POST /api/v1/files/move` with `X-Lumo-CSRF`:
+
+```json
+{"from":"/home/alice/notes.md","to":"/home/alice/Documents/notes.md","requestId":"unique-request-id"}
+```
+
+Moves one file, symbolic link, or directory as the authenticated Linux user.
+Both paths must be canonical and absolute, and the destination parent must
+exist. An atomic no-replace rename refuses existing targets with `409 conflict`.
+Moving a directory into itself, moving Trash storage, or crossing filesystems
+returns `400 validation_failed`; nothing is copied or deleted on failure.
+Success returns the destination `path`. A repeated request ID replays the
+original response. Multi-selection sends one request per item and reports
+failures individually; successful moves are retained.
+
 ### `files.write`
 
 `PUT /api/v1/files/write`
@@ -774,7 +802,9 @@ Success:
 
 The implementation follows the [freedesktop Trash specification](https://specifications.freedesktop.org/trash/latest/)
 for the user's home Trash (`$XDG_DATA_HOME/Trash`, defaulting to
-`~/.local/share/Trash`). Other filesystem trash directories are not aggregated.
+`~/.local/share/Trash`). The list also includes the signed-in account’s protected
+app-cleanup bundles (see App removal). Other filesystem trash directories are
+not aggregated.
 
 - `GET /api/v1/trash` returns `{ "items": [...] }`. Each item contains `id`,
   `name`, `originalPath`, `deletedAt` (RFC3339), `type`, `sizeBytes`, `revision`
@@ -787,8 +817,8 @@ for the user's home Trash (`$XDG_DATA_HOME/Trash`, defaulting to
 - `POST /api/v1/trash/delete` accepts `{ "requestId": "unique-id", "items":
   [{ "id": "stored-name", "revision": "sha256:..." }] }` and returns
   `{ "deleted": true }`. It permanently removes only the specified Trash
-  entries and their metadata. All revisions are checked before deleting any
-  items. Filesystem errors may interrupt a batch; refresh the list afterwards.
+  entries and their metadata. Each storage group checks all of its revisions
+  before deleting its items; a failure can leave a mixed batch partly completed. Filesystem errors may interrupt a batch; refresh the list afterwards.
   Each batch supports up to 10,000 items.
 
 Restore and delete reject traversal IDs and stale item revisions. Permanent
@@ -897,6 +927,44 @@ produces audit begin/end rows (denials produce a deny row); see
 §Idempotency applies unchanged.
 
 ## Phase 5 subset — complete system applications
+
+### Installed packages and available updates
+
+`GET /api/v1/updates/packages` returns the authenticated user's read-only
+view of the host's installed APT packages and locally cached upgrade plan:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "checkedAt": "2026-09-28T04:00:00Z",
+    "rebootRequired": false,
+    "packages": [{
+      "name": "openssl", "version": "3.0.13-0ubuntu3.4",
+      "architecture": "amd64", "summary": "Secure communication tools",
+      "group": "system", "origin": "Ubuntu", "held": false,
+      "updateVersion": "3.0.13-0ubuntu3.5",
+      "updateGroup": "system", "updateOrigin": "Ubuntu", "security": true
+    }]
+  }
+}
+```
+
+This endpoint runs local `dpkg-query`, `apt-cache policy` and an APT upgrade
+simulation; it never refreshes repositories, downloads or installs packages.
+`checkedAt` is the inventory read time, not the last repository refresh time.
+Only installed records are included. Updates are those eligible for the
+existing normal upgrade flow; held and kept-back packages are not offered.
+If simulation fails, `updateError` explains the failure and installed packages
+remain available without update fields.
+
+`group` and `updateGroup` are `system`, `third-party` or `unknown`, based on
+repository origin for the exact installed or target version. Ubuntu is system;
+other origins, including PPAs, are third-party. Missing or conflicting origins
+remain unknown. Security is a separate flag for security archives. It does not
+classify a package as system software. Snap, Flatpak and manually installed
+binaries are outside this APT inventory. The broker still prepares, validates
+and applies the exact saved plan through the existing endpoints below.
 
 ### `updates.refresh`
 
@@ -1181,7 +1249,7 @@ See [SERVER_APPS.md](SERVER_APPS.md) for scope and design references.
 
 ### Catalog and installation
 
-`GET /api/v1/apps` also reports `opencode` installation for the current Linux account. OpenCode is installed separately using its official instructions; the package-plan endpoint continues to accept only Docker and Nginx.
+`GET /api/v1/apps` also reports `pi` installation for the current Linux account. Pi has a separate unprivileged install/update worker; the APT package-plan endpoint continues to accept only Docker and Nginx.
 
 `GET /api/v1/apps` returns:
 
@@ -1207,6 +1275,156 @@ if the dependency/version set differs from the review. Removals are refused.
 Closing an app does not cancel a running package operation. A worker restart
 loses in-memory progress; the client must refresh installed state and prepare a
 new plan instead of blindly repeating an uncertain installation.
+
+### Pi installation and updates
+
+The Pi catalog reports `canInstall` when npm is available; installing requires
+Node.js 22.19 or newer. `canUpdate` and `canUninstall` apply only to Lumo-managed
+copies. Externally installed Pi can run in the native app but must be maintained
+with its original package manager.
+
+`POST /api/v1/apps/pi/plan` accepts `{requestId, operation}` (`install` or
+`update`). It reads the installed version and official
+`@earendil-works/pi-coding-agent` metadata from the npm registry. The resulting
+`UpdatePlan` has a `pi_` ID and expires after 15 minutes.
+
+`POST /api/v1/apps/pi/apply` accepts `{requestId, planId}` and returns immediately.
+The worker installs the exact reviewed version with npm, `--ignore-scripts`,
+and an account-local prefix at `~/.local/share/lumo/pi`. It checks Node's version,
+refuses a changed installation, and verifies Pi's version after npm completes.
+No elevated shell or automatic Node installation is involved. Command output
+and execution time are bounded. Duplicate request IDs return the same job.
+
+`GET /api/v1/apps/pi/progress?requestId=...` returns `UpdateProgress`. Operations
+continue after App Library closes. History persists under
+`~/.local/state/lumo/pi-operations.json`. Restarted jobs are reported as
+interrupted, never silently retried. Close active Pi projects before updating
+or removing Pi.
+
+### Native Pi workspace
+
+The authenticated per-user agent starts Pi using its documented JSONL RPC
+interface. The browser accesses it through the typed data-source seam; it never
+launches commands directly. Normal gateway authentication and CSRF protection
+apply. Pi has the Linux account's ordinary filesystem and command permissions.
+
+- `GET /api/v1/pi/providers` returns `{providers: [{id, name, methods:
+  [{type: "oauth"|"api_key", label}], credential?}]}` from the installed Pi SDK.
+  Enumeration uses `ModelRuntime` with network catalog refresh and initial
+  availability resolution disabled; credential metadata never resolves keys.
+- `POST /api/v1/pi/auth/start` accepts `{requestId, provider, method, operation}`,
+  with operation `login` or `logout`. It returns an account-bound flow
+  `{id, status, events, prompt?, error?}`. There is one active flow per user.
+- `GET /api/v1/pi/auth?id=...` polls that flow. Status is `working`, `done`,
+  `error` or `cancelled`. Events carry sign-in links, device codes or progress;
+  prompts have a stable ID and type `text`, `secret`, `manual_code` or `select`.
+- `POST /api/v1/pi/auth/reply` accepts `{requestId, id, promptId, value}`.
+  Stale prompt IDs and unsupported choices are rejected. Secret entries accept
+  literal keys only, never command or environment substitutions. Submitted
+  values travel through stdin and are never returned, logged or stored by Lumo.
+- `POST /api/v1/pi/auth/cancel` accepts `{requestId, id}`. Closing provider setup
+  cancels its process; abandoned flows expire after one minute without polling,
+  and all flows have a ten-minute limit. Successful login/logout uses Pi's
+  locked credential storage in its configured agent directory. Disconnect
+  removes Pi's stored credential; external environment credentials and upstream
+  authorization are unchanged. Native controls delegate provider-specific
+  authentication to `ModelRuntime.login` and `logout` from the installed SDK,
+  without loading project extensions or exposing general SDK calls. Only HTTPS
+  sign-in links are rendered. Provider responses are not returned as errors.
+
+- `GET /api/v1/pi/settings?kind=instructions|append` returns
+  `{kind, path, content, revision, exists}` for user instruction files. The
+  agent directory follows `PI_CODING_AGENT_DIR`, defaulting to `~/.pi/agent`.
+  Relative custom directories are rejected because their meaning varies by
+  project. Instructions use an existing `AGENTS.override.md`, `AGENTS.md`,
+  `AGENTS.MD`, `CLAUDE.md`, or `CLAUDE.MD` in that order, otherwise `AGENTS.md`.
+  The `append` kind uses `APPEND_SYSTEM.md`.
+- `POST /api/v1/pi/settings` accepts `{requestId, kind, content, revision}`.
+  Files are UTF-8, limited to 128 KiB, written with account-only permissions,
+  and replaced atomically after checking the revision. Empty revision creates
+  only a missing file; an existing or externally changed file returns conflict.
+  Linked instruction files must be edited directly in Files. Credentials and
+  arbitrary configuration paths are not exposed by these endpoints. Changes
+  take effect on the next Pi process start.
+- `GET /api/v1/pi/sessions?project=...` lists Pi-written sessions for the project.
+- `POST /api/v1/pi/sessions/archive` and `/pi/sessions/restore` accept
+  `{requestId, project, session}` and return `{moved: true}`. Archive moves the
+  original Pi JSONL into `.archive/` inside its project session folder; restore
+  moves it back. Contents and filename stay intact. This is Lumo's archive
+  feature; Pi has no native archive RPC command. Existing targets are never
+  replaced. Both operations require the project's Lumo Pi processes to exit;
+  they share the installation/start lock. The browser stops its idle connection
+  before moving and reopens the retained chat, or a fresh chat when archiving
+  the current one. Drafts and attachments remain. Another window's connection
+  blocks the move; active replies must be stopped first.
+- `GET /api/v1/pi/sessions/archived` lists all archived chats for the account,
+  including `project` from each original Pi session header. Project paths must
+  match the containing project hash. No browser project list or extra database
+  is needed. Archived chats remain listed when their project folder is removed.
+- `POST /api/v1/pi/sessions/delete` accepts `{requestId, project, session}` and
+  returns `{deleted: true}`. It permanently removes only an archived regular
+  `.jsonl` file; active chats are not deleted by this endpoint. Missing archives
+  succeed idempotently. Traversal, linked files/folders and non-regular files
+  are rejected. Delete all confirms a snapshot of the listed archived chats,
+  deletes them sequentially, and refreshes after any partial failure. New
+  arrivals are not included. Project files, credentials and active chats stay.
+  Exports, external backups and independently launched terminal Pi processes
+  are outside this endpoint's scope.
+- `POST /api/v1/pi/start` accepts `{requestId, project, session?, resume?}` and returns
+  `{id, project}`. Projects must be existing absolute directories (`~` means the
+  account home). Session IDs are basenames from the project list; traversal and
+  symlinked session files are rejected. A matching live `resume` process ID
+  reconnects the same account and project without starting another process.
+  The browser keeps this ID per window in tab storage for refresh recovery.
+- `POST /api/v1/pi/command` accepts `{requestId, id, command}`. The allowlist covers
+  prompt, steer, follow-up, abort, queue clearing, model/thinking selection,
+  state/messages/models/thinking-level/statistics queries, rename, compaction,
+  `get_fork_messages`, `clone`, and `fork` with a nonempty `entryId` (up to 128 bytes,
+  no whitespace or path separators). Pi validates membership on the active
+  branch. Fork and clone replies include the adapter's `eventCursor`, allowing the
+  browser to skip old output before rendering the new chat. History replies
+  (`get_messages`) include the cursor captured when the reply arrives, so
+  reconnecting loads saved messages without replaying their previous events.
+  Unknown command fields and arbitrary shell/RPC commands are rejected.
+- `GET /api/v1/pi/events?id=...&after=0` long-polls ordered events and returns
+  `{events, cursor, closed}`. The buffer holds at most 512 events or approximately
+  8 MiB; a cursor gap returns conflict so the client can reopen saved history.
+- `POST /api/v1/pi/stop` accepts `{id}` and stops that subprocess group.
+
+Commands are correlated by ID. Streaming deltas build message blocks; final
+messages replace partial text. Edit & resend uses Pi's native fork before the
+selected user message, preserving the original session. The browser pauses old
+event delivery, loads the new history, then sends the revision and resumes from
+the fork event boundary. Failed sends preserve the edited draft. Stop and Take
+back use `clear_queue`'s returned text, never a stale browser queue copy. Stop
+then awaits `abort`. These operations do not roll back filesystem changes. Branch chat uses native
+`clone` to duplicate the active branch at its current position without sending
+a prompt. It is offered on the latest completed assistant reply. Earlier-message
+branching remains available through Edit & resend.
+Tool events expose arguments, progress, result,
+and failures. `agent_settled` signals completion, including queued work and
+retries. Selecting a saved session starts it with Pi's `--session` option.
+Sessions are Pi-owned JSONL files in
+`~/.local/state/lumo/pi-sessions/<project-hash>/`; Lumo does not duplicate their
+conversation state in a database.
+
+There are at most eight subprocesses per Linux user. Closing a workspace stops
+its process; a disconnected browser lease expires after two minutes. Running
+workspaces and active provider setup count toward agent activity. Credentials
+remain managed by Pi through its public SDK; provider setup never opens a
+terminal. Native RPC
+starts with extensions, prompt templates, and trust-gated project resources
+disabled for this initial core interface. Extension UI and custom commands are
+not part of this version.
+
+Reference specifications: [Pi RPC](https://pi.dev/docs/latest/rpc),
+[commands](https://pi.dev/docs/latest/rpc-commands),
+[events](https://pi.dev/docs/latest/json), and
+[installation](https://pi.dev/docs/latest/quickstart),
+[provider authentication](https://pi.dev/docs/latest/providers),
+[SDK](https://pi.dev/docs/latest/sdk), and
+[user configuration](https://pi.dev/docs/latest/configuration). The Lumo UI and Go adapter
+are independent implementations using those public protocols.
 
 ### Containers
 
@@ -1353,19 +1571,59 @@ includes its operation and every package that apt proposes removing, including
 dependents. Application of the reviewed plan uses the existing authenticated,
 authorized and audited `/updates/apply` flow. The worker rechecks package names
 and installed versions before removal and rejects changed plans. It uses apt
-`remove`, never `purge` or `autoremove`; app data and configuration remain.
+`remove`, never `purge` or `autoremove`; normal uninstall keeps app data and
+configuration.
 Removal plans that require installing other packages are rejected.
 
-`POST /api/v1/apps/opencode/uninstall` accepts `{ "requestId": "unique-id" }`.
-It runs as the signed-in Linux user and moves the discovered standalone
-executable in `~/.opencode/bin` or `~/.local/bin` to that user's Trash. It never
-removes projects, configuration, conversations or system-wide installations.
-Symlinked executables and paths resolving through symlinks are not removed.
-The catalog's OpenCode entry reports `canUninstall`; externally managed copies
+`POST /api/v1/apps/pi/uninstall` accepts `{ "requestId": "unique-id" }`.
+It runs as the signed-in Linux user and moves the managed installation directory
+`~/.local/share/lumo/pi` to Trash. Normal uninstall keeps settings and sessions.
+External installations and project folders are preserved.
+The catalog's Pi entry reports `canUninstall`; externally managed copies
 show an unavailable Uninstall button with instructions to use their installer.
 The response's `uninstalled` flag reports whether another detected copy remains.
 This endpoint uses the gateway's authentication and CSRF checks and the agent's
-request-id replay protection. No privileged broker action is added for OpenCode.
+request-id replay protection. No privileged broker action is added for Pi.
+
+### Clean uninstall and protected app Trash
+
+The uninstall dialog defaults to **Uninstall**, which keeps settings and data.
+**Clean uninstall** additionally moves app settings, caches and stored data to
+recoverable Trash. It never deletes project folders or website content.
+
+- `/updates/apply` accepts optional `clean: true` for a Docker or Nginx removal
+  plan. The broker checks cleanup eligibility before removing packages, then
+  moves data only after successful removal, inside the package worker's operation
+  lock. Cleanup failures are reported separately from successful package removal.
+- Docker cleanup covers `/etc/docker` and `/var/lib/docker`, including local
+  container, image and volume data. The engine's `/info` must confirm its standard
+  data root. Custom roots, shared containerd image storage, active live-restore
+  workloads, symlinked storage and remaining mount points are refused. Bind-mounted
+  project data, remote volume data and shared `/var/lib/containerd` stay untouched.
+- Nginx cleanup covers `/etc/nginx`, `/var/cache/nginx`, `/var/lib/nginx` and
+  `/var/log/nginx`; `/var/www` and `/srv` are preserved. App installation uses
+  dpkg's `--force-confmiss` to recreate missing package defaults after cleanup.
+- `/apps/pi/uninstall` accepts optional `clean: true`. It also moves
+  `~/.pi/agent` and Lumo's Pi session directory to home Trash. Credentials,
+  conversations, and installed Pi packages under that default agent directory
+  are included. Custom agent directories and project-local `.pi` resources
+  are preserved. A failed batch attempts to restore items already moved.
+
+Protected Docker/Nginx bundles are stored beside the broker audit database in
+`app-trash/<uid>/apptrash_<random-id>/`, with root-owned private metadata and
+original ownership/modes preserved. The broker never writes root-owned recovery
+files into a user-controlled directory. Metadata is synced before moves, and
+partially moved bundles remain discoverable after interruption. No cross-device
+copy-and-delete fallback is used.
+
+`GET /apps/trash` on the broker socket lists only the peer UID's bundles. The
+agent aggregates those with personal Trash in `GET /api/v1/trash`. IDs prefixed
+`apptrash_` route restore/delete through typed broker actions
+`apps.trashRestore` and `apps.trashDelete`, using the existing package policy,
+reauthentication, audit and request replay protection. Caller-supplied paths and
+UIDs are never accepted. Recovery is restricted to stored allowlisted paths,
+rejects changed revisions and existing destinations, and rolls back partial
+restores where possible. Restoring data does not reinstall the application.
 
 ## Account skills
 
@@ -1400,4 +1658,40 @@ view, not a second store of installed state or a record of updates made via SSH.
 App Library separates Discovery from Updates. Discovery uses an adaptive card
 grid; Updates refreshes APT metadata once, checks installed managed apps in
 sequence, shows per-app failures separately from up-to-date results, and reviews
-a fresh plan before applying. OpenCode is explicitly managed outside APT.
+a fresh plan before applying. Pi uses versioned account-local npm installation
+and participates in Update all. Its account-local update history is merged with
+the broker history. Pi checks also work when APT management is unavailable.
+
+### Standard file locations
+
+`GET /api/v1/files/locations` returns `{ "locations": [{ "id": "documents", "name": "Documents", "path": "/home/user/Documents" }] }` in the normal data envelope.
+The per-user agent reads `$XDG_CONFIG_HOME/user-dirs.dirs` (default `~/.config/user-dirs.dirs`) without executing it. It reports existing directories only, honors customized and localized paths, skips locations disabled by pointing to Home, and deduplicates paths. For unconfigured locations it checks conventional names under Home. It never creates directories.
+
+`GET /api/v1/files/locations/settings` returns all standard locations with
+`defaultPath`, `exists`, and `enabled`, plus a configuration `revision` and existing
+parent-folder `choices`, including writable mounted storage as well as common data
+paths. System, temporary and read-only mounts are excluded.
+`GET /api/v1/files/locations/plan?id=documents&path=...&revision=...` checks an
+individual folder's proposed absolute destination without moving anything and
+returns `files`, `bytes`, and `create`. The destination's parent must exist.
+It rejects overlapping locations, unsupported file types, and any existing
+destination entry with the same name. Omitting `id` retains the common-parent API.
+
+`POST /api/v1/files/locations/settings` accepts `id`, `path`, `expectedRevision`,
+and `requestId`. It rechecks the move, creates the requested missing directory,
+moves existing contents without overwriting, and atomically updates only that
+folder's XDG assignment. Other folders and configuration lines are preserved.
+With `remove: true`, the configured folder and its contents move to recoverable
+Trash and its XDG assignment is disabled by pointing to Home. Missing or already
+disabled folders are disabled without moving anything. Removing Home, Trash,
+configuration-containing or overlapping standard directories is rejected.
+Restoring a folder from Trash does not automatically re-enable its XDG assignment.
+Omitting `id` retains the common-parent behavior; `remove` requires `id`.
+
+An existing same-name destination file or folder blocks the entire operation.
+Ordinary failures roll back staged moves. A per-user recovery record allows the
+next location read or change to recover an interrupted move or removal.
+Cross-filesystem moves copy regular files and symbolic links with permissions and
+modification times, retaining originals until configuration commit. Special files
+are rejected. No privileged broker operation is used; filesystem permissions
+remain authoritative.

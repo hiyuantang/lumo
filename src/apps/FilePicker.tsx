@@ -6,7 +6,7 @@ import { IconFile, IconFolder, IconHome } from '../shell/icons';
 import { formatSize } from '../utils/file-format';
 import '../styles/file-picker.css';
 
-export function FilePicker({ initialPath, onOpen, onCancel }: { initialPath?: string[]; onOpen: (path: string[]) => void; onCancel: () => void }) {
+export function FilePicker({ initialPath, mode = 'file', onOpen, onCancel }: { initialPath?: string[]; mode?: 'file' | 'folder'; onOpen: (path: string[]) => void; onCancel: () => void }) {
   const source = getDataSource();
   const dialog = useRef<HTMLDialogElement>(null);
   const [path, setPath] = useState(() => initialPath ?? source.homePath());
@@ -48,12 +48,12 @@ export function FilePicker({ initialPath, onOpen, onCancel }: { initialPath?: st
   function open(entry: FsEntry) {
     const next = [...path, entry.name];
     if (entry.kind === 'dir') navigate(next);
-    else onOpen(next);
+    else if (mode === 'file') onOpen(next);
   }
-  const visible = entries.filter((entry) => (hidden || !entry.name.startsWith('.')) && entry.name.toLocaleLowerCase().includes(search.toLocaleLowerCase())).sort((a, b) => Number(b.kind === 'dir') - Number(a.kind === 'dir') || a.name.localeCompare(b.name));
+  const visible = entries.filter((entry) => (mode === 'file' || entry.kind === 'dir') && (hidden || !entry.name.startsWith('.')) && entry.name.toLocaleLowerCase().includes(search.toLocaleLowerCase())).sort((a, b) => Number(b.kind === 'dir') - Number(a.kind === 'dir') || a.name.localeCompare(b.name));
   const chosen = visible.find((entry) => entry.name === selected);
 
-  return createPortal(<dialog ref={dialog} className="file-picker" aria-label="Open file" data-testid="file-picker" onCancel={(event) => { event.preventDefault(); onCancel(); }} onClick={(event) => { if (event.target === event.currentTarget) onCancel(); }} onKeyDown={(event) => {
+  return createPortal(<dialog ref={dialog} className="file-picker" aria-label={mode === 'folder' ? 'Choose folder' : 'Open file'} data-testid="file-picker" onCancel={(event) => { event.preventDefault(); onCancel(); }} onClick={(event) => { if (event.target === event.currentTarget) onCancel(); }} onKeyDown={(event) => {
     event.stopPropagation();
     if (event.key !== 'Tab') return;
     const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input')];
@@ -62,14 +62,15 @@ export function FilePicker({ initialPath, onOpen, onCancel }: { initialPath?: st
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   }}>
     <div className="file-picker-body">
-      <header><h2>Open file</h2><button type="button" className="file-picker-close" aria-label="Cancel file selection" onClick={onCancel}>×</button></header>
+      <header><h2>{mode === 'folder' ? 'Choose folder' : 'Open file'}</h2><button type="button" className="file-picker-close" aria-label="Cancel file selection" onClick={onCancel}>×</button></header>
       <div className="file-picker-location">
         <button type="button" className="btn" aria-label="Home folder" onClick={() => navigate(source.homePath())}><IconHome size={17}/></button>
+        {mode === 'folder' && <button type="button" className="btn" aria-label="Filesystem root" title="Filesystem root" onClick={() => navigate([''])}><IconFolder size={17}/></button>}
         <button type="button" className="btn" aria-label="Parent folder" disabled={path.length <= 1} onClick={() => navigate(path.slice(0, -1))}>↑</button>
         <nav aria-label="Folder path">{path.map((segment, index) => <button type="button" key={index} onClick={() => navigate(path.slice(0, index + 1))} title={source.absolutePath(path.slice(0, index + 1))}>{index === 0 ? (path[0] === '' ? '/' : 'Home') : segment}</button>)}</nav>
       </div>
       <div className="file-picker-filter"><input className="input" type="search" autoFocus aria-label="Filter files" placeholder="Find in this folder" value={search} onChange={(event) => { setSearch(event.target.value); setSelected(null); }}/><button type="button" className="btn" aria-pressed={hidden} onClick={() => { setHidden(!hidden); setSelected(null); }}>Hidden files</button></div>
-      <div className="file-picker-list" role="listbox" aria-label="Choose a file" aria-busy={loading} onKeyDown={(event) => {
+      <div className="file-picker-list" role="listbox" aria-label={mode === 'folder' ? 'Choose a folder' : 'Choose a file'} aria-busy={loading} onKeyDown={(event) => {
         if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
         event.preventDefault();
         const options = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]')];
@@ -80,7 +81,7 @@ export function FilePicker({ initialPath, onOpen, onCancel }: { initialPath?: st
           {entry.kind === 'dir' ? <IconFolder size={19}/> : <IconFile size={19}/>}<span>{entry.name}</span><small>{entry.kind === 'dir' ? 'Folder' : formatSize(entry.size)}</small>
         </button>) : <p role="status">{search ? 'No matching files.' : 'This folder is empty.'}</p>}
       </div>
-      <footer><span title={source.absolutePath(path)}>{source.absolutePath(path)}</span><button type="button" className="btn" onClick={onCancel}>Cancel</button><button type="button" className="btn btn-primary" data-testid="file-picker-open" disabled={loading || !!error || !chosen} onClick={() => { if (chosen) open(chosen); }}>Open</button></footer>
+      <footer><span title={source.absolutePath(path)}>{source.absolutePath(path)}</span><button type="button" className="btn" onClick={onCancel}>Cancel</button><button type="button" className="btn btn-primary" data-testid="file-picker-open" disabled={loading || !!error || (mode === 'file' && !chosen)} onClick={() => { if (mode === 'folder') onOpen(chosen ? [...path, chosen.name] : path); else if (chosen) open(chosen); }}>{mode === 'folder' ? 'Choose' : 'Open'}</button></footer>
     </div>
   </dialog>, document.body);
 }

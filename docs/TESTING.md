@@ -6,16 +6,26 @@ an operation actually changes the server.
 
 ## Test commands
 
-Run commands from the repository root after `npm ci` and the one-time
-browser setup, `npx playwright install chromium`.
+Run commands from the repository root after explicitly preparing dependencies:
+`npm ci`, `npx playwright install chromium`, and the project Go toolchain/module
+cache. Setup may need internet access; ordinary test commands never provision
+missing dependencies automatically. Go tests disable module and toolchain downloads.
+
+Default tests are offline. Local HTTP/WebSocket test servers are allowed;
+external browser requests are blocked and fail the test. Online checks are
+reserved for cases that actually require verifying a third-party service or
+installer, such as a changed upstream installation contract. Do not run them
+for routine UI, uninstall, or regression changes.
 
 | Command | Responsibility |
 | --- | --- |
 | `npm run build` | Typecheck the app and tests; build the live frontend |
 | `npm run test:ui` (or `npm test`) | Browser appearance, layout, keyboard interaction, dialogs, drafts and error presentation using simulated data |
-| `npm run test:ui:production` | Build the shipped frontend and check OpenCode terminal rendering and setup |
+| `npm run test:ui:production` | Build the shipped frontend and check native Pi chat, sessions and setup |
 | `npm run test:unit` | Go logic and edge cases, plus Python installer and uninstaller checks |
-| `npm run test:docker` | Real Ubuntu backend operations, Linux/PAM-enabled Go tests and a small browser-to-Ubuntu workflow suite |
+| `npm run test:docker` | Offline Ubuntu operations, Linux/PAM tests and browser workflows using locally generated package fixtures |
+| `npm run test:docker:prepare` | Explicit network-enabled setup of cached build/runtime dependencies; not a test |
+| `npm run test:online` | Explicit network-enabled integration checks, including real Nginx packages; run only when necessary |
 | `npm run test:all` | Run all four gates in order; stop on a failure |
 
 The local Go commands expect `.tools/go/bin/go`, with module, build and
@@ -32,9 +42,8 @@ simulate responses to render loading, success, conflict, permission and
 connection states. They do not prove real authentication, authorization,
 package installation or disk writes.
 
-The production terminal check replays the capability queries emitted by
-OpenCode at startup. Run `npm run test:ui:production` when changing terminal
-dependencies or build settings. Syntax minification is disabled in
+The Pi checks replay documented RPC events and responses without contacting a
+model. Run `npm run test:ui:production` to check the production build. Syntax minification is disabled in
 `vite.config.ts` because it causes a runtime error in the terminal's mode-query
 handler; identifier and whitespace minification remain enabled. The Docker
 suite also sends these queries through a real Ubuntu terminal.
@@ -67,10 +76,26 @@ systemd containers, then run:
 npm run test:docker
 ```
 
-The runner builds `docker/Dockerfile.ubuntu24`, including the production
-frontend and PAM-enabled backend. It starts systemd, D-Bus, the gateway,
+The runner requires the local `lumo-test-build:deps` and
+`lumo-test-runtime:deps` images. If either is missing it stops without pulling;
+prepare them explicitly with `npm run test:docker:prepare` when appropriate.
+Source/dependency changes may require deliberately refreshing those images.
+
+The frontend is built from installed local dependencies. The runner builds
+`docker/Dockerfile.ubuntu24` with networking and image pulls disabled, including
+the production frontend and PAM-enabled backend. It starts systemd, D-Bus, the gateway,
 session service and privileged broker inside a fresh Ubuntu 24.04 container.
-The image build also runs the Go tests on Linux with PAM enabled.
+The image build also runs the Go tests on Linux with PAM enabled. Go module
+and automatic toolchain downloads are disabled.
+
+The Ubuntu test container uses an internal Docker network with no internet
+route. A restricted local TCP relay exposes only its gateway to the host browser.
+APT sources point exclusively to a generated `file:` repository. Its `nginx`
+package is an original, minimal test fixture, not the Nginx web server. Real APT
+and dpkg still install/remove the fixture, so file preservation, protected Trash,
+authorization and recovery are exercised without external package downloads.
+Pi uninstall uses a local executable fixture; its install/update commands
+are covered by fake command runners and simulated browser responses. Pi installation and model calls are never executed by automated tests.
 
 `scripts/integration-test.sh` checks real login, CSRF protection, filesystem
 permissions, stale revisions, trash, service actions, policy denials, audit
@@ -87,7 +112,7 @@ state. API tests also verify that rejected writes leave the server unchanged.
 
 Each run gets a unique container and an automatically assigned localhost
 port. Set `PORT=18080 npm run test:docker` to choose a port. The runner
-removes its container on exit, retains the cached image, removes the login
+removes its containers and temporary network on exit, retains cached images, removes the login
 cookie file and prints the temporary directory containing build logs,
 container diagnostics and browser failure artifacts. Traces can contain
 test credentials; use these fixture accounts only in disposable environments.
@@ -105,9 +130,11 @@ connectivity or firewall recovery behavior. Test those on disposable Ubuntu
 VMs with console access and snapshots. Release validation should cover both
 Ubuntu 24.04 and 26.04 and both supported CPU architectures.
 
-Real Docker Engine and Nginx application workflows also need dedicated
-system integration coverage; the interface fixtures and adapter unit tests
-alone do not prove installation or administration on a VPS.
+Real Docker Engine and Nginx serving behavior need dedicated system integration
+coverage; the offline package fixture does not prove upstream package or web
+server behavior. `npm run test:online` explicitly enables external connectivity
+and real Nginx installation checks, with no test retries. It is excluded
+from `test:all` and must not be used unless external verification is necessary.
 
 The separate `docker/Dockerfile.install-test` and installation checks are
 documented in [the installation guide](INSTALL.md#transport-and-verification). Public
@@ -149,3 +176,15 @@ For an optional read-only contract check against a real local Engine, set
 configuration. This test only invokes Engine GET endpoints. Live deletion,
 volume/network creation, and real APT Engine upgrades require a disposable Ubuntu
 host; successful mock tests do not establish those real mutation workflows.
+
+
+Pi RPC transport tests launch the Go test binary as a local protocol fixture.
+They verify JSONL framing (including Unicode separators), response correlation,
+project isolation, event cursors, process shutdown, and rejected commands.
+Browser fixtures cover streamed chat, tools, model/thinking changes, saved
+sessions, queue cancellation, folder drop, and install/update progress. Provider
+settings tests use a local SDK fixture and simulated browser responses for API
+keys, browser links, device codes, prompts, disconnect, cancellation, stale
+responses and credential redaction. No real provider login or request runs. Actual
+Pi/provider interoperability still requires an explicitly authorized manual
+check; automated tests never download Pi or invoke model providers.

@@ -543,3 +543,30 @@ func TestAuditStoredResultErrors(t *testing.T) {
 		t.Error("replay must require the requesting uid to own the request")
 	}
 }
+
+func TestAppTrashMutationsRequirePackagePolicyAndValidSelections(t *testing.T) {
+	for _, action := range []string{"apps.trashRestore", "apps.trashDelete"} {
+		t.Run(action, func(t *testing.T) {
+			authz := StaticAuthorizer{Rules: func(_ uint32, policy string, _ map[string]string) Result {
+				if policy != packagesApplyActionID {
+					t.Error(policy)
+				}
+				return Deny
+			}}
+			_, client, _ := testBroker(t, authz, nil)
+			item := `{"id":"apptrash_` + strings.Repeat("a", 24) + `","revision":"` + strings.Repeat("b", 64) + `"}`
+			args := `{"item":` + item + `}`
+			if action == "apps.trashDelete" {
+				args = `{"items":[` + item + `]}`
+			}
+			status, _, _ := callAction(t, client, `{"requestId":"trash-denied","action":"`+action+`","arguments":`+args+`}`)
+			if status != 403 {
+				t.Fatal(status)
+			}
+			status, _, _ = callAction(t, client, `{"requestId":"trash-invalid","action":"`+action+`","arguments":{"item":{"id":"../../etc","revision":"x"}}}`)
+			if status != 400 {
+				t.Fatal(status)
+			}
+		})
+	}
+}

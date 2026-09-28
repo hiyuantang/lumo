@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { timezoneLabel } from '../utils/timezone';
 import { Select } from '../shell/Select';
 import { useId, useState } from 'react';
 import { describeError, isReauthRequired, type SystemSettings, type SystemSettingsChange } from '../api/source';
@@ -64,7 +65,7 @@ export function SettingsEditor({ snapshot, disabled, timezones, save, refresh }:
     }}>
       <label htmlFor={id}>Time zone</label>
       <Select id={id} aria-label="Time zone" data-testid="settings-timezone" value={value} onChange={edit} disabled={disabled || busy || !timezones?.length} aria-describedby={invalid && draft ? `${id}-invalid` : undefined} aria-invalid={Boolean(invalid && draft)}
-        options={[...(!timezones?.includes(value) ? [value] : []), ...(timezones ?? [])].map((zone) => ({ value: zone, label: zone.replaceAll('_', ' ') }))} />
+        options={[...(!timezones?.includes(value) ? [value] : []), ...(timezones ?? [])].map((zone) => ({ value: zone, label: timezoneLabel(zone) }))} />
       {invalid && draft ? <p id={`${id}-invalid`} className="settings-field-error">{invalid}</p> : null}
       {stale ? <div className="settings-conflict" role="alert"><p>Settings changed on the server. Your draft is kept.</p><button type="button" className="btn" data-testid="settings-reload-timezone" disabled={disabled || busy} onClick={async () => {
         if (!await refresh()) return;

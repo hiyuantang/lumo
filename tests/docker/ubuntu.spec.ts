@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { execFileSync } from 'node:child_process';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../offline';
 
 function ubuntu(...args: string[]) {
   return execFileSync('docker', ['exec', process.env.LUMO_TEST_CONTAINER!, ...args], { encoding: 'utf8' }).trim();
@@ -15,7 +15,7 @@ async function login(page: Page) {
   await expect(page.getByTestId('menu-bar')).toBeVisible();
 }
 
-test('terminal renders after the mode queries used by OpenCode', async ({ page }) => {
+test('terminal renders after the mode queries used by Pi', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await login(page);
@@ -128,7 +128,7 @@ test('time zone selection updates Ubuntu and uninstalled apps stay out of the do
   await login(page);
   await page.getByTestId('dock-app-library').click();
   await page.getByTestId('library-docker').click();
-  await expect(page.getByTestId('library-primary')).toHaveText('Install…');
+  await expect(page.getByTestId('library-primary')).toHaveText('Install');
   await expect(page.getByTestId('dock-app-containers')).toHaveCount(0);
   await expect(page.getByTestId('dock-app-websites')).toHaveCount(0);
   await page.getByTestId('dock-app-settings').click();
@@ -144,6 +144,7 @@ test('time zone selection updates Ubuntu and uninstalled apps stay out of the do
     await page.getByTestId('reauth-submit').click();
     await expect(page.getByTestId('settings-editor-timezone')).toContainText('Saved');
     expect(ubuntu('timedatectl', 'show', '--property=Timezone', '--value')).toBe(timezone);
+    await expect(page.getByTestId('notifications-button')).toHaveAttribute('title', `Server time · ${timezone.replaceAll('_', ' ')}`);
   } finally {
     ubuntu('timedatectl', 'set-timezone', original);
   }
@@ -213,22 +214,21 @@ test('App Library uninstalls Nginx after review and preserves site configuration
   await page.getByTestId('dock-app-library').click();
   await page.getByTestId('library-nginx').click();
   await expect(page.getByTestId('app-websites')).toHaveCount(0);
-  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall…');
+  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall');
   await page.getByTestId('library-primary').click();
-  await expect(page.getByTestId('library-plan')).toContainText('nginx');
-  await page.getByTestId('library-install-confirm').click();
-  await expect(page.getByTestId('server-app-confirm')).toContainText('go offline');
+  await expect(page.getByTestId('uninstall-normal')).toBeChecked();
+  await expect(page.getByTestId('server-app-confirm')).toContainText('Keep settings and stored data.');
   await page.getByTestId('server-app-confirm').getByRole('button', { name: 'Cancel', exact: true }).click();
   ubuntu('test', '-x', '/usr/sbin/nginx');
   try {
-    await page.getByTestId('library-install-confirm').click();
+    await page.getByTestId('library-primary').click();
     await page.getByTestId('server-app-confirm-ok').click();
     await expect(page.getByTestId('reauth-sheet').or(page.getByTestId('library-progress'))).toBeVisible();
     if (await page.getByTestId('reauth-sheet').isVisible()) {
       await page.getByTestId('reauth-password').fill('alice-pass');
       await page.getByTestId('reauth-submit').click();
     }
-    await expect(page.getByTestId('library-primary')).toHaveText('Install…', { timeout: 60_000 });
+    await expect(page.getByTestId('library-primary')).toHaveText('Install', { timeout: 60_000 });
     await expect(page.getByTestId('dock-app-websites')).toHaveCount(0);
     ubuntu('test', '!', '-e', '/usr/sbin/nginx');
     expect(ubuntu('cat', config)).toContain('keep this site configuration');
@@ -237,27 +237,27 @@ test('App Library uninstalls Nginx after review and preserves site configuration
   }
 });
 
-test('OpenCode uninstall keeps user data and moves only the executable to Trash', async ({ page, request }) => {
-  const binary = '/home/alice/.opencode/bin/opencode';
+test('Pi uninstall keeps user data and moves only the executable to Trash', async ({ page, request }) => {
+  const binary = '/home/alice/.local/share/lumo/pi/bin/pi';
   const installed = ubuntu('sh', '-c', 'test ! -e "$1" || printf installed', 'fixture', binary);
-  test.skip(installed === 'installed', 'An existing OpenCode installation must not be replaced by a test fixture.');
-  ubuntu('runuser', '-u', 'alice', '--', 'mkdir', '-p', '/home/alice/.opencode/bin', '/home/alice/.config/opencode');
+  test.skip(installed === 'installed', 'An existing Pi installation must not be replaced by a test fixture.');
+  ubuntu('runuser', '-u', 'alice', '--', 'mkdir', '-p', '/home/alice/.local/share/lumo/pi/bin', '/home/alice/.pi/agent');
   ubuntu('runuser', '-u', 'alice', '--', 'cp', '/usr/bin/true', binary);
-  ubuntu('runuser', '-u', 'alice', '--', 'sh', '-c', 'printf "keep user settings" > /home/alice/.config/opencode/lumo-test-settings');
+  ubuntu('runuser', '-u', 'alice', '--', 'sh', '-c', 'printf "keep user settings" > /home/alice/.pi/agent/lumo-test-settings');
   await login(page);
   await page.getByTestId('dock-app-library').click();
-  await page.getByTestId('library-opencode').click();
-  await expect(page.getByTestId('app-opencode')).toHaveCount(0);
-  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall…');
+  await page.getByTestId('library-pi').click();
+  await expect(page.getByTestId('app-pi')).toHaveCount(0);
+  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall');
   await page.getByTestId('library-primary').click();
-  await expect(page.getByTestId('server-app-confirm')).toContainText('executable moves to Trash');
+  await expect(page.getByTestId('server-app-confirm')).toContainText('Keep settings and stored data.');
   await page.getByTestId('server-app-confirm-ok').click();
-  await expect(page.getByTestId('library-primary')).toHaveText('Installation guide');
-  await expect(page.getByTestId('dock-app-opencode')).toHaveCount(0);
+  await expect(page.getByTestId('library-primary')).toHaveText('Install');
+  await expect(page.getByTestId('dock-app-pi')).toHaveCount(0);
   ubuntu('test', '!', '-e', binary);
-  ubuntu('test', '-x', '/home/alice/.local/share/Trash/files/opencode');
-  expect(ubuntu('cat', '/home/alice/.config/opencode/lumo-test-settings')).toBe('keep user settings');
-  expect((await request.post('/api/v1/apps/opencode/uninstall', { data: { requestId: 'missing-auth' } })).status()).toBe(401);
+  ubuntu('test', '-x', '/home/alice/.local/share/Trash/files/pi/bin/pi');
+  expect(ubuntu('cat', '/home/alice/.pi/agent/lumo-test-settings')).toBe('keep user settings');
+  expect((await request.post('/api/v1/apps/pi/uninstall', { data: { requestId: 'missing-auth' } })).status()).toBe(401);
 });
 
 test('Trash restores real files without overwriting and permanently deletes only confirmed items', async ({ page }) => {
@@ -396,4 +396,96 @@ test('idle worker exit recovers files in the same signed-in browser session', as
     page.request.get('/api/v1/system/identity'),
   ]);
   expect(responses.map((response) => response.status())).toEqual([200, 200, 200]);
+});
+
+test('Files drag moves real files and folders, refuses overwrite, and drops into Trash', async ({ page }) => {
+  const root = '/home/alice/drag-check';
+  ubuntu('runuser', '-u', 'alice', '--', 'mkdir', '-p', root + '/destination', root + '/folder');
+  ubuntu('runuser', '-u', 'alice', '--', 'sh', '-c', 'printf "keep contents" > "$1"', 'fixture', root + '/notes.txt');
+  await login(page);
+  await page.getByTestId('dock-app-files').click();
+  await page.getByTestId('file-row-drag-check').dblclick();
+  await page.getByTestId('file-row-folder').click();
+  await page.getByTestId('file-row-notes.txt').click({ modifiers: ['ControlOrMeta'] });
+  await page.getByTestId('file-row-notes.txt').dragTo(page.getByTestId('file-row-destination'));
+  await expect(page.getByTestId('file-row-notes.txt')).toHaveCount(0);
+  expect(ubuntu('cat', root + '/destination/notes.txt')).toBe('keep contents');
+  ubuntu('test', '-d', root + '/destination/folder');
+  expect(ubuntu('stat', '-c', '%U', root + '/destination/notes.txt')).toBe('alice');
+  const csrf = (await page.context().cookies()).find((cookie) => cookie.name === 'lumo_csrf')!.value;
+  const data = { from: root + '/destination/notes.txt', to: root + '/destination/folder', requestId: 'move-collision' };
+  expect((await page.request.post('/api/v1/files/move', { data })).status()).toBe(403);
+  expect((await page.request.post('/api/v1/files/move', { headers: { 'X-Lumo-CSRF': csrf }, data })).status()).toBe(409);
+  expect((await page.request.post('/api/v1/files/move', { headers: { 'X-Lumo-CSRF': csrf }, data: { from: root + '/destination/notes.txt', to: '/etc/lumo-drag-denied', requestId: 'move-denied' } })).status()).toBe(403);
+  expect(ubuntu('cat', root + '/destination/notes.txt')).toBe('keep contents');
+  await page.getByTestId('file-row-destination').dblclick();
+  await page.getByTestId('file-row-notes.txt').dragTo(page.getByTestId('dock-app-trash'));
+  await expect(page.getByTestId('file-row-notes.txt')).toHaveCount(0);
+  await page.getByTestId('dock-app-trash').click();
+  await expect(page.getByTestId('app-trash')).toContainText(root + '/destination/notes.txt');
+});
+
+test('Clean uninstall moves Nginx configuration and data to recoverable protected Trash', async ({ page, request }) => {
+  test.setTimeout(180_000);
+  ubuntu('env', 'DEBIAN_FRONTEND=noninteractive', 'apt-get', '-y', 'install', 'nginx');
+  const config = '/etc/nginx/conf.d/lumo-clean-check.conf';
+  ubuntu('sh', '-c', 'printf "# recover configuration\n" > "$1" && chmod 640 "$1"', 'fixture', config);
+  ubuntu('mkdir', '-p', '/var/www/lumo-clean-check');
+  ubuntu('sh', '-c', 'printf "keep website" > /var/www/lumo-clean-check/index.html');
+  await login(page);
+  await page.getByTestId('dock-app-library').click();
+  await page.getByTestId('library-nginx').click();
+  await page.getByTestId('library-primary').click();
+  await page.getByTestId('uninstall-clean').check();
+  await page.getByTestId('server-app-confirm-ok').click();
+  await expect(page.getByTestId('reauth-sheet').or(page.getByTestId('library-progress'))).toBeVisible();
+  if (await page.getByTestId('reauth-sheet').isVisible()) {
+    await page.getByTestId('reauth-password').fill('alice-pass');
+    await page.getByTestId('reauth-submit').click();
+  }
+  await expect(page.getByTestId('library-primary')).toHaveText('Install', { timeout: 60_000 });
+  ubuntu('test', '!', '-e', '/etc/nginx');
+  expect(ubuntu('cat', '/var/www/lumo-clean-check/index.html')).toBe('keep website');
+  await page.getByTestId('dock-app-trash').click();
+  const item = page.getByRole('option').filter({ hasText: 'Nginx settings and data' });
+  await expect(item).toBeVisible();
+  const response = await page.request.get('/api/v1/trash');
+  const entries = (await response.json()).data.items;
+  const selected = entries.find((entry: { id: string }) => entry.id.startsWith('apptrash_'));
+  expect((await request.post('/api/v1/trash/restore', { data: { requestId: 'clean-unauth', item: selected } })).status()).toBe(401);
+  expect((await page.request.post('/api/v1/trash/restore', { data: { requestId: 'clean-no-csrf', item: selected } })).status()).toBe(403);
+  await item.click();
+  await page.getByTestId('trash-restore').click();
+  if (await page.getByTestId('reauth-sheet').isVisible()) {
+    await page.getByTestId('reauth-password').fill('alice-pass');
+    await page.getByTestId('reauth-submit').click();
+  }
+  await expect(item).toHaveCount(0);
+  expect(ubuntu('cat', config)).toContain('recover configuration');
+  expect(ubuntu('stat', '-c', '%U:%G:%a', config)).toBe('root:root:640');
+  ubuntu('env', 'DEBIAN_FRONTEND=noninteractive', 'apt-get', '-y', 'install', 'nginx');
+});
+
+test('Pi clean uninstall trashes settings and conversations and restores them', async ({ page }) => {
+  const paths = ['/home/alice/.local/share/lumo/pi/bin', '/home/alice/.pi/agent', '/home/alice/.local/state/lumo/pi-sessions'];
+  ubuntu('runuser', '-u', 'alice', '--', 'mkdir', '-p', ...paths);
+  ubuntu('runuser', '-u', 'alice', '--', 'cp', '/usr/bin/true', '/home/alice/.local/share/lumo/pi/bin/pi');
+  ubuntu('runuser', '-u', 'alice', '--', 'sh', '-c', 'printf "saved conversation" > /home/alice/.pi/agent/lumo-conversation');
+  await login(page);
+  await page.getByTestId('dock-app-library').click();
+  await page.getByTestId('library-pi').click();
+  await page.getByTestId('library-primary').click();
+  await expect(page.getByTestId('uninstall-normal')).toBeChecked();
+  await page.getByTestId('uninstall-clean').check();
+  await page.getByTestId('server-app-confirm-ok').click();
+  await expect(page.getByTestId('library-primary')).toHaveText('Install');
+  for (const path of paths.slice(1)) ubuntu('test', '!', '-e', path);
+  await page.getByTestId('dock-app-trash').click();
+  const conversations = page.getByRole('option').filter({ hasText: '/home/alice/.pi/agent' });
+  await expect(conversations).toBeVisible();
+  await conversations.click();
+  await page.getByTestId('trash-restore').click();
+  await expect(conversations).toHaveCount(0);
+  expect(ubuntu('cat', '/home/alice/.pi/agent/lumo-conversation')).toBe('saved conversation');
+  ubuntu('test', '-d', '/home/alice');
 });

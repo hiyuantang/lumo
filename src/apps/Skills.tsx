@@ -50,8 +50,8 @@ export function Skills() {
 
   return <div className="app skills" data-testid="app-skills"><div className="skills-layout">
     <aside className="skills-sidebar" aria-label="Skills library">
-      <header className="skills-heading"><div><IconSkills size={21}/><h2>My skills</h2></div><button type="button" className="btn" aria-label="Refresh skills" title="Refresh skills" data-testid="skills-refresh" disabled={loading} onClick={() => setRevision((value) => value + 1)}><IconRefresh size={15}/></button></header>
-      <label className="skills-search"><IconSearch size={15}/><input type="search" aria-label="Search skills" placeholder="Search skills" value={search} onChange={(event) => setSearch(event.target.value)}/></label>
+      <header className="skills-heading"><div><IconSkills size={21}/><h2>My skills</h2></div><button type="button" className="btn btn-icon" aria-label="Refresh skills" title="Refresh skills" data-testid="skills-refresh" disabled={loading} onClick={() => setRevision((value) => value + 1)}><IconRefresh size={16}/></button></header>
+      <label className="app-search skills-search"><IconSearch size={15}/><input type="search" aria-label="Search skills" placeholder="Search skills" value={search} onChange={(event) => setSearch(event.target.value)}/></label>
       <span className="skills-count" aria-live="polite">{loading ? 'Scanning…' : `${filtered.length} ${filtered.length === 1 ? 'skill' : 'skills'}`}</span>
       <nav className="skills-list" aria-label="Installed skills">{filtered.map((skill) => <button type="button" key={skill.id} aria-current={current?.id === skill.id ? 'page' : undefined} data-testid={`skill-${skill.id}`} onClick={() => setSelected(skill.id)} onContextMenu={(event) => openContextMenu(event, [
         { label: 'Edit in Preview', run: () => actions.openPreview(skill.path.split('/'), true) },

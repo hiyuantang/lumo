@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { timezoneLabel } from '../utils/timezone';
 import { useAppMenus } from '../shell/appMenus';
 import { useAppState } from '../shell/useAppState';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -8,19 +9,22 @@ import {
   type SystemSettings, type SystemSettingsChange,
 } from '../api/source';
 import { useReauth } from '../shell/ReauthSheet';
-import { useNow, useShell, type ThemePref } from '../shell/ShellContext';
-import { IconChip, IconGear, IconHome, IconNetwork, IconSearch } from '../shell/icons';
+import { useServerClock, useServerClockSource } from '../shell/ServerClockContext';
+import { useShell, type ThemePref } from '../shell/ShellContext';
+import { IconRefresh, IconFolder, IconChip, IconGear, IconHome, IconNetwork, IconSearch } from '../shell/icons';
 import { Updates } from './Updates';
 import { AboutLegal } from './AboutLegal';
 import { SettingsEditor } from './SettingsEditor';
 import { SettingsMotion } from './SettingsMotion';
+import { SettingsFolders } from './SettingsFolders';
 import { SettingsNetwork } from './SettingsNetwork';
 import type { SettingsSection } from './registry';
 import '../styles/apps.css';
 import '../styles/settings.css';
 
 const SECTIONS = [
-  { id: 'system', label: 'System', icon: IconHome, terms: 'hostname server hardware memory storage restart power shutdown' },
+  { id: 'system', label: 'System', icon: IconHome, terms: 'hostname server hardware cpu processor memory storage restart power shutdown' },
+  { id: 'folders', label: 'Folders', icon: IconFolder, terms: 'documents downloads pictures music videos desktop location directory storage' },
   { id: 'time', label: 'Date & Time', icon: IconClock, terms: 'timezone clock ntp synchronization' },
   { id: 'network', label: 'Network', icon: IconNetwork, terms: 'ip dns gateway interfaces addresses ethernet' },
   { id: 'appearance', label: 'Appearance', icon: IconAppearance, terms: 'theme dark light motion animation' },
@@ -41,29 +45,21 @@ function IconAppearance({ size = 18 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3" /><path d="M12 4.5v15" /><path d="M15 8h3M15 11h3M15 14h3" /></svg>;
 }
 
-function ServerClock({ snapshot, receivedAt }: { snapshot: SystemSettings; receivedAt: number }) {
-  const now = useNow(1000);
-  const instant = new Date(Date.parse(snapshot.serverTime) + now - receivedAt);
-  let time = '—';
-  let date = snapshot.timezone;
-  try {
-    time = instant.toLocaleTimeString(undefined, { timeZone: snapshot.timezone, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    date = instant.toLocaleDateString(undefined, { timeZone: snapshot.timezone, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  } catch {
-    time = snapshot.serverTime;
-  }
-  return <div className="settings-clock"><span>SERVER TIME</span><strong>{time}</strong><p>{date}</p><small>{snapshot.timezone.replaceAll('_', ' ')}</small></div>;
+function ServerClock() {
+  const { instant, timezone } = useServerClock();
+  return <div className="settings-clock"><span>SERVER TIME</span><strong>{instant?.toLocaleTimeString(undefined, { timeZone: timezone, hour: '2-digit', minute: '2-digit', second: '2-digit' }) ?? '—'}</strong><p>{instant?.toLocaleDateString(undefined, { timeZone: timezone, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p><small>{timezone ? timezoneLabel(timezone) : 'Server time unavailable'}</small></div>;
 }
 
-function Stat({ label, value, percent }: { label: string; value: string; percent?: number }) {
-  return <div className="settings-stat"><span>{label}</span><strong>{value}</strong>{percent !== undefined ? <div className="meter" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}><div className="meter-fill" style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} /></div> : null}</div>;
+function Stat({ label, value }: { label: string; value: string }) {
+  return <div className="settings-stat"><span>{label}</span><strong>{value}</strong></div>;
 }
 
 export function Settings() {
   const source = getDataSource();
+  const { publish: publishClock } = useServerClockSource();
   const { state, actions } = useShell();
   const requireReauth = useReauth();
-  const [section, setSection] = useAppState<SettingsSection>('settings', 'section', () => state.navigation?.target === 'settings' ? state.navigation.section : 'system', ['system', 'time', 'network', 'appearance', 'updates', 'about']);
+  const [section, setSection] = useAppState<SettingsSection>('settings', 'section', () => state.navigation?.target === 'settings' ? state.navigation.section : 'system', ['system', 'folders', 'time', 'network', 'appearance', 'updates', 'about']);
   const [updatesOpened, setUpdatesOpened] = useState(section === 'updates');
   useEffect(() => { if (section === 'updates') setUpdatesOpened(true); }, [section]);
   const [networkOpened, setNetworkOpened] = useState(section === 'network');
@@ -71,7 +67,6 @@ export function Settings() {
   const [identity, setIdentity] = useState<SystemIdentity | null>(null);
   const [overview, setOverview] = useState<SystemOverview | null>(null);
   const [snapshot, setSnapshot] = useState<SystemSettings | null>(null);
-  const [receivedAt, setReceivedAt] = useState(Date.now());
   const [timezones, setTimezones] = useState<string[]>();
   const [zoneError, setZoneError] = useState<string | null>(null);
   const [zoneAttempt, setZoneAttempt] = useState(0);
@@ -113,7 +108,7 @@ export function Settings() {
     setLoading(false);
     if (settingsResult.status === 'fulfilled') {
       setSnapshot(settingsResult.value);
-      setReceivedAt(Date.now());
+      publishClock(settingsResult.value);
       setSettingsError(null);
     } else {
       setSettingsError(settingsResult.reason instanceof Error ? settingsResult.reason.message : describeError(settingsResult.reason));
@@ -122,7 +117,7 @@ export function Settings() {
     if (overviewResult.status === 'fulfilled') setOverview(overviewResult.value);
     setDetailsError(identityResult.status === 'rejected' || overviewResult.status === 'rejected' ? 'Some server details could not be refreshed.' : null);
     return settingsResult.status === 'fulfilled';
-  }, [source]);
+  }, [source, publishClock]);
 
   useEffect(() => {
     mounted.current = true;
@@ -149,9 +144,9 @@ export function Settings() {
     setSaving(true);
     try {
       const next = await source.updateSystemSettings(change, revision);
+      publishClock(next);
       if (mounted.current) {
         setSnapshot(next);
-        setReceivedAt(Date.now());
         setSettingsError(null);
       }
     } finally {
@@ -182,7 +177,7 @@ export function Settings() {
     <div className="app settings" data-testid="app-settings">
       <aside className="settings-sidebar">
         <div className="settings-profile"><span className="settings-profile-icon"><IconChip size={22} /></span><div><strong title={host}>{host}</strong><small>{source.kind === 'mock' ? 'Demo' : 'Connected'}</small></div></div>
-        <label className="settings-search"><IconSearch size={15} /><input aria-label="Search settings" placeholder="Search settings" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+        <label className="app-search settings-search"><IconSearch size={15} /><input aria-label="Search settings" placeholder="Search settings" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
         <nav aria-label="Settings sections">
           {choices.map(({ id, label, icon: Icon }) => <button type="button" key={id} className={`settings-nav-item${section === id ? ' selected' : ''}`} aria-label={label} title={label} aria-current={section === id ? 'page' : undefined} data-testid={`settings-section-${id}`} onClick={() => setSection(id)}><span className={`settings-nav-icon settings-icon-${id}`}><Icon size={17} /></span><span className="settings-nav-label">{label}</span></button>)}
           {!choices.length ? <p className="settings-note">No matching settings.</p> : null}
@@ -190,14 +185,13 @@ export function Settings() {
         <div className="settings-sidebar-footer"><span className="settings-status-dot" /><span><strong>{state.user}</strong></span></div>
       </aside>
       <main className="settings-content" ref={contentRef}>
-        {section !== 'about' && section !== 'network' && section !== 'updates' ? <header className="settings-heading"><div><h2>{SECTIONS.find((item) => item.id === section)?.label}</h2></div>{section !== 'appearance' ? <button className="btn" type="button" data-testid="settings-refresh" disabled={loading || saving} onClick={() => void refresh()}>{loading ? 'Refreshing…' : 'Refresh'}</button> : null}</header> : null}
+        {section !== 'folders' && section !== 'about' && section !== 'network' && section !== 'updates' ? <header className="settings-heading"><div><h2>{SECTIONS.find((item) => item.id === section)?.label}</h2></div>{section !== 'appearance' ? <button aria-label="Refresh" title="Refresh" className="btn btn-icon" type="button" data-testid="settings-refresh" disabled={loading || saving} onClick={() => void refresh()}><IconRefresh size={16}/></button> : null}</header> : null}
         {(section === 'system' || section === 'time') && settingsError ? <div className="settings-notice" role="alert"><strong>Settings unavailable</strong><p>{settingsError}</p><button type="button" className="btn" disabled={loading} onClick={() => void refresh()}>Try again</button></div> : null}
         {section === 'system' && detailsError ? <p className="settings-field-error" role="alert">{detailsError}</p> : null}
 
         <div className="settings-page" hidden={section !== 'system'}>
-          <section className="settings-server-card" aria-label="Server overview"><span className="settings-server-symbol"><IconChip size={42} /></span><div><h3>{host}</h3><p>{identity?.os ?? 'Loading…'}</p></div></section>
-          {overview ? <div className="settings-stats"><Stat label="Memory" value={`${(overview.memoryUsedMb / 1024).toFixed(1)} / ${(overview.memoryTotalMb / 1024).toFixed(0)} GB`} percent={overview.memoryTotalMb ? overview.memoryUsedMb / overview.memoryTotalMb * 100 : 0} /><Stat label="Storage" value={`${overview.storageUsedGb} / ${overview.storageTotalGb} GB`} percent={overview.storageTotalGb ? overview.storageUsedGb / overview.storageTotalGb * 100 : 0} /><Stat label="Uptime" value={uptime >= 24 ? `${Math.floor(uptime / 24)}d ${uptime % 24}h` : `${uptime}h`} /></div> : null}
-          <section className="settings-group" aria-label="System details"><dl className="settings-details"><div><dt>Hostname</dt><dd data-testid="settings-hostname">{host}</dd></div><div><dt>Operating system</dt><dd>{identity?.os ?? '—'}</dd></div><div><dt>Architecture</dt><dd>{identity?.architecture ?? '—'}</dd></div><div><dt>Kernel</dt><dd className="mono">{identity?.kernel ?? '—'}</dd></div></dl></section>
+          {overview ? <div className="settings-stats"><Stat label="CPUs" value={`${overview.cpuCores}`} /><Stat label="Memory" value={`${Number((overview.memoryTotalMb / 1024).toFixed(1))} GB`} /><Stat label="Storage" value={`${overview.storageTotalGb} GB`} /><Stat label="Uptime" value={uptime >= 24 ? `${Math.floor(uptime / 24)}d ${uptime % 24}h` : `${uptime}h`} /></div> : null}
+          <section className="settings-group" aria-label="System details"><dl className="settings-details"><div><dt>Hostname</dt><dd data-testid="settings-hostname">{host}</dd></div><div><dt>Operating system</dt><dd>{identity?.os ?? '—'}</dd></div><div><dt>CPU model</dt><dd>{identity ? identity.cpuModel || 'Unavailable' : '—'}</dd></div><div><dt>Architecture</dt><dd>{identity?.architecture ?? '—'}</dd></div><div><dt>Kernel</dt><dd className="mono">{identity?.kernel ?? '—'}</dd></div></dl></section>
           <h3 className="settings-section-title">Account</h3>
           <section className="settings-group" aria-label="Account"><div className="settings-row"><div><h3>{state.user}</h3><p>Signed in to this server</p></div><button type="button" className="btn" data-testid="logout-button" onClick={actions.logout}>Log out</button></div></section>
           <h3 className="settings-section-title">Power</h3>
@@ -205,10 +199,11 @@ export function Settings() {
         </div>
 
         <div className="settings-page" hidden={section !== 'time'}>
-          {snapshot ? <><ServerClock snapshot={snapshot} receivedAt={receivedAt} /><section className="settings-group" aria-label="Date and time settings"><SettingsEditor snapshot={snapshot} disabled={blocked} timezones={timezones} save={save} refresh={refresh} /><div className="settings-row"><div><h3>Clock synchronization</h3></div><span className={`settings-badge${snapshot.ntpSynchronized ? ' good' : ''}`}>{snapshot.ntpSynchronized ? 'Synchronized' : 'Not synchronized'}</span></div></section></> : !settingsError ? <p className="settings-note">Loading date and time…</p> : null}
+          {snapshot ? <><ServerClock /><section className="settings-group" aria-label="Date and time settings"><SettingsEditor snapshot={snapshot} disabled={blocked} timezones={timezones} save={save} refresh={refresh} /><div className="settings-row"><div><h3>Clock synchronization</h3></div><span className={`settings-badge${snapshot.ntpSynchronized ? ' good' : ''}`}>{snapshot.ntpSynchronized ? 'Synchronized' : 'Not synchronized'}</span></div></section></> : !settingsError ? <p className="settings-note">Loading date and time…</p> : null}
           {zoneError ? <div className="settings-notice" role="alert"><p>{zoneError}</p><button className="btn" type="button" onClick={() => setZoneAttempt((n) => n + 1)}>Retry time zones</button></div> : null}
         </div>
 
+        <div hidden={section !== 'folders'}><SettingsFolders active={section === 'folders'} /></div>
         <div className="settings-page" hidden={section !== 'network'}>{networkOpened ? <SettingsNetwork active={section === 'network'} /> : null}</div>
 
         <div className="settings-page" hidden={section !== 'appearance'}>

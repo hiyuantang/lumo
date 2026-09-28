@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useId, useRef, useState, type AriaAttributes } from 'react';
 import { Popup } from './Popup';
+import { IconChevronDown } from './icons';
 
 type Option = { value: string; label: string };
 interface Props extends AriaAttributes {
@@ -36,7 +37,7 @@ export function Select({ value, options, onChange, disabled, className = '', ...
       onClick={() => anchor ? close() : open()} onKeyDown={(event) => {
         if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { event.preventDefault(); open(); }
       }}>
-      <span>{options.find((option) => option.value === value)?.label ?? value}</span><span aria-hidden="true">⌄</span>
+      <span>{options.find((option) => option.value === value)?.label ?? value}</span><IconChevronDown size={16}/>
     </button>
     {anchor && !disabled && <Popup keepAnchorVisible anchorElement={trigger.current} x={anchor.left} y={anchor.bottom + 4} above={anchor.top - 4} width={Math.max(220, anchor.width)} onClose={close}>
       <div className="select-menu" onKeyDown={(event) => {
@@ -61,7 +62,7 @@ export function Select({ value, options, onChange, disabled, className = '', ...
           document.getElementById(`${listId}-${next}`)?.scrollIntoView({ block: 'nearest' });
         }
       }}>
-        {searchable && <input data-autofocus className="select-search" aria-label="Search options" placeholder="Search…" value={query} onChange={(event) => { setQuery(event.target.value); }} aria-controls={listId} aria-activedescendant={current ? `${listId}-${filtered.indexOf(current)}` : undefined} />}
+        {searchable && <input data-autofocus className="input select-search" aria-label="Search options" placeholder="Search…" value={query} onChange={(event) => { setQuery(event.target.value); }} aria-controls={listId} aria-activedescendant={current ? `${listId}-${filtered.indexOf(current)}` : undefined} />}
         <div id={listId} role="listbox" aria-label={attrs['aria-label'] ?? 'Options'} className="select-options" tabIndex={searchable ? -1 : 0} data-autofocus={!searchable || undefined} aria-activedescendant={current ? `${listId}-${filtered.indexOf(current)}` : undefined}>
           {filtered.map((option, index) => <button id={`${listId}-${index}`} key={option.value} type="button" role="option" tabIndex={-1} aria-selected={option.value === value}
             className={`popup-item${current?.value === option.value ? ' highlighted' : ''}`} onPointerMove={() => setActive(option.value)} onClick={() => choose(option.value)}>

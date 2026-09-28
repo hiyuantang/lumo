@@ -37,7 +37,7 @@
 .docker-storage > p { margin-top: 20px; }
 .docker-sampled { font-size: 11px; line-height: 1.5; color: var(--text-muted); margin-top: auto; }
 .docker-confirm-field { display: flex; flex-direction: column; gap: 10px; font-size: 12px; overflow-wrap: anywhere; }
-.docker-confirm-field input { padding: 10px 12px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 8px; width: 100%; }
+.docker-confirm-field input { width: 100%; }
 .docker-confirm-field small { color: var(--text-muted); }
 @container (max-width: 660px) {
  .docker-content { padding: 18px; }

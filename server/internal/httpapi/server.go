@@ -2,8 +2,10 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"lumo/server/internal/containers"
 	"lumo/server/internal/hostsettings"
@@ -11,6 +13,7 @@ import (
 	"lumo/server/internal/network"
 	"lumo/server/internal/services"
 	"lumo/server/internal/system"
+	"lumo/server/internal/updates"
 	"lumo/server/internal/websites"
 )
 
@@ -21,37 +24,66 @@ const (
 )
 
 type Deps struct {
-	Version      string
-	Sampler      *system.Sampler
-	Services     services.API
-	Journal      journal.Backend
-	Network      network.Snapshotter
-	Settings     hostsettings.Reader
-	Containers   containers.Reader
-	Websites     websites.Reader
-	WS           http.Handler
-	Static       http.Handler
+	Version    string
+	Sampler    *system.Sampler
+	Services   services.API
+	Journal    journal.Backend
+	Network    network.Snapshotter
+	Settings   hostsettings.Reader
+	Containers containers.Reader
+	Websites   websites.Reader
+	WS         http.Handler
+	Static     http.Handler
+	Packages   interface {
+		Catalog(context.Context) (updates.Catalog, error)
+	}
 	BrokerSocket string
 }
 
 type Server struct {
-	deps      Deps
-	processes system.ProcessSampler
-	idem      *idemStore
+	folderMoves atomic.Int64
+	deps        Deps
+	processes   system.ProcessSampler
+	idem        *idemStore
+	pi          *piWorker
+	piRPC       piRuntime
+	piAuth      piAuthRuntime
 }
 
 func NewServer(deps Deps) *Server {
-	return &Server{deps: deps, idem: newIdemStore()}
+	if deps.Packages == nil {
+		deps.Packages = updates.NewWorker()
+	}
+	return &Server{deps: deps, idem: newIdemStore(), pi: newPiWorker(), piRPC: piRuntime{processes: map[string]*piProcess{}}}
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/pi/providers", s.handlePiProviders)
+	mux.HandleFunc("POST /api/v1/pi/auth/start", s.handlePiAuthStart)
+	mux.HandleFunc("GET /api/v1/pi/auth", s.handlePiAuthState)
+	mux.HandleFunc("POST /api/v1/pi/auth/reply", s.handlePiAuthReply)
+	mux.HandleFunc("POST /api/v1/pi/auth/cancel", s.handlePiAuthCancel)
+	mux.HandleFunc("GET /api/v1/pi/settings", s.handlePiSettings)
+	mux.HandleFunc("POST /api/v1/pi/settings", s.handlePiSettings)
+	mux.HandleFunc("GET /api/v1/pi/sessions", s.handlePiSessions)
+	mux.HandleFunc("POST /api/v1/pi/sessions/delete", s.handlePiDeleteSession)
+	mux.HandleFunc("GET /api/v1/pi/sessions/archived", s.handlePiArchivedSessions)
+	mux.HandleFunc("POST /api/v1/pi/sessions/archive", s.handlePiArchiveSession)
+	mux.HandleFunc("POST /api/v1/pi/sessions/restore", s.handlePiRestoreSession)
+	mux.HandleFunc("POST /api/v1/pi/start", s.handlePiStart)
+	mux.HandleFunc("POST /api/v1/pi/command", s.handlePiCommand)
+	mux.HandleFunc("GET /api/v1/pi/events", s.handlePiEvents)
+	mux.HandleFunc("POST /api/v1/pi/stop", s.handlePiStop)
 	mux.HandleFunc("GET /api/v1/meta/version", s.handleVersion)
 	mux.HandleFunc("GET /api/v1/skills", s.handleSkills)
 	mux.HandleFunc("GET /api/v1/skills/detail", s.handleSkills)
 	mux.HandleFunc("GET /api/v1/apps", s.handleApps)
 	mux.HandleFunc("POST /api/v1/apps/plan", s.handleAppPlan)
-	mux.HandleFunc("POST /api/v1/apps/opencode/uninstall", s.handleOpenCodeUninstall)
+	mux.HandleFunc("POST /api/v1/apps/pi/uninstall", s.handlePiUninstall)
+	mux.HandleFunc("POST /api/v1/apps/pi/plan", s.handlePiPlan)
+	mux.HandleFunc("POST /api/v1/apps/pi/apply", s.handlePiApply)
+	mux.HandleFunc("GET /api/v1/apps/pi/progress", s.handlePiProgress)
 	mux.HandleFunc("GET /api/v1/docker/resources", s.handleDockerResources)
 	mux.HandleFunc("POST /api/v1/docker/resource", s.handleDockerResourceAction)
 	mux.HandleFunc("GET /api/v1/containers", s.handleContainers)
@@ -78,13 +110,19 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/trash", s.handleTrashList)
 	mux.HandleFunc("POST /api/v1/trash/restore", s.handleTrashRestore)
 	mux.HandleFunc("POST /api/v1/trash/delete", s.handleTrashDelete)
+	mux.HandleFunc("GET /api/v1/files/locations/plan", s.handleLocationMovePlan)
+	mux.HandleFunc("GET /api/v1/files/locations/settings", s.handleLocationSettings)
+	mux.HandleFunc("POST /api/v1/files/locations/settings", s.handleSetLocation)
+	mux.HandleFunc("GET /api/v1/files/locations", s.handleFileLocations)
 	mux.HandleFunc("GET /api/v1/files/list", s.handleFilesList)
 	mux.HandleFunc("GET /api/v1/files/read", s.handleFilesRead)
 	mux.HandleFunc("PUT /api/v1/files/write", s.handleFilesWrite)
 	mux.HandleFunc("POST /api/v1/files/create", s.handleFilesCreate)
+	mux.HandleFunc("POST /api/v1/files/move", s.handleFilesMove)
 	mux.HandleFunc("POST /api/v1/files/delete", s.handleFilesDelete)
 	mux.HandleFunc("POST /api/v1/files/write-privileged", s.handleFilesWritePrivileged)
 	mux.HandleFunc("POST /api/v1/services/action", s.handleServicesAction)
+	mux.HandleFunc("GET /api/v1/updates/packages", s.handleInstalledPackages)
 	mux.HandleFunc("POST /api/v1/updates/refresh", s.handleUpdatesRefresh)
 	mux.HandleFunc("GET /api/v1/apps/update-history", s.handleAppUpdateHistory)
 	mux.HandleFunc("POST /api/v1/updates/plan", s.handleUpdatesPlan)

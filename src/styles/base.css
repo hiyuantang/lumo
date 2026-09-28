@@ -28,6 +28,25 @@ textarea {
   color: inherit;
 }
 
+.input {
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  box-shadow: none;
+  background: var(--field-fill);
+  color: var(--text);
+  caret-color: var(--text);
+  font-size: 13px;
+  line-height: 20px;
+}
+.input::placeholder { color: var(--text-muted); opacity: 1; }
+.input:focus-visible { border-color: transparent; }
+.input::-webkit-search-decoration { appearance: none; }
+
 button {
   cursor: pointer;
   border: none;

@@ -8,7 +8,7 @@ const positions: Record<AppId, [number, number]> = {
   files: [404, 50],
   preview: [746, 50],
   terminal: [1087, 50],
-  opencode: [60, 389],
+  pi: [60, 389],
   containers: [404, 389],
   websites: [746, 389],
   library: [1087, 389],

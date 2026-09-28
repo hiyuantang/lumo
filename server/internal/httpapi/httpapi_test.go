@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"syscall"
@@ -572,5 +573,155 @@ func TestNetworkReadOnlySnapshotDoesNotRequireConfigurationService(t *testing.T)
 	}
 	if strings.Contains(response.Body.String(), `"revision"`) || !strings.Contains(response.Body.String(), `"interfaces"`) {
 		t.Fatalf("unexpected read-only snapshot: %s", response.Body.String())
+	}
+}
+
+func TestFilesMoveHandler(t *testing.T) {
+	dir := t.TempDir()
+	from, to := dir+"/source", dir+"/target"
+	if err := os.WriteFile(from, []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ts := testServer(fakeServices{}, fakeJournal{})
+	defer ts.Close()
+	post := func(body string) int {
+		res, err := http.Post(ts.URL+"/api/v1/files/move", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		return res.StatusCode
+	}
+	body := `{"from":` + jsonString(from) + `,"to":` + jsonString(to) + `,"requestId":"move-one"}`
+	for i := 0; i < 2; i++ {
+		if status := post(body); status != 200 {
+			t.Fatalf("move/replay: %d", status)
+		}
+	}
+	if status := post(`{"from":` + jsonString(to) + `,"to":` + jsonString(from) + `}`); status != 400 {
+		t.Fatalf("request ID: %d", status)
+	}
+	if err := os.WriteFile(from, []byte("other"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if status := post(strings.Replace(body, "move-one", "move-two", 1)); status != 409 {
+		t.Fatalf("collision: %d", status)
+	}
+}
+
+func TestFileLocations(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if err := os.Mkdir(home+"/Documents", 0700); err != nil {
+		t.Fatal(err)
+	}
+	ts := testServer(fakeServices{}, fakeJournal{})
+	defer ts.Close()
+	status, env := get(t, ts.URL+"/api/v1/files/locations")
+	if status != 200 || !env.OK {
+		t.Fatalf("status=%d, error=%v", status, env.Error)
+	}
+	var data struct {
+		Locations []struct{ ID, Name, Path string }
+	}
+	if err := json.Unmarshal(env.Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	if len(data.Locations) != 1 || data.Locations[0].ID != "documents" || data.Locations[0].Path != home+"/Documents" {
+		t.Fatalf("data = %s", env.Data)
+	}
+}
+
+func TestFolderLocationSettingsApply(t *testing.T) {
+	home, destination := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home+"/.config")
+	if err := os.Mkdir(home+"/Documents", 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(home+"/Documents/notes.txt", []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ts := testServer(fakeServices{}, fakeJournal{})
+	defer ts.Close()
+	status, env := get(t, ts.URL+"/api/v1/files/locations/settings")
+	if status != 200 || !env.OK {
+		t.Fatalf("settings: %d %s", status, env.Data)
+	}
+	var snapshot struct{ Revision string }
+	if err := json.Unmarshal(env.Data, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(map[string]string{"path": destination, "expectedRevision": snapshot.Revision, "requestId": "folder-move-test"})
+	for i := 0; i < 2; i++ {
+		response, err := http.Post(ts.URL+"/api/v1/files/locations/settings", "application/json", strings.NewReader(string(body)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var result testEnvelope
+		err = json.NewDecoder(response.Body).Decode(&result)
+		response.Body.Close()
+		if err != nil || response.StatusCode != 200 || !result.OK {
+			t.Fatalf("apply: %d %v %v", response.StatusCode, result.Error, err)
+		}
+	}
+	if data, err := os.ReadFile(destination + "/Documents/notes.txt"); err != nil || string(data) != "keep" {
+		t.Fatalf("moved file: %s %v", data, err)
+	}
+	if _, err := os.Stat(home + "/Documents/notes.txt"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("source not moved")
+	}
+}
+
+func TestIndividualFolderSettingsMoveAndRemove(t *testing.T) {
+	home, destination := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home+"/.config")
+	t.Setenv("XDG_DATA_HOME", home+"/.local/share")
+	os.Mkdir(home+"/Documents", 0755)
+	os.WriteFile(home+"/Documents/notes.txt", []byte("keep"), 0600)
+	ts := testServer(fakeServices{}, fakeJournal{})
+	defer ts.Close()
+	_, env := get(t, ts.URL+"/api/v1/files/locations/settings")
+	var snapshot struct{ Revision string }
+	json.Unmarshal(env.Data, &snapshot)
+	path := destination + "/Documents"
+	status, planned := get(t, ts.URL+"/api/v1/files/locations/plan?id=documents&path="+url.QueryEscape(path)+"&revision="+url.QueryEscape(snapshot.Revision))
+	if status != 200 || !planned.OK {
+		t.Fatalf("plan: %d %+v", status, planned.Error)
+	}
+	apply := func(body map[string]any) testEnvelope {
+		t.Helper()
+		encoded, _ := json.Marshal(body)
+		response, err := http.Post(ts.URL+"/api/v1/files/locations/settings", "application/json", strings.NewReader(string(encoded)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		var result testEnvelope
+		if err := json.NewDecoder(response.Body).Decode(&result); err != nil || response.StatusCode != 200 || !result.OK {
+			t.Fatalf("apply: %d %+v %v", response.StatusCode, result.Error, err)
+		}
+		return result
+	}
+	saved := apply(map[string]any{"id": "documents", "path": path, "expectedRevision": snapshot.Revision, "requestId": "individual-move"})
+	if data, _ := os.ReadFile(path + "/notes.txt"); string(data) != "keep" {
+		t.Fatal("missing moved contents")
+	}
+	if _, err := os.Stat(destination + "/Videos"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("unrequested folder created")
+	}
+	json.Unmarshal(saved.Data, &snapshot)
+	request := map[string]any{"id": "documents", "remove": true, "expectedRevision": snapshot.Revision, "requestId": "individual-remove"}
+	apply(request)
+	apply(request)
+	status, listed := get(t, ts.URL+"/api/v1/trash")
+	if status != 200 || !listed.OK || !strings.Contains(string(listed.Data), "Documents") {
+		t.Fatalf("trash: %d %s", status, listed.Data)
+	}
+	_, locations := get(t, ts.URL+"/api/v1/files/locations")
+	if strings.Contains(string(locations.Data), "documents") {
+		t.Fatal("removed shortcut remains")
 	}
 }

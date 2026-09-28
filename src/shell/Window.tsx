@@ -7,7 +7,7 @@ import { IconMinus, IconX, IconZoom } from './icons';
 import { useShell, type WindowState } from './ShellContext';
 import { useWindowPlacement } from './useWindowPlacement';
 import { useWindowMinimize } from './useWindowMinimize';
-import { clampRect, COMPACT_WIDTH, resizeRect, snapRect, snapTargetAt, type ResizeDirection, type SnapTarget } from './windowGeometry';
+import { reachableRect, COMPACT_WIDTH, resizeRect, snapRect, snapTargetAt, type ResizeDirection, type SnapTarget } from './windowGeometry';
 import '../styles/window.css';
 
 const RESIZE_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
@@ -104,7 +104,7 @@ export function Window({ win }: { win: WindowState }) {
     const startX = e.clientX;
     const startY = e.clientY;
     const placed = win.maximized || Boolean(win.snapped);
-    const floating = clampRect(placed ? (win.restore ?? { ...win, ...meta.defaultSize }) : win, state.viewport);
+    const floating = reachableRect(placed ? (win.restore ?? { ...win, ...meta.defaultSize }) : win, state.viewport);
     const offsetX = placed ? ((startX - win.x) / win.w) * floating.w : startX - win.x;
     const offsetY = Math.min(startY - win.y, e.currentTarget.clientHeight - 1);
     let moved = false;

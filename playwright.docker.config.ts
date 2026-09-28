@@ -7,6 +7,7 @@ if (!process.env.LUMO_TEST_URL || !process.env.LUMO_TEST_CONTAINER) {
 
 export default defineConfig({
   testDir: './tests/docker',
+  grepInvert: process.env.LUMO_TEST_ONLINE === '1' ? undefined : /@online/,
   outputDir: process.env.LUMO_TEST_OUTPUT,
   timeout: 45_000,
   expect: { timeout: 10_000 },
@@ -15,6 +16,7 @@ export default defineConfig({
   retries: 0,
   reporter: 'list',
   use: {
+    serviceWorkers: 'block',
     baseURL: process.env.LUMO_TEST_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',

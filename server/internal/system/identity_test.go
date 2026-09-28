@@ -25,3 +25,18 @@ func TestMachineArch(t *testing.T) {
 		t.Error("empty architecture")
 	}
 }
+
+func TestParseCPUModel(t *testing.T) {
+	for _, tc := range []struct{ name, input, want string }{
+		{"repeated cores", "processor : 0\nmodel name : AMD EPYC 7763\nprocessor : 1\nmodel name : AMD EPYC 7763\n", "AMD EPYC 7763"},
+		{"mixed models", "model name : Cortex-A76\nmodel name : Cortex-A55\nmodel name : Cortex-A76", "Cortex-A76; Cortex-A55"},
+		{"missing model", "processor : 0\nCPU architecture : 8\nHardware : Board name", ""},
+		{"empty and malformed", "model name\nmodel name :   \n", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := parseCPUModel(tc.input); got != tc.want {
+				t.Fatalf("parseCPUModel() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

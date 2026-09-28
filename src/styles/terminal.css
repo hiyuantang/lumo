@@ -111,13 +111,6 @@
   color: var(--text);
 }
 
-.opencode { display: flex; flex-direction: column; min-height: 0; }
-.opencode > .terminal { flex: 1; min-height: 0; }
-.opencode-launcher { margin: auto; padding: 32px; max-width: 560px; overflow: auto; }
-.opencode-launcher h1 { margin: 0 0 12px; font-size: 26px; }
-.opencode-launcher p { color: var(--text-muted); line-height: 1.6; margin: 16px 0; }
-.opencode-launcher form { display: grid; gap: 12px; margin-top: 28px; }
-.opencode-launcher form .btn { justify-self: start; }
-.opencode-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
 
 .terminal-tab { touch-action: none; user-select: none; }
