@@ -3,16 +3,19 @@ import type { Page } from '@playwright/test';
 import type { PiAuthState, PiCommand, PiEvent, PiMessage } from '../../src/api/pi';
 export async function piFixture(page: Page) {
   let model = 'balanced'; let level = 'medium'; let session = 'first.jsonl'; let name = 'Project notes'; let busy = false;
+  let desiredCompaction = { enabled: true, threshold: 160000 };
+  let activeCompaction = { ...desiredCompaction };
   const events: PiEvent[] = []; const commands: PiCommand[] = []; const starts: { project: string; session: string }[] = [];
   const messages: PiMessage[] = [];
   const queue: { type: string; message: string }[] = [];
+  let emptyQueueReplies = false;
   const originals = new Map<string, PiMessage[]>();
   let forks = 0;
   let auth: PiAuthState | null = null;
   let credential = false;
   let authOperation = 'login';
   let authMethod = 'api_key';
-  const models = [{ id: 'balanced', provider: 'Fixture', name: 'Balanced', reasoning: true }, { id: 'fast', provider: 'Fixture', name: 'Fast', reasoning: false }];
+  const models = [{ id: 'balanced', provider: 'Fixture', name: 'Balanced', reasoning: true, contextWindow: 200000 }, { id: 'fast', provider: 'Fixture', name: 'Fast', reasoning: false, contextWindow: 128000 }];
   const instructions = new Map<string, { content: string; revision: string }>();
   await page.route('**/api/v1/pi/**', async (route) => {
     const url = new URL(route.request().url()); const path = url.pathname;
@@ -34,8 +37,9 @@ export async function piFixture(page: Page) {
       const value = instructions.get(kind);
       return reply({ kind, path: '/home/user/.pi/agent/' + (kind === 'instructions' ? 'AGENTS.md' : 'APPEND_SYSTEM.md'), content: value?.content ?? '', revision: value?.revision ?? '', exists: Boolean(value) });
     }
+    if (path.endsWith('/reference')) return reply({ project: url.searchParams.get('project'), session: url.searchParams.get('session'), path: '/home/user/.local/state/lumo/pi-sessions/fixture/' + url.searchParams.get('session'), reader: '/usr/local/bin/lumod' });
     if (path.endsWith('/sessions')) return reply({ sessions: [...originals.keys()].map((id) => ({ id, name: 'Original chat', modified: '2026-09-28T11:00:00Z' })).concat([{ id: session, name, modified: '2026-09-28T12:00:00Z' }, { id: 'second.jsonl', name: 'Earlier work', modified: '2026-09-27T12:00:00Z' }]) });
-    if (path.endsWith('/start')) { const body = route.request().postDataJSON(); starts.push(body); if (!body.session && !body.resume && starts.length > 1) messages.length = 0; session = body.session || (body.resume ? session : 'first.jsonl'); if (!body.resume) events.length = 0; return reply({ id: 'fixture-run', project: body.project === '~' ? '/home/user' : body.project }); }
+    if (path.endsWith('/start')) { activeCompaction = { ...desiredCompaction }; const body = route.request().postDataJSON(); starts.push(body); if (!body.session && !body.resume && starts.length > 1) messages.length = 0; session = body.session || (body.resume ? session : 'first.jsonl'); if (!body.resume) events.length = 0; return reply({ id: 'fixture-run', project: body.project === '~' ? '/home/user' : body.project }); }
     if (path.endsWith('/stop')) return reply({ closed: true });
     if (path.endsWith('/events')) { await new Promise((resolve) => setTimeout(resolve, 100)); return reply({ events: events.slice(Number(url.searchParams.get('after'))), cursor: events.length, closed: false }); }
     const command: PiCommand = route.request().postDataJSON().command; commands.push(command);
@@ -43,7 +47,7 @@ export async function piFixture(page: Page) {
     if (command.type === 'get_state') data = { model: models.find((item) => item.id === model), thinkingLevel: level, sessionFile: '/sessions/' + session, sessionName: name, isStreaming: busy };
     if (command.type === 'get_available_models') data = { models };
     if (command.type === 'get_available_thinking_levels') data = { levels: model === 'fast' ? ['off'] : ['off', 'low', 'medium', 'high'] };
-    if (command.type === 'get_session_stats') data = { cost: .012, contextUsage: { percent: 7, tokens: 14000, contextWindow: 200000 } };
+    if (command.type === 'get_session_stats') data = { compaction: activeCompaction, cost: .012, contextUsage: { percent: 7, tokens: 14000, contextWindow: 200000 } };
     if (command.type === 'get_fork_messages') data = { messages: messages.flatMap((message, index) => message.role === 'user' ? [{ entryId: `entry-${index}`, text: typeof message.content === 'string' ? message.content : message.content.map((block) => block.text ?? '').join('') }] : []) };
     if (command.type === 'fork' || command.type === 'clone') {
       const index = command.type === 'fork' ? Number(command.entryId.replace('entry-', '')) : messages.length;
@@ -59,17 +63,24 @@ export async function piFixture(page: Page) {
     if (command.type === 'prompt') {
       busy = true; data = { disposition: 'started' };
       const user: PiMessage = { role: 'user', content: [{ type: 'text', text: command.message }] }; messages.push(user);
-      events.push({ type: 'agent_start' }, { type: 'message_start', message: user }, { type: 'message_end', message: user }, { type: 'message_start', message: { role: 'assistant', content: [] } }, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'Inspecting your project…' } }, { type: 'tool_execution_start', toolCallId: 'read-1', toolName: 'read', args: { path: 'README.md' } });
+      events.push({ type: 'agent_start' }, { type: 'message_start', message: user }, { type: 'message_end', message: user }, { type: 'message_start', message: { role: 'assistant', content: [] } }, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'Inspecting your project…' } }, { type: 'message_end', message: { role: 'assistant', stopReason: 'toolUse', content: [{ type: 'text', text: 'Inspecting your project…' }, { type: 'toolCall', id: 'read-1', name: 'read', arguments: { path: 'README.md' } }] } }, { type: 'tool_execution_start', toolCallId: 'read-1', toolName: 'read', args: { path: 'README.md' } });
     }
-    if (command.type === 'steer' || command.type === 'follow_up') { queue.push(command); data = { disposition: 'queued' }; }
+    if (command.type === 'steer' || command.type === 'follow_up') { queue.push(command); data = emptyQueueReplies ? {} : { disposition: 'queued' }; }
     if (command.type === 'abort') { busy = false; events.push({ type: 'agent_settled' }); }
     return reply({ type: 'response', command: command.type, success: true, data });
   });
-  return { commands, starts, originals, finish() {
+  return { commands, starts, originals, emptyQueueReplies() { emptyQueueReplies = true; }, consumeQueued() {
+    const index = queue.findIndex((item) => item.type === 'steer');
+    const next = queue.splice(index < 0 ? 0 : index, 1)[0];
+    if (!next) return;
+    const user: PiMessage = { role: 'user', content: [{ type: 'text', text: next.message }] };
+    messages.push(user); events.push({ type: 'message_start', message: user }, { type: 'message_end', message: user });
+    return next;
+  }, setCompaction(value: { enabled: boolean; threshold: number }) { desiredCompaction = value; }, finish() {
     busy = false;
-    const message: PiMessage = { role: 'assistant', timestamp: Date.parse('2026-09-28T14:34:00Z'), content: [{ type: 'text', text: 'The project uses **React and Go**.\n\nI found the application entry point.' }] };
+    const message: PiMessage = { role: 'assistant', stopReason: 'stop', timestamp: Date.parse('2026-09-28T14:34:00Z'), content: [{ type: 'text', text: 'The project uses **React and Go**.\n\nI found the application entry point.' }] };
     messages.push(message);
-    events.push({ type: 'tool_execution_end', toolCallId: 'read-1', toolName: 'read', result: { content: [{ type: 'text', text: '# Lumo\nReact frontend and Go server.' }] } }, { type: 'message_end', message }, { type: 'agent_settled' });
+    events.push({ type: 'tool_execution_end', toolCallId: 'read-1', toolName: 'read', result: { content: [{ type: 'text', text: '# Lumo\nReact frontend and Go server.' }] } }, { type: 'message_start', message }, { type: 'message_end', message }, { type: 'agent_settled' });
   } };
 }
 export async function piPage(page: Page) {

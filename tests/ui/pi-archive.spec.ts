@@ -46,7 +46,7 @@ test('Pi archives with one click after stop, fills Settings, restores and keeps 
   await expect(tree.getByRole('button', { name: 'Project notes', exact: true })).toHaveCount(0);
   await expect(recent.getByRole('button', { name: 'Project notes', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('pi-prompt')).toBeEnabled();
-  await expect(page.getByTestId('pi-prompt')).toHaveValue('Keep this unsent draft');
+  await expect(page.getByTestId('pi-prompt')).toHaveText('Keep this unsent draft');
   expect(fixture.order.slice(0, 2)).toEqual(['stop', 'archive']); expect(fixture.starts.at(-1)?.session).toBe('');
   await openArchive(page);
   await expect(page.getByTestId('pi-sidebar')).toHaveCount(0);
@@ -65,7 +65,7 @@ test('Pi archives with one click after stop, fills Settings, restores and keeps 
   await expect(page.getByTestId('pi-archived')).toContainText('No archived chats');
   await page.getByTestId('pi-home-button').click();
   await expect(page.getByTestId('pi-prompt')).toBeEnabled();
-  await expect(page.getByTestId('pi-prompt')).toHaveValue('Keep this unsent draft');
+  await expect(page.getByTestId('pi-prompt')).toHaveText('Keep this unsent draft');
   await expect(tree.getByRole('button', { name: 'Project notes', exact: true })).toBeVisible();
   expect(fixture.errors).toEqual([]);
 });
@@ -97,6 +97,7 @@ test('Pi preserves active chats when stop or archive fails', async ({ page }) =>
   const fixture = await archivePage(page);
   await page.route('**/api/v1/pi/stop', (route) => route.fulfill({ status: 503, json: { ok: false, error: { code: 'UNAVAILABLE', message: 'Pi is still stopping. Try again.' } } }));
   const archive = page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Archive Project notes' });
+  await page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Project notes', exact: true }).hover();
   await archive.click(); await expect(page.getByRole('alert')).toContainText('Pi is still stopping'); expect(fixture.archived.size).toBe(0);
   await page.route('**/api/v1/pi/stop', (route) => route.fulfill({ json: { ok: true, data: { closed: true } } }));
   await page.route('**/api/v1/pi/sessions/archive', (route) => route.fulfill({ status: 409, json: { ok: false, error: { code: 'CONFLICT', message: 'Project is open in another Pi window.' } } }));
@@ -126,6 +127,7 @@ test('Pi refreshes remaining archived chats after a partial bulk deletion failur
 
 test('Pi archives an older conversation and resumes the active one', async ({ page }) => {
   const fixture = await archivePage(page);
+  await page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Earlier work', exact: true }).hover();
   await page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Archive Earlier work' }).click();
   await expect.poll(() => fixture.starts.at(-1)?.session).toBe('first.jsonl');
   await expect(page.getByRole('button', { name: 'Earlier work', exact: true })).toHaveCount(0);

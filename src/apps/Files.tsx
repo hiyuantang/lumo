@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useFileSelection } from './useFileSelection';
-import { useFileDrop, startFileDrag, endFileDrag } from '../shell/fileDrag';
+import { useFileDrop, useFileDragNavigation, startFileDrag, endFileDrag } from '../shell/fileDrag';
 import { useAppMenus } from '../shell/appMenus';
 import { folderPath } from '../utils/folder-path';
 import { copyText } from '../utils/clipboard';
@@ -41,6 +41,9 @@ export function Files() {
   const [listError, setListError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const drop = useFileDrop();
+  const currentFolder = source.absolutePath(path);
+  const parentFolder = currentFolder === '/' || location !== 'folder' ? null : currentFolder.slice(0, currentFolder.lastIndexOf('/')) || '/';
+  const dragParent = useFileDragNavigation(parentFolder, () => { if (parentFolder) navigateTo(['', ...parentFolder.split('/').filter(Boolean)]); });
   const [detailsOpen, setDetailsOpen] = useAppState<boolean>('files', 'details', false);
   const [creation, setCreation] = useState<{ kind: 'file' | 'directory'; name: string; busy: boolean; error: string | null } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useAppPreference<boolean>('files', 'sidebar-collapsed', () => window.innerWidth < 700);
@@ -353,7 +356,7 @@ export function Files() {
           <div className="app-toolbar">
             <div className="files-navigation">
               <nav className="app-history" aria-label="Folder history">
-                <button type="button" className="app-history-back" data-testid="files-back" aria-label="Back" title="Back" disabled={!navigation.back.length} onClick={() => travel('back')}><IconChevronRight size={18}/></button>
+                <button type="button" className="app-history-back files-drag-parent" data-testid="files-back" aria-label="Back" title="Back · Hold a dragged item here to open the parent folder" aria-disabled={!navigation.back.length} tabIndex={navigation.back.length ? 0 : -1} {...dragParent} onClick={() => travel('back')}><IconChevronRight size={18}/></button>
                 <button type="button" data-testid="files-forward" aria-label="Forward" title="Forward" disabled={!navigation.forward.length} onClick={() => travel('forward')}><IconChevronRight size={18}/></button>
               </nav>
               <div className="files-current-folder" data-testid="files-current-folder" title={location === 'trash' ? 'Trash' : source.absolutePath(path)}>

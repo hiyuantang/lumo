@@ -1,22 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ComponentType, SVGProps } from 'react';
-import { IconSkills, IconTrash, IconCode, IconEye, IconBoxes, IconFolder, IconGear, IconGlobe, IconGrid, IconMonitor, IconTerminal } from '../shell/icons';
+import { IconBranch, IconSkills, IconTrash, IconCode, IconEye, IconBoxes, IconFolder, IconGear, IconGlobe, IconGrid, IconMonitor, IconTerminal } from '../shell/icons';
 
-export type AppId = 'skills' | 'trash' | 'pi' | 'preview' | 'home' | 'files' | 'terminal' | 'settings' | 'containers' | 'websites' | 'library';
+export type AppId = 'git' | 'skills' | 'trash' | 'pi' | 'preview' | 'home' | 'files' | 'terminal' | 'settings' | 'containers' | 'websites' | 'library';
 export type SettingsSection = 'system' | 'folders' | 'time' | 'network' | 'appearance' | 'updates' | 'about';
 
 export interface AppMeta {
   id: AppId;
-  requiredPackage?: 'docker' | 'nginx' | 'pi';
+  requiredPackage?: 'git' | 'docker' | 'nginx' | 'pi';
   title: string;
   icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
   defaultSize: { w: number; h: number };
   minSize: { w: number; h: number };
 }
 
-export const APP_ORDER: AppId[] = ['home', 'files', 'preview', 'terminal', 'pi', 'containers', 'websites', 'library', 'skills', 'settings', 'trash'];
+export const APP_ORDER: AppId[] = ['home', 'files', 'preview', 'terminal', 'git', 'pi', 'containers', 'websites', 'library', 'skills', 'settings', 'trash'];
 
 export const APPS: Record<AppId, AppMeta> = {
+  git: { id: 'git', requiredPackage: 'git', title: 'Git', icon: IconBranch, defaultSize: { w: 1060, h: 680 }, minSize: { w: 390, h: 400 } },
   skills: { id: 'skills', title: 'Skills', icon: IconSkills, defaultSize: { w: 960, h: 650 }, minSize: { w: 390, h: 380 } },
   trash: { id: 'trash', title: 'Trash', icon: IconTrash, defaultSize: { w: 860, h: 590 }, minSize: { w: 390, h: 320 } },
   pi: { id: 'pi', requiredPackage: 'pi', title: 'Pi', icon: IconCode, defaultSize: { w: 980, h: 680 }, minSize: { w: 460, h: 360 } },

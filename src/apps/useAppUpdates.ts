@@ -19,7 +19,7 @@ class AppUpdates {
     this.key = `lumo-app-updates:${this.source.kind}:${user}`;
     try {
       const saved = JSON.parse(localStorage.getItem(this.key) || 'null') as Snapshot | null;
-      if (saved && Array.isArray(saved.items) && saved.items.length <= 3 && saved.items.every((item) => (item.app === 'docker' || item.app === 'nginx' || item.app === 'pi') && Array.isArray(item.plan?.packages))) {
+      if (saved && Array.isArray(saved.items) && saved.items.length <= 4 && saved.items.every((item) => (item.app === 'git' || item.app === 'docker' || item.app === 'nginx' || item.app === 'pi') && Array.isArray(item.plan?.packages))) {
         this.snapshot = { ...saved, phase: 'disconnected' };
         if (!saved.requestId) this.stop('The update was interrupted. Check for updates before trying again.');
       }
@@ -56,7 +56,7 @@ class AppUpdates {
 
   start = (plans: UpdatePlan[]) => {
     if (this.snapshot.phase !== 'idle') return;
-    const items: Item[] = plans.filter((plan) => plan.packages.length && (plan.appId === 'docker' || plan.appId === 'nginx' || plan.appId === 'pi')).map((plan) => ({ app: plan.appId!, plan, status: 'pending' }));
+    const items: Item[] = plans.filter((plan) => plan.packages.length && (plan.appId === 'git' || plan.appId === 'docker' || plan.appId === 'nginx' || plan.appId === 'pi')).map((plan) => ({ app: plan.appId!, plan, status: 'pending' }));
     if (!items.length) return;
     this.publish({ items, phase: 'running', requestId: null });
     void this.next();

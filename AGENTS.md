@@ -89,6 +89,11 @@ interaction and accessibility requirements.
   Keep the full path below, with clickable folder segments and Copy on the
   right; no path-edit field. Preserve List/Grid views and sorting choices.
 - **Make menus consistent.** Left-align labels with a fixed checkmark column.
+  A checkmark alone shows the selected choice; never add a persistent selected
+  background. Reserve the row highlight for the single hovered or keyboard-active
+  item, so adjacent options never appear joined. Use the shared menu input
+  handling: pointer movement activates hover, keyboard navigation activates
+  keyboard focus, and only that input mode may paint a row background.
   Clicking outside a menu, including inside another app, dismisses it and
   performs the clicked action.
 - **Use direct update flows.** App Library has Discovery and Updates. Offer
@@ -113,6 +118,10 @@ interaction and accessibility requirements.
   content rows, aligned with the card's inner padding (normally 16px). Preserve
   existing inset lines. Keep structural window, toolbar and sidebar borders
   distinct from content dividers.
+- **Keep checkbox activation precise.** Toggle checkboxes only when the checkbox
+  itself is clicked or activated with the keyboard. Clicking surrounding text,
+  a row, or empty space must not toggle them. Use accessible names on the input
+  without wrapping the whole row in an activating label.
 - **Share input styling.** Search boxes use `app-search`; ordinary text fields
   use `input`. Keep font size, line height, caret spacing and field height
   consistent, with flat borders and one outer focus outline.
@@ -122,6 +131,12 @@ interaction and accessibility requirements.
   the desktop, but never above the menu bar; retain a draggable title-bar area.
   Overview offers a top-right close control on hover or keyboard focus and
   preserves unsaved-change prompts.
+- **Align and animate disclosures.** Use the shared Disclosure control for expandable
+  content. Center an SVG chevron in a fixed, nonshrinking icon column beside the
+  label; never use text glyphs as arrows. Rotate the chevron and animate content
+  height together on both expansion and collapse. Honor reduced motion and keep
+  collapsed content out of keyboard navigation. Avoid empty action rows around
+  collapsed thinking and tool entries.
 - **Coordinate motion.** Transitions should feel smooth and explain state.
   A dock thumbnail disappears as its window restores, without lingering as
   a duplicate. Preserve window state and respect reduced motion. Verify UI

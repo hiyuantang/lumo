@@ -11,6 +11,8 @@ import { textToBase64 } from '../api/encoding';
 import { ApiError } from '../api/transport';
 import { useShell } from '../shell/ShellContext';
 import { Markdown } from './Markdown';
+import { HtmlPreview } from './HtmlPreview';
+import { ImagePreview, imageType } from './ImagePreview';
 import { FilePicker } from './FilePicker';
 import '../styles/preview.css';
 
@@ -20,8 +22,9 @@ export function Preview() {
   const path = win.filePath;
   const [picking, setPicking] = useState(false);
   useAppMenus({ file: [{ id: 'open', label: 'Open File…', run: () => setPicking(true) }] });
+  const Document = imageType(path?.at(-1) ?? '') ? ImagePreview : PreviewDocument;
   return <>
-    {path ? <PreviewDocument key={JSON.stringify(path)} path={path} onOpen={() => setPicking(true)} /> : <div className="app preview preview-empty" data-testid="app-preview"><p>Choose a file to preview.</p><button type="button" className="btn" data-testid="preview-open" onClick={() => setPicking(true)}>Open file…</button></div>}
+    {path ? <Document key={JSON.stringify(path)} path={path} onOpen={() => setPicking(true)} /> : <div className="app preview preview-empty" data-testid="app-preview"><p>Choose a file to preview.</p><button type="button" className="btn" data-testid="preview-open" onClick={() => setPicking(true)}>Open file…</button></div>}
     {picking && <FilePicker initialPath={path?.slice(0, -1)} onCancel={() => setPicking(false)} onOpen={(selected) => { setPicking(false); actions.openPreview(selected, false, win.id); }} />}
   </>;
 }
@@ -32,6 +35,8 @@ function PreviewDocument({ path, onOpen }: { path: string[]; onOpen: () => void 
   const { state, actions } = useShell();
   const name = path.at(-1) ?? 'File';
   const markdown = /\.(md|markdown|mdown)$/i.test(name);
+  const html = /\.(html?|xhtml)$/i.test(name);
+  const rendered = markdown || html;
   const win = useCurrentWindow();
   const mode = win.previewMode ?? 'rendered';
   const setMode = (value: 'rendered' | 'raw') => actions.setPreviewMode(win.id, value);
@@ -46,7 +51,7 @@ function PreviewDocument({ path, onOpen }: { path: string[]; onOpen: () => void 
   const working = useRef(false);
   const alive = useRef(true);
   const editable = typeof read?.content === 'string' && !!read.revision && !read.truncated;
-  const editing = editable && (!markdown || mode === 'raw');
+  const editing = editable && (!rendered || mode === 'raw');
   const dirty = editable && draft !== read?.content;
 
   useEffect(() => {
@@ -134,7 +139,7 @@ function PreviewDocument({ path, onOpen }: { path: string[]; onOpen: () => void 
     file: [{ id: 'save', label: 'Save', hint: '⌘S', disabled: !dirty || busy !== null, run: () => { void save(); } }],
     view: [
       { id: 'refresh', label: 'Refresh', disabled: busy !== null, run: requestReload },
-      ...(markdown ? [
+      ...(rendered ? [
         { id: 'rendered', label: 'Rendered', checked: mode === 'rendered', run: () => setMode('rendered') },
         { id: 'raw', label: 'Raw', checked: mode === 'raw', run: () => setMode('raw') },
       ] : []),
@@ -147,7 +152,7 @@ function PreviewDocument({ path, onOpen }: { path: string[]; onOpen: () => void 
     <div className="app-toolbar preview-toolbar">
       <strong title={name}>{name}{dirty && <span className="preview-unsaved" aria-label="Unsaved changes"> •</span>}</strong>
       <div className="app-toolbar-actions">
-        {markdown && <div className="preview-modes" role="group" aria-label="Markdown display">
+        {rendered && <div className="preview-modes" role="group" aria-label={html ? "HTML display" : "Markdown display"}>
           <button type="button" className="btn" aria-pressed={mode === 'rendered'} data-testid="preview-mode-rendered" onClick={() => setMode('rendered')}>Rendered</button>
           <button type="button" className="btn" aria-pressed={mode === 'raw'} data-testid="preview-mode-raw" onClick={() => setMode('raw')}>Raw</button>
         </div>}
@@ -164,15 +169,15 @@ function PreviewDocument({ path, onOpen }: { path: string[]; onOpen: () => void 
     </div></div>}
     {editing ? <div className="preview-editor" data-testid="file-editor">
       <textarea className="preview-editor-input" data-testid="editor-input" aria-label={`Contents of ${name}`} value={draft} onChange={(event) => setDraft(event.target.value)} readOnly={busy === 'load' || !!pending} spellCheck={false} />
-    </div> : <div className="preview-content" tabIndex={0} aria-label="File content" onContextMenu={(event) => {
+    </div> : <div className={`preview-content${html && mode === 'rendered' ? ' preview-html-content' : ''}`} tabIndex={0} aria-label="File content" onContextMenu={(event) => {
       const selection = window.getSelection()?.toString();
       openContextMenu(event, [
         ...(selection ? [{ label: 'Copy', run: () => { void copyText(selection).catch(() => actions.notify('Clipboard unavailable', 'Use the keyboard shortcut to copy.')); } }] : []),
-        ...(markdown ? [{ label: mode === 'rendered' ? 'Show Raw' : 'Show Rendered', run: () => setMode(mode === 'rendered' ? 'raw' : 'rendered') }] : []),
+        ...(rendered ? [{ label: mode === 'rendered' ? 'Show Raw' : 'Show Rendered', run: () => setMode(mode === 'rendered' ? 'raw' : 'rendered') }] : []),
         { label: 'Copy Path', run: () => { void copyText(source.absolutePath(path)).catch(() => actions.notify('Clipboard unavailable', 'Could not copy the file path.')); } },
       ]);
     }}>
-      {!read ? <p className="preview-empty">{error ? 'Could not open this file.' : 'Loading…'}</p> : read.content === null ? <p className="preview-empty">This file type cannot be previewed yet. Use Files to download it.</p> : markdown && mode === 'rendered' ? <Markdown text={editable ? draft : read.content} /> : <pre data-testid="preview-raw">{read.content || 'Empty file'}</pre>}
+      {!read ? <p className="preview-empty">{error ? 'Could not open this file.' : 'Loading…'}</p> : read.content === null ? <p className="preview-empty">This file type cannot be previewed yet. Use Files to download it.</p> : html && mode === 'rendered' ? <HtmlPreview text={editable ? draft : read.content} name={name}/> : markdown && mode === 'rendered' ? <Markdown text={editable ? draft : read.content} /> : <pre data-testid="preview-raw">{read.content || 'Empty file'}</pre>}
     </div>}
     <footer className="preview-path"><span title={source.absolutePath(path)}>{source.absolutePath(path)}</span><span role="status" data-testid="preview-save-status">{busy === 'save' ? 'Saving…' : autoSave && autoSavePaused ? 'Auto-save paused' : dirty ? 'Unsaved changes' : editable ? 'Saved' : 'Read-only'}</span></footer>
     {pending && <div className="quicklook-overlay"><div className="file-confirm" role="alertdialog" aria-modal="true" aria-label="Unsaved changes" data-testid="preview-unsaved-dialog">

@@ -16,6 +16,17 @@ test('Preview picks files in its own dialog, with navigation, filtering and keyb
   await expect(page.getByTestId('window-files')).toHaveCount(0);
   await expect(page.getByTestId('file-picker-open')).toBeDisabled();
   await expect(picker.getByRole('searchbox')).toBeFocused();
+  const trail = picker.getByRole('navigation', { name: 'Folder path' });
+  await expect(trail).toHaveText('/home/user');
+  await trail.getByRole('button', { name: 'Filesystem root' }).click();
+  await expect(trail).toHaveText('/');
+  await expect(picker.getByRole('button', { name: 'Parent folder' })).toBeDisabled();
+  await picker.getByRole('button', { name: 'Home folder' }).click();
+  await expect(trail).toHaveText('/home/user');
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await picker.screenshot({ path: `/tmp/lumo-picker-path-${theme}.png`, animations: 'disabled' });
+  }
   await expect(page.getByTestId('file-picker-entry-.bashrc')).toHaveCount(0);
   await picker.getByRole('button', { name: 'Hidden files', exact: true }).click();
   await expect(page.getByTestId('file-picker-entry-.bashrc')).toBeVisible();
@@ -46,6 +57,8 @@ test('picker cancels without opening apps, traps focus and fits a compact viewpo
   await expect(page.getByTestId('preview-open')).toBeFocused();
   await page.getByTestId('preview-open').click();
   await page.mouse.click(5, 5);
+  await expect(picker).toBeVisible();
+  await page.getByTestId('app-modal-overlay').click({ position: { x: 4, y: 4 } });
   await expect(picker).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 650 });
   await page.getByTestId('preview-open').click();

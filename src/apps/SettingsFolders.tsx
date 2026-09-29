@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { describeError, getDataSource, type FileLocationSettings } from '../api/source';
 import { useShell } from '../shell/ShellContext';
 import { IconRefresh } from '../shell/icons';
+import { AppModal } from '../shell/AppModal';
 import { Select } from '../shell/Select';
 import { formatSize } from '../utils/file-format';
 import { folderPath } from '../utils/folder-path';
@@ -19,7 +20,6 @@ export function SettingsFolders({ active }: { active: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [removing, setRemoving] = useState<Location | null>(null);
-  const confirmation = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     if (!active) return;
@@ -29,7 +29,6 @@ export function SettingsFolders({ active }: { active: boolean }) {
     return () => { alive = false; };
   }, [source, active, refresh]);
 
-  useEffect(() => { if (removing) confirmation.current?.showModal(); }, [removing]);
 
   async function apply(item: Location, path: string, remove = false) {
     if (!settings || busy) return;
@@ -47,12 +46,12 @@ export function SettingsFolders({ active }: { active: boolean }) {
       </section>
       {error && !removing && <p className="settings-field-error" role="alert">{error}</p>}
     </div>
-    {removing && <dialog ref={confirmation} className="settings-folder-confirm" aria-labelledby="folder-remove-title" onCancel={(event) => { event.preventDefault(); if (!busy) setRemoving(null); }}>
+    {removing && <AppModal onCancel={() => { if (!busy) setRemoving(null); }}><div role="alertdialog" className="settings-folder-confirm" aria-labelledby="folder-remove-title">
       <h3 id="folder-remove-title">Remove {removing.name}?</h3>
       <p>Move this folder and its contents to Trash.</p>
       {error && <p className="settings-field-error" role="alert">{error}</p>}
       <div className="settings-folder-actions"><button type="button" className="btn" disabled={!!busy} autoFocus onClick={() => setRemoving(null)}>Cancel</button><button type="button" className="btn btn-danger" data-testid="settings-folder-remove-confirm" disabled={!!busy} onClick={() => void apply(removing, '', true)}>{busy ? 'Removing…' : 'Remove'}</button></div>
-    </dialog>}
+    </div></AppModal>}
   </>;
 }
 

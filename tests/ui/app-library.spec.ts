@@ -11,7 +11,7 @@ async function open(page: Page) {
 test('Discovery uses adaptive cards and keeps details separate from launch', async ({ page }) => {
   await open(page);
   const cards = page.locator('.library-discovery-grid');
-  await expect(cards.getByRole('button')).toHaveCount(3);
+  await expect(cards.getByRole('button')).toHaveCount(4);
   const columns = () => cards.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);
   expect(await columns()).toBe(2);
   await page.getByTestId('library-nginx').click();

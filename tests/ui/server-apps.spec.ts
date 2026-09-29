@@ -41,6 +41,11 @@ test('Websites keeps drafts between sites and adds a reviewed proxy without alte
   await login(page);
   await page.getByTestId('dock-app-websites').click();
   await expect(page.getByLabel('Website domain')).toHaveValue('notes.example.com');
+  await page.locator('.website-enabled span').click();
+  await expect(page.getByRole('checkbox', { name: 'Enabled' })).toBeChecked();
+  await page.getByRole('checkbox', { name: 'Enabled' }).press('Space');
+  await expect(page.getByRole('checkbox', { name: 'Enabled' })).not.toBeChecked();
+  await page.getByRole('checkbox', { name: 'Enabled' }).check();
   await page.getByLabel('Application port').fill('4000');
   await page.getByTestId('website-row-default').click();
   await expect(page.getByTestId('website-source')).toContainText('default_server');

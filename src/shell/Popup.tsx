@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import '../styles/popup.css';
+import { useMenuInput } from './useMenuInput';
 
-export function Popup({ x, y, width, above, placement, anchorElement, keepAnchorVisible, onClose, children }: {
-  x: number; y: number; width?: number; above?: number; placement?: 'above'; anchorElement?: HTMLElement | null; keepAnchorVisible?: boolean; onClose: () => void; children: ReactNode;
+export function Popup({ x, y, width, above, placement, anchorElement, keepAnchorVisible, keyboard, onClose, children }: {
+  x: number; y: number; width?: number; above?: number; placement?: 'above'; anchorElement?: HTMLElement | null; keepAnchorVisible?: boolean; keyboard?: boolean; onClose: () => void; children: ReactNode;
 }) {
+  const input = useMenuInput(keyboard);
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -40,7 +41,7 @@ export function Popup({ x, y, width, above, placement, anchorElement, keepAnchor
       window.removeEventListener('blur', dismiss);
     };
   }, [x, y, above, placement, anchorElement, keepAnchorVisible]);
-  return createPortal(<div ref={ref} className="shell-popup" style={{ left: x, top: y, width, maxHeight: placement === 'above' ? Math.max(48, y - 8) : undefined }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }} onKeyDown={(event) => {
+  return createPortal(<div {...input} ref={ref} className="shell-popup menu-surface" style={{ left: x, top: y, width, maxHeight: placement === 'above' ? Math.max(48, y - 8) : undefined }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }} onKeyDown={(event) => {
     event.stopPropagation();
     if (event.key === 'Escape') { event.preventDefault(); onClose(); }
     if (event.key === 'Tab') onClose();

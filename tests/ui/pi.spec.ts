@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, test } from '../offline';
 import { piPage } from './pi-fixture';
+import { piAction } from './pi-actions';
 
 test('Pi streams native chat and tools, queues work, changes models, and resumes saved sessions', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', (err) => errors.push(err.message));
@@ -21,12 +22,13 @@ test('Pi streams native chat and tools, queues work, changes models, and resumes
   await expect(page.locator('.pi-compose .pi-status')).toHaveCount(0);
   await page.getByTestId('pi-prompt').fill('Focus on the backend');
   await page.getByTestId('pi-send').click();
-  await expect(page.getByTestId('app-pi')).toContainText('1 queued');
-  expect(fixture.commands).toContainEqual({ type: 'steer', message: 'Focus on the backend' });
+  await expect(page.getByTestId('pi-queued-message')).toContainText('Focus on the backend');
+  expect(fixture.commands).toContainEqual({ type: 'follow_up', message: 'Focus on the backend' });
   fixture.finish();
   await expect(page.getByTestId('pi-messages')).toContainText('React and Go');
   await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
-  await page.getByTestId('pi-tool').locator('summary').click();
+  await page.getByTestId('pi-work-summary').getByRole('button', { name: /Worked/ }).click();
+  await page.getByTestId('pi-tool').getByRole('button').click();
   await expect(page.getByTestId('pi-tool')).toContainText('README.md');
   await expect(page.getByTestId('pi-tool')).toContainText('React frontend and Go server.');
   await page.screenshot({ animations: 'disabled', path: '/tmp/lumo-pi-light.png' });
@@ -43,7 +45,7 @@ test('Pi streams native chat and tools, queues work, changes models, and resumes
   await expect(page.getByRole('slider', { name: 'Effort', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Choose model', exact: true }).press('Escape');
   expect(fixture.commands).toContainEqual({ type: 'set_model', modelId: 'fast', provider: 'Fixture' });
-  await page.getByRole('button', { name: 'Rename', exact: true }).click();
+  await piAction(page, 'rename');
   await page.getByRole('textbox', { name: 'Conversation name' }).fill('Backend review');
   await page.getByTestId('server-app-confirm-ok').click();
   await expect(page.getByTestId('pi-sidebar')).toContainText('Backend review');
@@ -149,12 +151,13 @@ test('Pi native provider settings connect with an API key and resume the same ch
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByTestId('pi-home-button').click();
   await expect(page.getByTestId('pi-prompt')).toBeEnabled();
-  await expect(page.getByTestId('pi-prompt')).toHaveValue('Preserve my draft');
+  await expect(page.getByTestId('pi-prompt')).toHaveText('Preserve my draft');
   expect(fixture.starts.at(-1)).toMatchObject({ session: 'first.jsonl' });
 });
 
 test('Pi preserves rejected messages and protects drafts during session navigation', async ({ page }) => {
   await piPage(page);
+  await page.route('**/api/v1/pi/sessions?**', (route) => route.fulfill({ json: { ok: true, data: { sessions: [{ id: 'first.jsonl', name: 'Project notes', modified: '' }, { id: 'second.jsonl', name: 'Earlier work', modified: '' }] } } }));
   await page.route('**/api/v1/pi/command', (route) => {
     if (route.request().postDataJSON().command.type !== 'prompt') return route.fallback();
     return route.fulfill({ json: { ok: true, data: { type: 'response', command: 'prompt', success: false, error: 'Choose a connected provider first.' } } });
@@ -163,15 +166,16 @@ test('Pi preserves rejected messages and protects drafts during session navigati
   await expect(page.getByTestId('pi-prompt')).toBeEnabled();
   await page.getByTestId('pi-prompt').fill('Keep this draft'); await page.getByTestId('pi-send').click();
   await expect(page.getByRole('alert')).toContainText('Choose a connected provider first.');
-  await expect(page.getByTestId('pi-prompt')).toHaveValue('Keep this draft');
+  await expect(page.getByTestId('pi-prompt')).toHaveText('Keep this draft');
   await page.getByRole('navigation', { name: 'Pi projects', exact: true }).getByRole('button', { name: 'Earlier work', exact: true }).click();
-  await expect(page.getByTestId('server-app-confirm')).toContainText('Leave conversation?');
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(page.getByTestId('pi-prompt')).toHaveValue('Keep this draft');
+  await expect(page.getByTestId('pi-messages')).toContainText('Earlier saved conversation.');
+  await expect(page.getByTestId('server-app-confirm')).toHaveCount(0);
+  await page.getByRole('navigation', { name: 'Pi projects', exact: true }).getByRole('button', { name: 'Project notes', exact: true }).click();
+  await expect(page.getByTestId('pi-prompt')).toHaveText('Keep this draft');
 });
 
 
-test('Pi waits for the old process to stop before resuming another session', async ({ page }) => {
+test('Pi opens another session while an idle process finishes stopping', async ({ page }) => {
   await piPage(page);
   let stopping = false; let overlapped = false;
   await page.route('**/api/v1/pi/stop', async (route) => { stopping = true; await new Promise((resolve) => setTimeout(resolve, 250)); stopping = false; return route.fallback(); });
@@ -180,5 +184,5 @@ test('Pi waits for the old process to stop before resuming another session', asy
   await expect(page.getByTestId('pi-prompt')).toBeEnabled();
   await page.getByRole('navigation', { name: 'Pi projects', exact: true }).getByRole('button', { name: 'Earlier work', exact: true }).click();
   await expect(page.getByTestId('pi-messages')).toContainText('Earlier saved conversation.');
-  expect(overlapped).toBe(false);
+  expect(overlapped).toBe(true);
 });

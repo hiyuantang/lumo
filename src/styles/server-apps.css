@@ -66,7 +66,7 @@
 .website-kind-options strong { font-size: 12px; }
 .website-kind-options small { grid-column: 2; }
 .website-fields input[type=checkbox],.website-fields input[type=radio] { accent-color: var(--accent); }
-.website-fields .website-enabled { flex-direction: row; align-items: center; }
+.website-fields .website-enabled { display: flex; gap: 8px; align-items: center; font-size: 12px; font-weight: 600; }
 .server-app-savebar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .server-app-savebar > span { margin-right: auto; }
 .server-app-confirm { width: min(420px,calc(100vw - 36px)); }

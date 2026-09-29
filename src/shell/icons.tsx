@@ -63,6 +63,10 @@ export function IconTerminal(p: IconProps) {
   );
 }
 
+export function IconThinking(p: IconProps) {
+  return base(p, <><path d="M7 16a4 4 0 0 1-3-6.6A4.5 4.5 0 0 1 10 4a4.5 4.5 0 0 1 7.6 1.8A4.5 4.5 0 0 1 18 15h-7"/><circle cx="8" cy="18" r="1.5"/><circle cx="4" cy="21" r=".7" fill="currentColor" stroke="none"/></>);
+}
+
 export function IconGear(p: IconProps) {
   return base(
     p,
@@ -246,4 +250,16 @@ export function IconCopy(p: IconProps) {
 
 export function IconBranch(p: IconProps) {
   return base(p, <><circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10M18 7v2a4 4 0 0 1-4 4h-4a4 4 0 0 0-4 4"/></>);
+}
+
+export function IconChatBubble(p: IconProps) {
+  return base(p, <path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 3v-3H3V6a2 2 0 0 1 2-2Z"/>);
+}
+
+export function IconSend(p: IconProps) {
+  return base(p, <path d="M12 20V4m-6 6 6-6 6 6"/>);
+}
+
+export function IconStop(p: IconProps) {
+  return base(p, <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>);
 }

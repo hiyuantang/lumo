@@ -238,13 +238,13 @@
   gap: var(--space-2);
 }
 
-.services-unit-files details {
+.services-unit-files .disclosure {
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
   overflow: hidden;
 }
 
-.services-unit-files summary {
+.services-unit-files .disclosure-trigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -256,7 +256,7 @@
 }
 
 .services-unit-files pre,
-.services-unit-files details > p {
+.services-unit-files .disclosure-content > p {
   margin: 0;
   padding: var(--space-2);
   border-top: 1px solid var(--border);

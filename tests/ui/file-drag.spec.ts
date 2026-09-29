@@ -64,3 +64,49 @@ test('folder drops refuse collisions and allow moving back through the path bar'
   await page.getByTestId('files-location-home').click();
   await expect(page.getByTestId('file-row-upgrade-plan.txt')).toBeVisible();
 });
+
+test('Holding a dragged folder over Back opens its parent once and keeps the move active', async ({ page }) => {
+  await open(page);
+  await page.getByTestId('file-row-Pictures').dragTo(page.getByTestId('file-row-Documents'));
+  await page.getByTestId('file-row-Documents').dblclick();
+  const folder = (await page.getByTestId('file-row-Pictures').boundingBox())!;
+  const back = page.getByTestId('files-back'); const button = (await back.boundingBox())!;
+  await page.mouse.move(folder.x + 35, folder.y + folder.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(folder.x + 48, folder.y + folder.height / 2, { steps: 3 });
+  await page.mouse.move(button.x + button.width / 2, button.y + button.height / 2, { steps: 8 });
+  await page.mouse.move(button.x + button.width / 2 + 1, button.y + button.height / 2);
+  await expect(back).toHaveAttribute('data-drag-navigating', 'true');
+  await expect(back).toHaveCSS('animation-iteration-count', '2');
+  await expect(page.getByTestId('files-current-folder')).toHaveText('Home');
+  await page.waitForTimeout(1200);
+  await expect(page.getByTestId('files-current-folder')).toHaveText('Home');
+  const list = (await page.getByRole('listbox', { name: 'Files', exact: true }).boundingBox())!;
+  await page.mouse.move(list.x + list.width - 15, list.y + list.height - 15, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByTestId('file-row-Pictures')).toBeVisible();
+  await page.getByTestId('file-row-Documents').dblclick();
+  await expect(page.getByTestId('file-row-Pictures')).toHaveCount(0);
+});
+
+test('Back drag navigation cancels on leave and accepts a folder even with no history', async ({ page }) => {
+  await open(page);
+  const back = page.getByTestId('files-back');
+  await expect(back).toBeDisabled();
+  const transfer = await page.evaluateHandle(() => new DataTransfer());
+  await page.getByTestId('file-row-Pictures').dispatchEvent('dragstart', { dataTransfer: transfer });
+  await back.dispatchEvent('dragover', { dataTransfer: transfer });
+  await expect(back).toHaveAttribute('data-drag-navigating', 'true');
+  await back.dispatchEvent('dragleave', { dataTransfer: transfer });
+  await page.waitForTimeout(1100);
+  await expect(page.getByTestId('files-current-folder')).toHaveText('Home');
+  await expect(back).not.toHaveAttribute('data-drag-navigating', 'true');
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await back.dispatchEvent('dragover', { dataTransfer: transfer });
+  await expect(back).toHaveCSS('animation-name', 'none');
+  await page.getByTestId('app-files').screenshot({ path: '/tmp/lumo-files-back-hover.png' });
+  await expect(page.getByTestId('files-current-folder')).toHaveText('home');
+  await page.dispatchEvent('body', 'dragend', { dataTransfer: transfer });
+  await expect(back).not.toHaveAttribute('data-drag-navigating', 'true');
+});

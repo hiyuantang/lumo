@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"lumo/server/internal/containers"
@@ -41,6 +42,7 @@ type Deps struct {
 }
 
 type Server struct {
+	gitMu       sync.Mutex
 	folderMoves atomic.Int64
 	deps        Deps
 	processes   system.ProcessSampler
@@ -59,11 +61,17 @@ func NewServer(deps Deps) *Server {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/git/repository", s.handleGit)
+	mux.HandleFunc("GET /api/v1/git/diff", s.handleGit)
+	mux.HandleFunc("POST /api/v1/git/action", s.handleGit)
 	mux.HandleFunc("GET /api/v1/pi/providers", s.handlePiProviders)
 	mux.HandleFunc("POST /api/v1/pi/auth/start", s.handlePiAuthStart)
 	mux.HandleFunc("GET /api/v1/pi/auth", s.handlePiAuthState)
 	mux.HandleFunc("POST /api/v1/pi/auth/reply", s.handlePiAuthReply)
 	mux.HandleFunc("POST /api/v1/pi/auth/cancel", s.handlePiAuthCancel)
+	mux.HandleFunc("GET /api/v1/pi/reference", s.handlePiReference)
+	mux.HandleFunc("GET /api/v1/pi/compaction", s.handlePiCompaction)
+	mux.HandleFunc("POST /api/v1/pi/compaction", s.handlePiCompaction)
 	mux.HandleFunc("GET /api/v1/pi/settings", s.handlePiSettings)
 	mux.HandleFunc("POST /api/v1/pi/settings", s.handlePiSettings)
 	mux.HandleFunc("GET /api/v1/pi/sessions", s.handlePiSessions)

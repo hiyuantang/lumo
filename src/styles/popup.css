@@ -16,6 +16,7 @@
   font-size: 13px;
 }
 .popup-item {
+  --menu-detail-color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -25,14 +26,18 @@
   border-radius: 6px;
   text-align: left;
 }
-.popup-item:hover:not(:disabled), .popup-item:focus-visible, .popup-item.highlighted {
-  background: var(--accent);
-  color: var(--accent-contrast);
+.menu-surface .popup-item { background: transparent; color: var(--text); transition: none; }
+.popup-item:disabled { color: var(--text-faint); cursor: default; }
+.popup-item.danger { --menu-row-color: var(--danger); --menu-row-contrast: white; color: var(--danger); }
+.menu-surface[data-menu-input='pointer'] .popup-item:hover:not(:disabled),
+.menu-surface[data-menu-input='keyboard'] .popup-item.highlighted:not(:disabled),
+.menu-surface[data-menu-input='keyboard']:not(:has(.popup-item.highlighted)) .popup-item:focus:not(:disabled) {
+  --menu-detail-color: currentColor;
+  background: var(--menu-row-color, var(--accent));
+  color: var(--menu-row-contrast, var(--accent-contrast));
   outline: none;
 }
-.popup-item:disabled { color: var(--text-faint); cursor: default; }
-.popup-item.danger { color: var(--danger); }
-.popup-item.danger:hover, .popup-item.danger:focus-visible { background: var(--danger); color: white; }
+.menu-surface[data-menu-input='pointer'] .popup-item:focus-visible { outline: none; }
 .popup-separator { height: 1px; margin: 5px; background: var(--border); }
 .popup-empty { padding: 10px; color: var(--text-muted); }
 .custom-select {
@@ -54,7 +59,10 @@
 .select-options { max-height: min(300px, 55dvh); overflow-y: auto; overscroll-behavior: contain; outline: none; }
 .select-search { width: 100%; margin-bottom: 6px; }
 
-.popup-item.dropdown-menu-item { justify-content: flex-start; gap: 8px; }
+.popup-item.dropdown-menu-item, .select-options .popup-item { justify-content: flex-start; gap: 8px; }
 .dropdown-menu-check { flex: 0 0 14px; text-align: center; }
 
 .custom-select > svg { display: block; flex-shrink: 0; }
+
+
+.select-options:focus-visible {outline:none;}

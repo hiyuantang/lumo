@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { MockGit } from './git';
+import type { GitAction } from '../api/git';
 import { mockPi } from './pi';
 import { mockSkills } from './skills';
 import type { SkillCatalog, SkillDetail } from '../api/skills';
@@ -75,11 +77,18 @@ import {
 const TICK_MS = 2000;
 
 export class MockDataSource implements DataSource {
+  private git = new MockGit();
+  gitRepository(path: string) { return this.git.repository(path); }
+  gitDiff(path: string, file: string, commit: string, staged: boolean) { return this.git.diff(path, file, commit, staged); }
+  gitAction(request: GitAction) { return this.git.action(request); }
   piProviders = mockPi.providers;
   piAuthStart = mockPi.authStart;
   piAuthState = mockPi.authState;
   piAuthReply = mockPi.authReply;
   piAuthCancel = mockPi.authCancel;
+  piReference = mockPi.reference;
+  piCompaction = mockPi.compaction;
+  piSaveCompaction = mockPi.saveCompaction;
   piSettings = mockPi.settings;
   piSaveSettings = mockPi.saveSettings;
   piSessions = mockPi.sessions;
@@ -94,7 +103,7 @@ export class MockDataSource implements DataSource {
 
   constructor() { appFileFixtures('docker'); appFileFixtures('nginx'); }
   private removedApps = new Set<LibraryAppID>();
-  async getAppCatalog(): Promise<AppCatalog> { return { canInstall: true, apps: [{ id: 'docker', installed: !this.removedApps.has('docker') }, { id: 'nginx', installed: !this.removedApps.has('nginx') }, { id: 'pi', installed: Boolean(this.piVersion), canInstall: true, canUpdate: Boolean(this.piVersion), canUninstall: true }] }; }
+  async getAppCatalog(): Promise<AppCatalog> { return { canInstall: true, apps: [{ id: 'git', installed: !this.removedApps.has('git') }, { id: 'docker', installed: !this.removedApps.has('docker') }, { id: 'nginx', installed: !this.removedApps.has('nginx') }, { id: 'pi', installed: Boolean(this.piVersion), canInstall: true, canUpdate: Boolean(this.piVersion), canUninstall: true }] }; }
   private piVersion = '';
   async uninstallPi(clean = false): Promise<void> { this.piVersion = ''; if (clean) { cleanAppFiles('pi'); mockPi.clear(); } }
   async planAppInstall(id: LibraryAppID, operation: AppOperation = 'install'): Promise<UpdatePlan> {
@@ -102,9 +111,11 @@ export class MockDataSource implements DataSource {
       const packages = this.piVersion !== '1.2.1' ? [{ name: 'pi', fromVersion: this.piVersion, toVersion: '1.2.1', security: false, downloadBytes: 0, installedDeltaBytes: 0 }] : [];
       return rememberAppPlan({ ...await calculateUpdatePlan(), appId: id, operation, packages, downloadBytes: 0 }, () => { this.piVersion = '1.2.1'; appFileFixtures('pi'); });
     }
+    if (id === 'git') return rememberAppPlan({ ...await calculateUpdatePlan(), appId: id, operation, packages: operation === 'update' && this.updatedGit ? [] : [{ name: 'git', fromVersion: '2.43.0', toVersion: '2.43.1', security: false, downloadBytes: 0, installedDeltaBytes: 0 }], downloadBytes: 0 }, () => { if (operation === 'uninstall') this.removedApps.add(id); else { this.removedApps.delete(id); this.updatedGit = true; } });
     const updated = id === 'docker' ? this.serverApps.engineVersion === '27.5.2' : this.updatedNginx;
     return rememberAppPlan({ ...await calculateUpdatePlan(), appId: id, operation, packages: operation !== 'update' || !updated ? [{ name: id === 'docker' ? 'docker.io' : 'nginx', fromVersion: id === 'docker' ? this.serverApps.engineVersion : '1.24.0', toVersion: id === 'docker' ? '27.5.2' : '1.24.1', security: false, downloadBytes: 24000000, installedDeltaBytes: 1200000 }] : [], downloadBytes: operation === 'update' && !updated ? 24000000 : 0 }, (clean) => { if (operation === 'uninstall') { this.removedApps.add(id); if (clean) cleanAppFiles(id); } else { this.removedApps.delete(id); appFileFixtures(id); if (operation === 'update') { if (id === 'docker') this.serverApps.engineVersion = '27.5.2'; else this.updatedNginx = true; } } });
   }
+  private updatedGit = false;
   private updatedNginx = false;
   private serverApps = new MockServerApps();
   getDockerResources() { return this.serverApps.getDockerResources(); }

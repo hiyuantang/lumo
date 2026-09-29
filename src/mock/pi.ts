@@ -1,12 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { PiProvider, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiCommand, PiData, PiEvent, PiEvents, PiMessage, PiModel, PiReply, PiSession } from '../api/pi';
+import type { PiContextBudget, PiCompaction, PiCompactionChange, PiProvider, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiCommand, PiData, PiEvent, PiEvents, PiMessage, PiModel, PiReply, PiSession } from '../api/pi';
 const models: PiModel[] = [{ id: 'demo-balanced', name: 'Balanced', provider: 'Demo', reasoning: true }, { id: 'demo-fast', name: 'Fast', provider: 'Demo' }];
-interface Saved { archived?: boolean; session: PiSession; project: string; messages: PiMessage[] }
+interface Saved { archived?: boolean; session: PiSession; project: string; messages: PiMessage[]; model: PiModel; level: string }
 interface Run { saved: Saved; events: PiEvent[]; busy: boolean; queue: { type: 'steer' | 'follow_up'; message: string }[]; model: PiModel; level: string; timer?: number }
 const instructions = new Map<PiInstructionKind, PiInstruction>();
+let compactionDefaults: { usageBudget?: PiContextBudget; enabled: boolean; reserveTokens: number; keepRecentTokens: number; revision: string } = { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000, revision: 'initial' };
+const compactionOverrides = new Map<string, { reserveTokens: number; keepRecentTokens: number }>();
 const saved: Saved[] = [];
+let lastSelection = { model: models[0], level: 'medium' };
 const runs = new Map<string, Run>();
 export const mockPi = {
+  async reference(project: string, session: string) { if (!saved.some((item) => item.project === project && item.session.id === session)) throw new Error('This saved conversation is unavailable.'); return { project, session, path: `/home/user/.local/state/lumo/pi-sessions/demo/${session}.jsonl`, reader: '/usr/local/bin/lumod' }; },
+  async compaction(model: string): Promise<PiCompaction> {
+    return { ...compactionDefaults, model, defaultReserveTokens: compactionDefaults.reserveTokens, defaultKeepRecentTokens: compactionDefaults.keepRecentTokens, customized: compactionOverrides.has(model), ...compactionOverrides.get(model) };
+  },
+  async saveCompaction(change: PiCompactionChange): Promise<PiCompaction> {
+    if (change.revision !== compactionDefaults.revision) throw new Error('Pi settings changed on the server. Reload before saving.');
+    compactionDefaults = { ...compactionDefaults, usageBudget: change.usageBudget, enabled: change.enabled, revision: crypto.randomUUID() };
+    if (change.usageBudget) compactionOverrides.clear();
+    if (!change.model) { compactionDefaults.reserveTokens = change.reserveTokens; compactionDefaults.keepRecentTokens = change.keepRecentTokens; }
+    else if (change.customized) compactionOverrides.set(change.model, { reserveTokens: change.reserveTokens, keepRecentTokens: change.keepRecentTokens });
+    else compactionOverrides.delete(change.model);
+    return mockPi.compaction(change.model);
+  },
   async providers(): Promise<{ providers: PiProvider[] }> { return { providers: [{ id: 'demo', name: 'Demo', methods: [], credential: 'api_key' }] }; },
   async authStart(_provider: string, _method: PiAuthMethod, _operation: 'login' | 'logout'): Promise<PiAuthState> { throw new Error('Provider sign-in is available on your server. Demo never stores credentials.'); },
   async authState(_id: string): Promise<PiAuthState> { throw new Error('No provider setup is running.'); },
@@ -18,7 +34,7 @@ export const mockPi = {
     if (before.revision !== revision) throw new Error('Instructions changed on the server. Reload before saving.');
     const value = { ...before, content, exists: true, revision: crypto.randomUUID() }; instructions.set(kind, value); return value;
   },
-  clear() { instructions.clear(); for (const run of runs.values()) window.clearTimeout(run.timer); runs.clear(); saved.length = 0; },
+  clear() { compactionDefaults = { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000, revision: 'initial' }; compactionOverrides.clear(); instructions.clear(); for (const run of runs.values()) window.clearTimeout(run.timer); runs.clear(); saved.length = 0; lastSelection = { model: models[0], level: 'medium' }; },
   async sessions(project: string) { project = project === '~' ? '/home/user' : project; return saved.filter((item) => item.project === project && !item.archived).map((item) => item.session); },
   async deleteSession(project: string, session: string) {
     project = project === '~' ? '/home/user' : project;
@@ -41,8 +57,8 @@ export const mockPi = {
     project = project === '~' ? '/home/user' : project;
     const id = crypto.randomUUID();
     let item = saved.find((item) => item.session.id === session && item.project === project && !item.archived);
-    if (!item) { item = { project, messages: [], session: { id: `${id}.jsonl`, name: 'New conversation', modified: new Date().toISOString() } }; saved.unshift(item); }
-    runs.set(id, { saved: item, events: [], busy: false, queue: [], model: models[0], level: 'medium' });
+    if (!item) { item = { ...lastSelection, project, messages: [], session: { id: `${id}.jsonl`, name: 'New conversation', modified: new Date().toISOString() } }; saved.unshift(item); }
+    runs.set(id, { saved: item, events: [], busy: false, queue: [], model: item.model, level: item.level });
     return { id, project: project === '~' ? '/home/user' : project };
   },
   async command(id: string, command: PiCommand): Promise<PiReply> {
@@ -55,7 +71,7 @@ export const mockPi = {
       const index = command.type === 'fork' ? Number(command.entryId.replace(/^entry-/, '')) : run.saved.messages.length;
       if (run.busy || !Number.isInteger(index) || (command.type === 'fork' && run.saved.messages[index]?.role !== 'user')) return { type: 'response', command: command.type, success: false, error: 'Choose an earlier message after stopping Pi.' };
       const original = run.saved;
-      const item = { project: original.project, messages: structuredClone(original.messages.slice(0, index)), session: { id: `${crypto.randomUUID()}.jsonl`, name: `${original.session.name} · edited`, modified: new Date().toISOString() } };
+      const item = { model: run.model, level: run.level, project: original.project, messages: structuredClone(original.messages.slice(0, index)), session: { id: `${crypto.randomUUID()}.jsonl`, name: `${original.session.name} · edited`, modified: new Date().toISOString() } };
       saved.unshift(item); run.saved = item;
       return { type: 'response', command: command.type, success: true, eventCursor: run.events.length, data: { cancelled: false } };
     }
@@ -63,9 +79,16 @@ export const mockPi = {
     if (command.type === 'get_messages') data = { messages: [...run.saved.messages] };
     if (command.type === 'get_available_models') data = { models };
     if (command.type === 'get_available_thinking_levels') data = { levels: run.model.reasoning ? ['off', 'low', 'medium', 'high'] : ['off'] };
-    if (command.type === 'get_session_stats') data = { tokens: { total: run.saved.messages.length * 240 }, cost: 0, contextUsage: { percent: 2, tokens: 4000, contextWindow: 200000 } };
-    if (command.type === 'set_model') run.model = models.find((model) => model.id === command.modelId) ?? models[0];
-    if (command.type === 'set_thinking_level') run.level = command.level;
+    if (command.type === 'get_session_stats') data = { compaction: { enabled: compactionDefaults.enabled, threshold: compactionDefaults.usageBudget ? compactionDefaults.usageBudget.mode === 'percent' ? Math.floor(200000 * compactionDefaults.usageBudget.value / 100) : Math.min(183616, compactionDefaults.usageBudget.value) : 200000 - compactionDefaults.reserveTokens }, tokens: { total: run.saved.messages.length * 240 }, cost: 0, contextUsage: { percent: 2, tokens: 4000, contextWindow: 200000 } };
+    if (command.type === 'set_model') {
+      const model = models.find((model) => model.id === command.modelId && model.provider === command.provider);
+      if (!model) return { type: 'response', command: command.type, success: false, error: 'Model is unavailable.' };
+      run.model = model; if (!model.reasoning) run.level = 'off';
+    }
+    if (command.type === 'set_thinking_level') run.level = run.model.reasoning ? command.level : 'off';
+    if (command.type === 'set_model' || command.type === 'set_thinking_level') {
+      lastSelection = { model: run.model, level: run.level }; Object.assign(run.saved, lastSelection);
+    }
     if (command.type === 'set_session_name') run.saved.session.name = command.name;
     if (command.type === 'abort') { window.clearTimeout(run.timer); run.busy = false; emit({ type: 'agent_settled' }); }
     if (command.type === 'compact') { emit({ type: 'auto_compaction_start' }); emit({ type: 'auto_compaction_end' }); }

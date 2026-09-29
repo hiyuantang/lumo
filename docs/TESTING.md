@@ -188,3 +188,80 @@ keys, browser links, device codes, prompts, disconnect, cancellation, stale
 responses and credential redaction. No real provider login or request runs. Actual
 Pi/provider interoperability still requires an explicitly authorized manual
 check; automated tests never download Pi or invoke model providers.
+
+
+### Git
+
+`npm run test:ui -- tests/ui/git.spec.ts tests/ui/app-library.spec.ts` checks
+individual and filtered select-all staging, mixed checkbox states, commit drafts,
+history, branch search/create/switch/merge, dynamic Fetch/Pull/Push states, remote
+selection, remembered clone destinations, clone/create/add repository flows, nested folder selection, focus
+restoration and continued access to other apps while a dialog is open.
+It also checks App Library updates and light/dark layouts at desktop and
+390px widths, with external browser networking blocked.
+
+`npm run test:unit` includes disposable real Git repositories and local bare
+remotes: first commits, partial staging, literal filenames, renames, binary
+previews, stale revisions, detached HEAD, conflicts, branch changes,
+fetch/push, fast-forward pull, differently named tracking branches,
+divergence rejection, clone/create operations and existing-destination
+protection. HTTP tests cover route serialization and idempotent commit and
+repository-creation replay. Package-plan tests include
+Git's fixed APT target. These checks do not contact a hosting service or
+install Git packages. They require Git already available in the test runtime.
+
+Shared app-contained dialogs and pickers are also exercised by
+`tests/ui/settings-folders.spec.ts`, `tests/ui/updates.spec.ts` and
+`tests/ui/preview.spec.ts`.
+
+Pi compaction settings are covered by `tests/ui/pi-compaction.spec.ts` and
+`TestPiCompaction*` in the HTTP API package. Offline browser fixtures check
+shared percentage and token budgets, model capacity previews,
+validation, conflict recovery, draft protection, persistence, both themes and
+narrow layouts. Go tests verify native settings JSON, independent fallback,
+preservation of unrelated settings and model choices, stale revisions,
+idempotent retry, malformed values, linked files and account-only permissions.
+These tests do not invoke an LLM or spend tokens on compaction.
+
+Pi conversation reference checks use `tests/ui/pi-references.spec.ts` for actual
+HTML drag/drop, deduplication, whole-chip removal, hidden lookup instructions,
+context tooltips, running indicators and reduced motion in both themes and a
+narrow viewport. `server/internal/pihistory` tests bounded Unicode expansion,
+search, pagination, branch ancestry metadata, oversized records and archived
+references; the HTTP tests verify reference resolution without transcript
+content. These checks use fixtures and make no model/provider requests.
+Checkbox regression checks in Git, Pi compaction and Websites ensure adjacent
+text does not toggle controls while box clicks and keyboard activation do.
+
+`tests/ui/menu-consistency.spec.ts` checks shared Select/DropdownMenu/ContextMenu,
+Settings motion, desktop menu bar and Pi model choices. Selected values retain
+only their checkmark; one row background follows the latest pointer or keyboard
+input. Tests switch input modes without moving the pointer, reopen menus, and
+cover instruction menus at 1440px/390px in both themes.
+
+Pi context settings list the configured models and their reported context windows.
+The compaction browser check switches between percentage and token budgets,
+checks smaller-model caps and verifies that the chat model remains unchanged.
+Instruction checks cover both editors at once, independent saves and cancellation,
+unsaved-draft protection, and server revision conflicts.
+
+`TestPiContextBudget*` verifies conversion to native Pi reserves, new-model
+coverage, idempotent application, small-window caps, preservation of unrelated
+settings, project overrides and the effective budget returned with chat statistics.
+
+Compaction saves also verify an automatic idle conversation reload, an updated
+context-circle threshold, refreshed settings revisions, preserved transcript and
+composer drafts, deferral during active replies, and disabled budget controls
+when automatic compaction is off.
+
+### Image and HTML previews
+
+`tests/ui/image-preview.spec.ts` opens real PNG, JPEG and WebP bytes through
+mocked file APIs, checks fit and actual size, refresh, file selection, invalid
+images and the size limit in light/desktop and dark/narrow layouts.
+`tests/ui/html-preview.spec.ts` checks rendered HTML, inline styles, raw editing,
+save/refresh and sandbox isolation without external requests. Its test disables
+Playwright's service-worker blocking injection, which cannot access the worker
+API in a sandboxed frame; the preview itself cannot execute scripts.
+`go test ./internal/files` covers bounded binary reads and unchanged text reads;
+`go test ./internal/httpapi -run '^TestFilesEndpoints$'` covers the image query.

@@ -85,3 +85,28 @@ real VPS installation or public domain is reachable.
 The original layout uses a searchable resource list and a detail workspace,
 shared confirmation sheets and compact-window layouts. Each workflow has one
 app; server preferences remain in Settings.
+
+
+## Git
+
+Git follows the same App Library install, update and uninstall workflow, using
+Ubuntu's `git` package. Its native window opens existing working repositories
+on the server. A compact repository/branch/remote toolbar sits above a
+Changes/History sidebar, commit composer and diff viewer. Light and dark
+surfaces, fields, menus and window behavior use Lumo's shared design tokens.
+The coral branch artwork is an original SVG.
+
+The app supports whole-file staging and unstaging, committing the index,
+recent commit patches, local branch creation and switching, fetch,
+fast-forward-only pull and explicit push confirmation. Recent repository
+paths are browser preferences; actual status always comes from Git on the
+server. Operations run as the authenticated Linux user and use that account's
+Git identity, hooks, signing and remote credentials. Credentials and trusted
+SSH host keys must already be configured. Merge conflict resolution, stash,
+clone/init, remote editing and history rewriting remain Terminal workflows.
+
+Reference specifications: the Git section of `PROTOCOL.md`,
+`DESKTOP_STYLE.md`, `DESIGN_PRINCIPLES.md`, and Git's official CLI manual.
+The layout keeps file selection adjacent to the commit message and gives
+patches most of the available width. The compact layout stacks the list and
+diff while preserving every action.

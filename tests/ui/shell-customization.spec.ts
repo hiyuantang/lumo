@@ -14,7 +14,7 @@ const dockOrder = (page: Page) => page.locator('.dock-app[data-app]').evaluateAl
 test('dock supports dragging and keyboard reordering and remembers the order', async ({ page }) => {
   await login(page);
   await page.getByTestId('dock-app-files').dragTo(page.getByTestId('dock-app-home'));
-  await expect.poll(() => dockOrder(page)).toEqual(['files', 'home', 'preview', 'terminal', 'containers', 'websites', 'library', 'skills', 'settings', 'trash']);
+  await expect.poll(() => dockOrder(page)).toEqual(['files', 'home', 'preview', 'terminal', 'git', 'containers', 'websites', 'library', 'skills', 'settings', 'trash']);
   await page.reload();
   await expect(page.locator('.dock-app[data-app]').first()).toHaveAttribute('data-app', 'files');
   await page.getByTestId('dock-app-files').focus();

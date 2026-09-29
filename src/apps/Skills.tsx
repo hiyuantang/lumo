@@ -55,6 +55,7 @@ export function Skills() {
       <span className="skills-count" aria-live="polite">{loading ? 'Scanning…' : `${filtered.length} ${filtered.length === 1 ? 'skill' : 'skills'}`}</span>
       <nav className="skills-list" aria-label="Installed skills">{filtered.map((skill) => <button type="button" key={skill.id} aria-current={current?.id === skill.id ? 'page' : undefined} data-testid={`skill-${skill.id}`} onClick={() => setSelected(skill.id)} onContextMenu={(event) => openContextMenu(event, [
         { label: 'Edit in Preview', run: () => actions.openPreview(skill.path.split('/'), true) },
+        { label: 'Reveal in Files', run: () => actions.openFolder(skill.path.split('/').slice(0, -1)) },
         { label: 'Copy Path', separator: true, run: () => { void copyText(skill.path).catch(() => actions.notify('Clipboard unavailable', 'Could not copy the skill path.')); } },
       ])}><strong>{skill.name}</strong><span>{skill.description || skill.issue || 'No description'}</span>{skill.issue && <small>Needs attention</small>}</button>)}</nav>
       <footer className="skills-location"><span>Account skills</span><code title={catalog?.path}>~/.agents/skills</code></footer>
@@ -66,7 +67,6 @@ export function Skills() {
         <header className="skills-hero"><span className="skills-emblem"><IconSkills size={30}/></span><div><h1>{document.title}</h1><p>{current.description}</p></div><button className="btn" type="button" data-testid="skill-edit" onClick={edit}>Edit</button></header>
         {issue && <p className="skills-notice" role="status">{issue}</p>}
         {detailError ? <p className="skills-notice" role="alert">{detailError} Refresh to check this skill again.</p> : !detail ? <p className="skills-status" role="status">Loading instructions…</p> : <div className="skills-document" data-testid="skill-document">{document.body ? <Markdown text={document.body}/> : <p className="skills-status">No instructions to display.</p>}</div>}
-        <footer className="skills-file-path" title={current.path}>{current.path}</footer>
       </> : <div className="skills-empty"><IconSkills size={48}/><h1>{loading ? 'Loading your skills…' : query ? 'No matching skills' : error ? 'Skills unavailable' : 'Your skills, in one place'}</h1><p>{loading ? 'Reading your account skills folder.' : query ? 'Try a different name or description.' : error ? 'Check folder access, then refresh.' : <>Add a folder containing <code>SKILL.md</code> to <code>~/.agents/skills</code>, then refresh to see it here.</>}</p>{query && <button className="btn" type="button" onClick={() => setSearch('')}>Clear search</button>}</div>}
     </main>
   </div></div>;

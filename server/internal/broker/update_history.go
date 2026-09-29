@@ -49,7 +49,7 @@ func (a *Audit) AppUpdateHistory(uid uint32) ([]AppUpdateHistoryEntry, error) {
 		if err := json.Unmarshal([]byte(raw), &saved); err != nil {
 			return nil, err
 		}
-		if saved.Plan.AppID != "docker" && saved.Plan.AppID != "nginx" {
+		if saved.Plan.AppID != "docker" && saved.Plan.AppID != "nginx" && saved.Plan.AppID != "git" {
 			continue
 		}
 		entry.AppID = saved.Plan.AppID

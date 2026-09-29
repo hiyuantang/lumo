@@ -30,6 +30,10 @@ the foundation. No third-party implementation code or assets are used.
   and App Library. Ivory tiles with colorful objects alternate with blue,
   indigo and graphite tiles. Large filled shapes and restrained dimensional
   shading keep each application recognizable at dock size.
+- Menu and selector choices use a checkmark in a fixed left column as their only
+  persistent selection indicator. A neutral accent background and contrasting
+  text highlight only the hovered or keyboard-active row, never the selected
+  value by itself. Secondary labels inherit the highlighted text color.
 - App menus dismiss on pointer, touch, focus or wheel interaction outside
   the menu navigation. Dismissal does not swallow the underlying action;
   the same click can select a file, use a toolbar button or focus a window.
@@ -37,6 +41,9 @@ the foundation. No third-party implementation code or assets are used.
   it does not get a dedicated full-width toolbar. Search belongs in the header
   of the list it filters. App updates are available through “Check for Updates…”
   in the top-left app menu, with updates handled in App Library.
+- Checkbox rows and descriptions do not toggle their control. Only the checkbox
+  hit target and normal keyboard activation change it; inputs retain accessible
+  names without a whole-row activating label.
 - Window corners: 18px; menus and sheets: 16px; controls: 8–10px.
 - Compact 12.5–14px desktop type and the existing content hierarchy remain.
 - Small transitions use 140–220 ms ease-out. Dock hover lifts four pixels;
@@ -44,6 +51,15 @@ the foundation. No third-party implementation code or assets are used.
   these transitions through the existing system and manual preferences.
 - The wallpaper is a bundled static WebP. Dark mode multiplies the same
   neutral artwork with `#292929`, avoiding another download or animation.
+
+## App dialogs
+
+Confirmations and file/folder pickers open inside their owning window, below
+its title bar. They size to their content with a compact maximum width and
+scroll inside the available window height. The owning app’s content is inert
+until the dialog closes; other apps and the desktop remain usable. Nested
+folder pickers restore focus to the calling dialog. Desktop Overview remains
+a desktop-wide dialog.
 
 ## Window behavior
 

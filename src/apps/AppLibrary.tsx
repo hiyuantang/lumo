@@ -17,6 +17,7 @@ import '../styles/server-apps.css';
 import '../styles/app-library.css';
 
 const CATALOG = [
+  { id: 'git' as const, name: APPS.git.title, appId: 'git' as const, description: 'Review changes and manage repositories.', overview: 'Browse changes and commit history, stage files, create branches and sync repositories using your Linux account’s Git configuration.', packages: 'Git' },
   { id: 'docker' as const, name: APPS.containers.title, appId: 'containers' as const, description: 'Run apps in isolated containers.', overview: 'Docker runs applications in isolated containers. Manage containers, view logs and connect persistent storage.', packages: 'Docker Engine · Compose' },
   { id: 'nginx' as const, name: APPS.websites.title, appId: 'websites' as const, description: 'Serve websites and route web traffic.', overview: 'Nginx serves websites and directs web traffic to your apps. Manage domains, static sites and reverse proxies.', packages: 'Nginx' },
   { id: 'pi' as const, name: APPS.pi.title, appId: 'pi' as const, description: 'A coding agent with a native workspace.', overview: 'Work with Pi in a native conversation. Follow file edits and commands, choose a model, and return to saved project sessions.', packages: 'Pi · Requires Node.js 22.19+ and npm' },
@@ -26,7 +27,7 @@ type LibraryPage = 'Discovery' | 'Updates' | LibraryAppID;
 type Job = { app: LibraryAppID; requestId: string; operation?: AppOperation };
 type Review = { app: LibraryAppID; operation: AppOperation; plan: UpdatePlan };
 function readJob(): Job | null {
-  try { const value = JSON.parse(localStorage.getItem(JOB_KEY) || 'null'); return value && (value.app === 'docker' || value.app === 'nginx' || value.app === 'pi') && typeof value.requestId === 'string' ? value : null; } catch { return null; }
+  try { const value = JSON.parse(localStorage.getItem(JOB_KEY) || 'null'); return value && (value.app === 'git' || value.app === 'docker' || value.app === 'nginx' || value.app === 'pi') && typeof value.requestId === 'string' ? value : null; } catch { return null; }
 }
 const size = (bytes: number) => bytes > 0 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : '0 MB';
 
@@ -38,7 +39,7 @@ export function AppLibrary() {
   const updates = useAppUpdates(state.user ?? '');
   const updating = updates.phase !== 'idle';
   const { catalog, refresh: refreshCatalog } = useAppCatalog();
-  const [selected, setSelected] = useAppState<LibraryAppID>('library', 'selection', () => state.navigation?.target === 'library' ? state.navigation.appId : readJob()?.app ?? 'docker', ['docker', 'nginx', 'pi']);
+  const [selected, setSelected] = useAppState<LibraryAppID>('library', 'selection', () => state.navigation?.target === 'library' ? state.navigation.appId : readJob()?.app ?? 'docker', ['docker', 'nginx', 'pi', 'git']);
   const [navigation, setNavigation] = useState<{ pages: LibraryPage[]; index: number }>(() => {
     const job = readJob();
     const page: LibraryPage = updating ? 'Updates' : job ? job.operation === 'update' ? 'Updates' : job.app : 'Discovery';
@@ -276,7 +277,7 @@ export function AppLibrary() {
         {error && <div className="server-app-error" role="alert">{error}{job && <><button type="button" className="btn" onClick={() => { setError(null); setRetry((n) => n + 1); }}>Reconnect</button><button type="button" className="btn" onClick={checkInstalledApps}>Check installed apps</button></>}</div>}
         {section === 'Updates' && <section className="library-update-section library-history" data-testid="library-history"><h2>Update history</h2><p className="library-history-note">Recent app updates made through Lumo by your account.</p>{historyError ? <p className="server-app-error" role="alert">{historyError}</p> : historyLoading ? <p className="server-app-muted">Loading history…</p> : !history.length ? <p className="server-app-muted">No updates recorded yet.</p> : history.map((item) => {
           const app = CATALOG.find((app) => app.id === item.appId)!;
-          const names = item.appId === 'docker' ? ['docker.io', 'docker-ce'] : ['nginx'];
+          const names = item.appId === 'docker' ? ['docker.io', 'docker-ce'] : [item.appId];
           const pkg = item.packages.find((pkg) => names.includes(pkg.name)) ?? item.packages[0];
           return <article key={item.requestId} className="library-history-entry"><span className="library-icon"><AppIcon appId={app.appId}/></span><div><strong>{app.name} {item.success ? 'updated' : 'update failed'}</strong><small>{new Date(item.completedAt).toLocaleString()}</small></div><span className="library-history-version">{pkg ? `${pkg.fromVersion || 'Not installed'} → ${pkg.toVersion}` : 'Version unavailable'}</span>{item.error && <p className="server-app-error">{item.error}</p>}</article>;
         })}</section>}
@@ -288,6 +289,7 @@ export function AppLibrary() {
           <label className={!cleanUninstall ? 'selected' : ''}><input type="radio" name="uninstall-mode" checked={!cleanUninstall} onChange={() => setCleanUninstall(false)} data-testid="uninstall-normal"/><span><strong>Uninstall</strong><small>Remove the app. Keep settings and stored data.</small></span></label>
           <label className={cleanUninstall ? 'selected' : ''}><input type="radio" name="uninstall-mode" checked={cleanUninstall} onChange={() => setCleanUninstall(true)} data-testid="uninstall-clean"/><span><strong>Clean uninstall</strong><small>Also move settings, caches and stored app data to Trash.</small></span></label>
         </div>
+        {confirmedApp.id === 'git' && <p>Repositories, SSH keys and account Git settings are preserved. Clean uninstall moves system Git settings to Trash.</p>}
         {confirm !== 'pi' && confirm.plan.packages.length > 1 && <p className="library-uninstall-note">Packages to remove: {confirm.plan.packages.map((pkg) => pkg.name).join(', ')}.</p>}
 
     </AppConfirmation>}

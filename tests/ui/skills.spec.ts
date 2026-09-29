@@ -17,6 +17,11 @@ test('Skills presents compact descriptions and rendered instructions with a sing
   await expect(app.getByRole('button', { name: 'Raw', exact: true })).toHaveCount(0);
   await expect(app.getByRole('button', { name: 'Rendered', exact: true })).toHaveCount(0);
   await expect(app.getByTestId('skill-edit')).toBeVisible();
+  await expect(app.locator('.skills-file-path')).toHaveCount(0);
+  await page.getByTestId('skill-server-health').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Reveal in Files', exact: true }).click();
+  await expect(page.getByTestId('app-files')).toContainText('server-health');
+  await page.getByTestId('dock-app-skills').click();
   await app.getByRole('searchbox', { name: 'Search skills' }).fill('release');
   await expect(app.getByRole('navigation', { name: 'Installed skills' }).getByRole('button')).toHaveCount(1);
   await expect(app.getByRole('heading', { name: 'Writing guide' })).toBeVisible();

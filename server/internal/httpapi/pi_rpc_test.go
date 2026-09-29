@@ -19,6 +19,7 @@ func TestPiRPCFixtureProcess(t *testing.T) {
 		return
 	}
 	scanner := bufio.NewScanner(os.Stdin)
+	model, level := "balanced", "medium"
 	for scanner.Scan() {
 		var command map[string]any
 		if json.Unmarshal(scanner.Bytes(), &command) != nil {
@@ -29,7 +30,25 @@ func TestPiRPCFixtureProcess(t *testing.T) {
 			event, _ := json.Marshal(map[string]any{"type": "message_update", "assistantMessageEvent": map[string]any{"type": "text_delta", "contentIndex": 0, "delta": command["message"]}})
 			fmt.Println(string(event))
 		}
-		response, _ := json.Marshal(map[string]any{"type": "response", "id": command["id"], "command": kind, "success": true, "data": map[string]any{"cwd": mustWorkingDirectory(), "home": os.Getenv("HOME")}})
+		success := true
+		if kind == "set_model" {
+			if command["modelId"] == "missing" {
+				success = false
+			} else {
+				model = command["modelId"].(string)
+			}
+		}
+		if kind == "set_thinking_level" {
+			level = "high"
+		}
+		data := map[string]any{"cwd": mustWorkingDirectory(), "home": os.Getenv("HOME")}
+		if kind == "get_state" {
+			data = map[string]any{"model": map[string]any{"provider": "fixture", "id": model, "contextWindow": 200000}, "thinkingLevel": level}
+		}
+		if kind == "get_available_models" {
+			data = map[string]any{"models": []piContextModel{{"fixture", "balanced", 200000}, {"fixture", "fast", 128000}}}
+		}
+		response, _ := json.Marshal(map[string]any{"type": "response", "id": command["id"], "command": kind, "success": success, "data": data})
 		fmt.Println(string(response))
 	}
 	os.Exit(0)
@@ -242,5 +261,74 @@ func TestPiReconnectResumesOnlyMatchingLiveProcess(t *testing.T) {
 	s.Handler().ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/pi/start", strings.NewReader(`{"requestId":"resume-wrong-project","project":"~","resume":"existing","session":"missing.jsonl"}`)))
 	if strings.Contains(response.Body.String(), `"id":"existing"`) {
 		t.Fatal("resumed another project")
+	}
+}
+
+func TestPiConcurrentSessionsInOneProject(t *testing.T) {
+	t.Setenv("LUMO_PI_RPC_FIXTURE", "1")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	binary := filepath.Join(home, ".local/share/lumo/pi/bin/pi")
+	if err := os.MkdirAll(filepath.Dir(binary), 0700); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nexec '" + strings.ReplaceAll(os.Args[0], "'", "'\\''") + "' -test.run=^TestPiRPCFixtureProcess$\n"
+	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	s := NewServer(Deps{})
+	s.pi.home = home
+	s.pi.path = func() string { return binary }
+	project, dir, err := s.piFolder("~")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"first.jsonl", "second.jsonl"} {
+		writePiChat(t, project, filepath.Join(dir, name))
+	}
+	start := func(session, resume, request string) *httptest.ResponseRecorder {
+		response := httptest.NewRecorder()
+		body, _ := json.Marshal(map[string]string{"requestId": request, "project": project, "session": session, "resume": resume})
+		s.Handler().ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/pi/start", strings.NewReader(string(body))))
+		return response
+	}
+	defer func() {
+		for _, p := range s.piRPC.processes {
+			p.cancel()
+		}
+	}()
+	for index, session := range []string{"first.jsonl", "second.jsonl"} {
+		if response := start(session, "", fmt.Sprintf("open-%d", index)); response.Code != 200 {
+			t.Fatalf("start %s: %d %s", session, response.Code, response.Body.String())
+		}
+	}
+	if len(s.piRPC.processes) != 2 {
+		t.Fatal("expected independent processes")
+	}
+	if response := start("first.jsonl", "", "duplicate"); response.Code != 409 {
+		t.Fatalf("duplicate: %d %s", response.Code, response.Body.String())
+	}
+	for id, p := range s.piRPC.processes {
+		p.mu.Lock()
+		session := p.session
+		p.mu.Unlock()
+		if session == "first.jsonl" {
+			if response := start("second.jsonl", id, "wrong-resume"); response.Code != 409 {
+				t.Fatalf("resumed wrong conversation: %d %s", response.Code, response.Body.String())
+			}
+			if response := start(session, id, "right-resume"); response.Code != 200 {
+				t.Fatal(response.Body.String())
+			}
+		}
+	}
+	if response := archivePiRequest(s, project, "first.jsonl", "archive-running", "archive"); response.Code != 409 {
+		t.Fatal(response.Body.String())
+	}
+	writePiChat(t, project, filepath.Join(dir, "idle.jsonl"))
+	if response := archivePiRequest(s, project, "idle.jsonl", "archive-idle", "archive"); response.Code != 200 {
+		t.Fatal(response.Body.String())
 	}
 }

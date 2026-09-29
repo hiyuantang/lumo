@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { describeError, getDataSource } from '../api/source';
 import { ApiError } from '../api/transport';
 import { useShell } from './ShellContext';
+import { setDragPreview } from './dragPreview';
 
 const MIME = 'application/x-lumo-file-selection';
-let drag: { token: string; paths: string[][]; folder: string[] | null } | null = null;
+let drag: { token: string; paths: string[][]; kinds: ('dir' | 'file')[]; folder: string[] | null } | null = null;
 let transferring = false;
 
 export function endFileDrag() {
@@ -16,10 +17,55 @@ export function endFileDrag() {
 export function startFileDrag(event: DragEvent, items: { path: string[]; kind: 'dir' | 'file' }[]) {
   const paths = items.map((item) => [...item.path]);
   if (transferring || !paths.length) { event.preventDefault(); return; }
-  drag = { token: crypto.randomUUID(), paths, folder: items.length === 1 && items[0].kind === 'dir' ? paths[0] : null };
+  drag = { token: crypto.randomUUID(), paths, kinds: items.map((item) => item.kind), folder: items.length === 1 && items[0].kind === 'dir' ? paths[0] : null };
   event.dataTransfer.effectAllowed = 'copyMove';
   event.dataTransfer.setData(MIME, drag.token);
   event.dataTransfer.setData('text/plain', paths.map((path) => getDataSource().absolutePath(path)).join('\n'));
+  setDragPreview(event, paths[0].at(-1) || '/', items[0].kind === 'dir' ? 'folder' : 'file', items.length);
+}
+
+export function useFileDragNavigation(destination: string | null, navigate: () => void) {
+  const [pending, setPending] = useState(false);
+  const timer = useRef<number>();
+  const hovered = useRef(false);
+  function cancel() {
+    window.clearTimeout(timer.current); timer.current = undefined;
+    hovered.current = false; setPending(false);
+  }
+  useEffect(() => {
+    window.addEventListener('dragend', cancel, true);
+    window.addEventListener('drop', cancel, true);
+    window.addEventListener('blur', cancel);
+    return () => {
+      window.clearTimeout(timer.current);
+      window.removeEventListener('dragend', cancel, true);
+      window.removeEventListener('drop', cancel, true);
+      window.removeEventListener('blur', cancel);
+    };
+  }, []);
+  useEffect(() => {
+    window.clearTimeout(timer.current); timer.current = undefined; setPending(false);
+  }, [destination]);
+  return {
+    'data-drag-navigating': pending || undefined,
+    onDragOver(event: DragEvent<HTMLElement>) {
+      if (!destination || !drag || transferring || !event.dataTransfer.types.includes(MIME)) return;
+      event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'move';
+      if (hovered.current) return;
+      hovered.current = true; setPending(true);
+      const token = drag.token;
+      timer.current = window.setTimeout(() => {
+        timer.current = undefined; setPending(false);
+        if (drag?.token === token && !transferring) navigate();
+      }, 900);
+    },
+    onDragLeave(event: DragEvent<HTMLElement>) {
+      if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) cancel();
+    },
+    onDrop(event: DragEvent<HTMLElement>) {
+      event.preventDefault(); event.stopPropagation(); cancel();
+    },
+  };
 }
 
 export function folderDrop(onFolder: (path: string) => void, onInvalid: () => void) {
@@ -58,7 +104,10 @@ export function fileReferenceDrop(onPaths: (paths: string[]) => void) {
     onDrop(event: DragEvent<HTMLElement>) {
       event.preventDefault(); event.stopPropagation(); delete event.currentTarget.dataset.fileDropTarget;
       if (!accepts(event) || !drag || event.dataTransfer.getData(MIME) !== drag.token) return;
-      const paths = drag.paths.map((path) => getDataSource().absolutePath(path));
+      const paths = drag.paths.map((path, index) => {
+        const absolute = getDataSource().absolutePath(path);
+        return drag!.kinds[index] === 'dir' && !absolute.endsWith('/') ? absolute + '/' : absolute;
+      });
       endFileDrag(); onPaths(paths);
     },
   };

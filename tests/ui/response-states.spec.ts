@@ -172,6 +172,12 @@ test('interface response: home, services, logs and terminal placeholder render f
   await expect(services.getByTestId('services-actions-note')).toHaveCount(0);
   await expect(services.getByTestId('service-dependencies')).toContainText('network.target');
   await expect(services.getByTestId('service-unit-files')).toContainText('/usr/lib/systemd/system/nginx.service');
+  const unitDisclosure = services.getByTestId('service-unit-files').getByRole('button').first();
+  await unitDisclosure.click(); await expect(unitDisclosure).toHaveAttribute('aria-expanded', 'true');
+  await expect(services.getByTestId('service-unit-files').locator('.disclosure-body').first()).toHaveCSS('opacity', '1');
+  await unitDisclosure.click(); await expect(unitDisclosure).toHaveAttribute('aria-expanded', 'false');
+  await expect(services.getByTestId('service-unit-files').locator('.disclosure-body').first()).toHaveCSS('opacity', '0');
+
 
   await services.getByTestId('service-open-logs').click();
   const relatedLogs = page.getByTestId('app-logs');

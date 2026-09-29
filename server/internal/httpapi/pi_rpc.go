@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"lumo/server/internal/strictjson"
-	"lumo/server/internal/terminal"
 )
 
 type piRuntime struct {
@@ -30,19 +29,21 @@ type piRuntime struct {
 	processes map[string]*piProcess
 }
 type piProcess struct {
-	mu         sync.Mutex
-	write      sync.Mutex
-	input      io.WriteCloser
-	cancel     context.CancelFunc
-	events     []json.RawMessage
-	base       int
-	eventBytes int
-	pending    map[string]chan json.RawMessage
-	done       chan struct{}
-	wake       chan struct{}
-	touched    time.Time
-	closed     bool
-	project    string
+	compactionSettings map[string]json.RawMessage
+	mu                 sync.Mutex
+	write              sync.Mutex
+	input              io.WriteCloser
+	cancel             context.CancelFunc
+	events             []json.RawMessage
+	base               int
+	eventBytes         int
+	pending            map[string]chan json.RawMessage
+	done               chan struct{}
+	wake               chan struct{}
+	touched            time.Time
+	closed             bool
+	project            string
+	session            string
 }
 type piSession struct {
 	ID       string `json:"id"`
@@ -166,7 +167,7 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 		}
 		if existing := s.piProcess(req.Resume); existing != nil {
 			existing.mu.Lock()
-			canResume := !existing.closed && existing.project == project
+			canResume := !existing.closed && existing.project == project && (req.Session == "" || existing.session == req.Session)
 			if canResume {
 				existing.touched = time.Now()
 			}
@@ -190,7 +191,7 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 			}
 			args = append(args, "--session", path)
 		}
-		binary := terminal.PiPath()
+		binary := s.pi.path()
 		if binary == "" {
 			WriteError(w, NewError(CodeUnavailable, "Install Pi from App Library first."))
 			return
@@ -199,15 +200,15 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 		defer s.piRPC.mu.Unlock()
 		for _, existing := range s.piRPC.processes {
 			existing.mu.Lock()
-			same := !existing.closed && existing.project == project
+			same := !existing.closed && req.Session != "" && existing.project == project && existing.session == req.Session
 			existing.mu.Unlock()
 			if same {
-				WriteError(w, NewError(CodeConflict, "This project is already open in another Pi window."))
+				WriteError(w, NewError(CodeConflict, "This conversation is already open in another Pi window."))
 				return
 			}
 		}
 		if len(s.piRPC.processes) >= 8 {
-			WriteError(w, NewError(CodeConflict, "Close another Pi project before opening more."))
+			WriteError(w, NewError(CodeConflict, "Up to eight Pi chats can run at once. Wait for a chat to finish before starting another."))
 			return
 		}
 		if err := os.MkdirAll(dir, 0700); err != nil {
@@ -219,6 +220,43 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, NewError(CodeUnavailable, "Could not start Pi: "+err.Error()))
 			return
 		}
+		agentDir, err := s.piAgentDir()
+		if err != nil {
+			p.cancel()
+			WriteError(w, err)
+			return
+		}
+		changed, err := preparePiContextBudget(r.Context(), p, agentDir)
+		if err != nil {
+			p.cancel()
+			WriteError(w, NewError(CodeUnavailable, "Could not apply context budget: "+err.Error()))
+			return
+		}
+		if changed {
+			p.cancel()
+			select {
+			case <-p.done:
+			case <-time.After(5 * time.Second):
+				WriteError(w, NewError(CodeUnavailable, "Pi is still restarting to apply its context budget."))
+				return
+			}
+			p, err = startPiProcess(binary, args, project, s.pi.home)
+			if err != nil {
+				WriteError(w, NewError(CodeUnavailable, "Could not reopen Pi: "+err.Error()))
+				return
+			}
+		}
+		p.compactionSettings, err = piCompactionSnapshot(agentDir, project)
+		if err != nil {
+			p.cancel()
+			WriteError(w, err)
+			return
+		}
+		p.mu.Lock()
+		if p.session == "" {
+			p.session = req.Session
+		}
+		p.mu.Unlock()
 		id := piID()
 		s.piRPC.processes[id] = p
 		go func() {
@@ -273,6 +311,16 @@ func startPiProcess(binary string, args []string, project, home string) (*piProc
 			}
 			p.mu.Lock()
 			if record.Type == "response" {
+				if record.Command == "get_state" {
+					var state struct {
+						Data struct {
+							SessionFile string `json:"sessionFile"`
+						} `json:"data"`
+					}
+					if json.Unmarshal(raw, &state) == nil && state.Data.SessionFile != "" {
+						p.session = filepath.Base(state.Data.SessionFile)
+					}
+				}
 				if ch := p.pending[record.ID]; ch != nil {
 					if record.Command == "get_messages" {
 						var reply map[string]any
@@ -432,10 +480,29 @@ func (s *Server) handlePiCommand(w http.ResponseWriter, r *http.Request) {
 	s.mutate(w, req.RequestID, func(w http.ResponseWriter) {
 		ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 		defer cancel()
+		selection := command["type"] == "set_model" || command["type"] == "set_thinking_level"
+		if selection {
+			s.pi.operation.Lock()
+			defer s.pi.operation.Unlock()
+		}
 		result, err := p.command(ctx, command)
 		if err != nil {
 			WriteError(w, NewError(CodeUnavailable, err.Error()))
 			return
+		}
+		if command["type"] == "get_session_stats" {
+			result = p.contextBudgetStats(ctx, result)
+		}
+		if selection {
+			var reply struct {
+				Success bool `json:"success"`
+			}
+			if json.Unmarshal(result, &reply) == nil && reply.Success {
+				if err := s.rememberPiSelection(ctx, p); err != nil {
+					WriteError(w, NewError(CodeUnavailable, "The choice changed in this conversation, but could not be saved for new conversations: "+err.Error()))
+					return
+				}
+			}
 		}
 		if command["type"] == "fork" || command["type"] == "clone" {
 			var reply map[string]any

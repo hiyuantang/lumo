@@ -19,6 +19,7 @@ func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
 		return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0
 	}
 	WriteData(w, map[string]any{"canInstall": exists("/usr/bin/apt-get") && s.deps.BrokerSocket != "", "apps": []any{
+		map[string]any{"id": "git", "installed": exists("/usr/bin/git")},
 		map[string]any{"id": "docker", "installed": exists("/usr/bin/dockerd")},
 		map[string]any{"id": "nginx", "installed": exists("/usr/sbin/nginx")},
 		map[string]any{"id": "pi", "installed": terminal.PiPath() != "", "canUninstall": removablePi(terminal.PiPath()), "canInstall": piNPMAvailable(), "canUpdate": removablePi(terminal.PiPath())},
@@ -35,8 +36,8 @@ func (s *Server) handleAppPlan(w http.ResponseWriter, r *http.Request) {
 		AppID     string `json:"appId"`
 		Operation string `json:"operation"`
 	}
-	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil || !validRequestID(req.RequestID) || (req.AppID != "docker" && req.AppID != "nginx") || (req.Operation != "" && req.Operation != "install" && req.Operation != "uninstall" && req.Operation != "update") {
-		WriteError(w, NewError(CodeValidationFailed, "Choose Docker or Nginx from the App Library."))
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil || !validRequestID(req.RequestID) || (req.AppID != "docker" && req.AppID != "nginx" && req.AppID != "git") || (req.Operation != "" && req.Operation != "install" && req.Operation != "uninstall" && req.Operation != "update") {
+		WriteError(w, NewError(CodeValidationFailed, "Choose a supported app from the App Library."))
 		return
 	}
 	s.forwardBrokerAction(w, r, brokerAction{RequestID: req.RequestID, Action: "apps.plan", Arguments: map[string]any{"appId": req.AppID, "operation": req.Operation}}, 2*time.Minute)

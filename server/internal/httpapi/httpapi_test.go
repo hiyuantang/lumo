@@ -361,6 +361,13 @@ func TestFilesEndpoints(t *testing.T) {
 	if status != 200 || !strings.Contains(string(env.Data), `"revision":"sha256:`) {
 		t.Errorf("read: status=%d data=%s", status, env.Data)
 	}
+	if err := os.WriteFile(dir+"/image.webp", []byte{0, 1, 2, 255}, 0600); err != nil {
+		t.Fatal(err)
+	}
+	status, env = get(t, ts.URL+"/api/v1/files/read?preview=image&path="+dir+"/image.webp")
+	if status != 200 || !strings.Contains(string(env.Data), `"content":"AAEC/w=="`) {
+		t.Errorf("image: status=%d data=%s", status, env.Data)
+	}
 	status, env = get(t, ts.URL+"/api/v1/files/read?path=/missing/nope")
 	if status != 404 || env.Error == nil || env.Error.Code != CodeNotFound {
 		t.Errorf("missing: status=%d env=%+v", status, env)

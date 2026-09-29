@@ -2,6 +2,50 @@
 import { expect, test } from '../offline';
 import { piPage } from './pi-fixture';
 
+test('Pi remembers each chat and uses the last explicit selection for new chats', async ({ page }) => {
+  await page.goto('http://localhost:5199');
+  await page.getByRole('textbox', { name: 'Username' }).fill('demo');
+  await page.getByLabel('Password', { exact: true }).fill('demo');
+  await page.getByRole('button', { name: 'Log in', exact: true }).click();
+  await page.getByTestId('dock-app-library').click();
+  await page.getByTestId('library-pi').click();
+  await page.getByTestId('library-primary').click();
+  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall', { timeout: 20000 });
+  await page.getByTestId('window-close-library').click();
+  await page.getByTestId('dock-app-pi').click();
+  const trigger = page.getByTestId('pi-model');
+  const chats = page.getByRole('navigation', { name: 'Pi projects', exact: true });
+  await expect(trigger).toHaveText('BalancedMedium');
+  await page.getByTestId('pi-prompt').fill('First chat');
+  await page.getByTestId('pi-send').click();
+  await expect(trigger).toBeEnabled();
+  await trigger.click();
+  await page.getByRole('slider', { name: 'Effort', exact: true }).press('End');
+  await expect(trigger).toHaveText('BalancedHigh');
+  await page.getByRole('slider', { name: 'Effort', exact: true }).press('Escape');
+  await page.getByTestId('pi-new').click();
+  await expect(trigger).toHaveText('BalancedHigh');
+  await page.getByTestId('pi-prompt').fill('Second chat');
+  await page.getByTestId('pi-send').click();
+  await expect(trigger).toBeEnabled();
+  await trigger.click();
+  await page.getByRole('button', { name: 'Choose model', exact: true }).click();
+  await page.getByRole('option', { name: 'Fast · Demo', exact: true }).click();
+  await expect(trigger).toHaveText('FastOff');
+  await page.getByRole('button', { name: 'Choose model', exact: true }).press('Escape');
+  await chats.getByRole('button', { name: 'First chat', exact: true }).click();
+  await expect(trigger).toHaveText('BalancedHigh');
+  await chats.getByRole('button', { name: 'Second chat', exact: true }).click();
+  await expect(trigger).toHaveText('FastOff');
+  await chats.getByRole('button', { name: 'First chat', exact: true }).click();
+  await expect(trigger).toHaveText('BalancedHigh');
+  await page.getByTestId('pi-new').click();
+  await expect(trigger).toHaveText('FastOff');
+  await page.getByTestId('window-close-pi').click();
+  await page.getByTestId('dock-app-pi').click();
+  await expect(trigger).toHaveText('FastOff');
+});
+
 test('Pi combines model and effort with a keyboard accessible slider and provider-aware model picker', async ({ page }) => {
   const fixture = await piPage(page);
   const errors: string[] = [];
@@ -39,7 +83,7 @@ test('Pi combines model and effort with a keyboard accessible slider and provide
   await expect(trigger).toHaveText('FastOff');
   await expect(slider).toBeDisabled();
   expect(fixture.commands).toContainEqual({ type: 'set_model', modelId: 'fast', provider: 'Fixture' });
-  await expect(page.getByTestId('pi-prompt')).toHaveValue('Keep my draft');
+  await expect(page.getByTestId('pi-prompt')).toHaveText('Keep my draft');
   await card.getByRole('button', { name: 'Choose model' }).click();
   await page.getByRole('option', { name: 'Balanced · Fixture' }).click();
   await expect(slider).toBeEnabled();

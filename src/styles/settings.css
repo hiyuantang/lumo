@@ -127,8 +127,7 @@
 .settings-select:hover, .settings-select[aria-expanded='true'] { background: var(--button-hover); border-color: var(--accent); }
 .settings-select svg { flex: none; color: var(--text-muted); }
 .settings-select-menu { position: fixed; z-index: 3500; overflow-y: auto; padding: 5px; border: 1px solid var(--glass-border); border-radius: 12px; background: var(--surface-glass); backdrop-filter: blur(24px); box-shadow: var(--shadow-menu), 0 0 0 1px var(--border); color: var(--text); font-size: 12px; }
-.settings-select-option { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 8px; border-radius: 7px; cursor: pointer; user-select: none; }
-.settings-select-option.highlighted { background: var(--accent); color: var(--accent-contrast); }
+.settings-select-option { justify-content: flex-start; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 8px; border-radius: 7px; cursor: pointer; user-select: none; }
 .settings-select-check { display: grid; place-items: center; width: 15px; flex: none; }
 
 @container (max-width: 620px) {

@@ -96,13 +96,16 @@ func (s *Server) changePiSession(w http.ResponseWriter, r *http.Request, action 
 		defer s.piRPC.mu.Unlock()
 		if action != "delete" {
 			for _, process := range s.piRPC.processes {
-				if process.project != project {
+				process.mu.Lock()
+				matches := process.project == project && (process.session == "" || process.session == req.Session)
+				process.mu.Unlock()
+				if !matches {
 					continue
 				}
 				select {
 				case <-process.done:
 				default:
-					WriteError(w, NewError(CodeConflict, "Close this project's Pi connection before moving a conversation."))
+					WriteError(w, NewError(CodeConflict, "Close this conversation before moving it."))
 					return
 				}
 			}

@@ -23,7 +23,11 @@ func (s *Server) handleFilesList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFilesRead(w http.ResponseWriter, r *http.Request) {
-	res, err := files.Read(r.URL.Query().Get("path"))
+	read := files.Read
+	if r.URL.Query().Get("preview") == "image" {
+		read = files.ReadImage
+	}
+	res, err := read(r.URL.Query().Get("path"))
 	if err != nil {
 		WriteError(w, err)
 		return

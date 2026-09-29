@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ComponentType } from 'react';
+import { Git } from './Git';
 import { Skills } from './Skills';
 import { Trash } from './Trash';
 import { Pi } from './Pi';
@@ -14,6 +15,7 @@ import { Websites } from './Websites';
 import { AppLibrary } from './AppLibrary';
 
 export const APP_COMPONENTS: Record<AppId, ComponentType> = {
+  git: Git,
   skills: Skills,
   trash: Trash,
   preview: Preview,

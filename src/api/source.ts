@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { PiProvider, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiArchivedSession, PiSession, PiCommand, PiReply, PiEvents } from './pi';
+import type { GitSnapshot, GitDiff, GitAction } from './git';
+import type { PiConversationReference, PiCompaction, PiCompactionChange, PiProvider, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiArchivedSession, PiSession, PiCommand, PiReply, PiEvents } from './pi';
 import type { SkillCatalog, SkillDetail } from './skills';
 import type { TrashItem, TrashSelection } from './trash';
 import { LiveDataSource } from './client';
@@ -342,11 +343,17 @@ export interface SessionUser {
 export type Unsubscribe = () => void;
 
 export interface DataSource {
+  gitRepository(path: string): Promise<GitSnapshot>;
+  gitDiff(path: string, file: string, commit: string, staged: boolean): Promise<GitDiff>;
+  gitAction(request: GitAction): Promise<void>;
   piProviders(): Promise<{ providers: PiProvider[] }>;
   piAuthStart(provider: string, method: PiAuthMethod, operation: 'login' | 'logout'): Promise<PiAuthState>;
   piAuthState(id: string): Promise<PiAuthState>;
   piAuthReply(id: string, promptId: string, value: string): Promise<void>;
   piAuthCancel(id: string): Promise<void>;
+  piReference(project: string, session: string): Promise<Omit<PiConversationReference, 'name'>>;
+  piCompaction(model: string): Promise<PiCompaction>;
+  piSaveCompaction(change: PiCompactionChange): Promise<PiCompaction>;
   piSettings(kind: PiInstructionKind): Promise<PiInstruction>;
   piSaveSettings(kind: PiInstructionKind, content: string, revision: string): Promise<PiInstruction>;
   piSessions(project: string): Promise<PiSession[]>;
@@ -414,7 +421,7 @@ export interface DataSource {
   absolutePath(path: string[]): string;
   createEntry(path: string[], kind: 'file' | 'directory'): Promise<void>;
   listDir(path: string[]): Promise<FsEntry[]>;
-  readFile(path: string[]): Promise<FileRead>;
+  readFile(path: string[], preview?: 'image'): Promise<FileRead>;
   readSystemFile(path: string): Promise<FileRead>;
   writeFile(path: string[], contentBase64: string, expectedRevision: string | null): Promise<FileWrite>;
   writePrivilegedFile(path: string, contentBase64: string, expectedRevision: string, restartUnit?: string): Promise<PrivilegedFileWrite>;

@@ -312,7 +312,7 @@ test('floating windows can leave the desktop on three sides and keep a draggable
   await page.mouse.up();
   const recovered = await rect(page, 'files');
   expect(recovered.y).toBeLessThan(300);
-  await page.mouse.move(600, recovered.y + 30);
+  await page.mouse.move(600, recovered.y + 24);
   await page.mouse.down();
   await page.mouse.move(600, 54, { steps: 12 });
   await page.mouse.up();

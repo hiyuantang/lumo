@@ -9,7 +9,7 @@
 .docker-list-bar,
 .trash-row,
 .services-unit-files pre,
-.services-unit-files details > p {
+.services-unit-files .disclosure-content > p {
   border-image: linear-gradient(to right,
     transparent 0 var(--divider-inset),
     var(--border) var(--divider-inset) calc(100% - var(--divider-inset)),

@@ -20,26 +20,29 @@ export function Select({ value, options, onChange, disabled, className = '', ...
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(value);
+  const [highlight, setHighlight] = useState(false);
+  const [keyboard, setKeyboard] = useState(false);
   const filtered = options.filter((option) => option.label.toLowerCase().includes(query.toLowerCase()));
   const current = filtered.find((option) => option.value === active) ?? filtered[0];
   const searchable = options.length > 10;
   function close() { setAnchor(null); }
   function restore() { close(); trigger.current?.focus(); }
   function choose(next: string) { onChange(next); restore(); }
-  function open() {
+  function open(fromKeyboard = false) {
+    setKeyboard(fromKeyboard);
     setQuery('');
-    setActive(value);
+    setActive(value); setHighlight(fromKeyboard);
     setAnchor(trigger.current!.getBoundingClientRect());
   }
   return <>
     <button {...attrs} ref={trigger} type="button" role="combobox" className={`custom-select ${className}`} value={value} disabled={disabled}
       aria-haspopup="listbox" aria-expanded={Boolean(anchor)} aria-controls={anchor ? listId : undefined}
-      onClick={() => anchor ? close() : open()} onKeyDown={(event) => {
-        if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { event.preventDefault(); open(); }
+      onClick={(event) => anchor ? close() : open(event.detail === 0)} onKeyDown={(event) => {
+        if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { event.preventDefault(); open(true); }
       }}>
       <span>{options.find((option) => option.value === value)?.label ?? value}</span><IconChevronDown size={16}/>
     </button>
-    {anchor && !disabled && <Popup keepAnchorVisible anchorElement={trigger.current} x={anchor.left} y={anchor.bottom + 4} above={anchor.top - 4} width={Math.max(220, anchor.width)} onClose={close}>
+    {anchor && !disabled && <Popup keyboard={keyboard} keepAnchorVisible anchorElement={trigger.current} x={anchor.left} y={anchor.bottom + 4} above={anchor.top - 4} width={Math.max(220, anchor.width)} onClose={close}>
       <div className="select-menu" onKeyDown={(event) => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); restore(); return; }
         const index = filtered.findIndex((option) => option.value === current?.value);
@@ -58,15 +61,15 @@ export function Select({ value, options, onChange, disabled, className = '', ...
         } else return;
         event.preventDefault();
         if (filtered[next]) {
-          setActive(filtered[next].value);
+          setActive(filtered[next].value); setHighlight(true);
           document.getElementById(`${listId}-${next}`)?.scrollIntoView({ block: 'nearest' });
         }
       }}>
         {searchable && <input data-autofocus className="input select-search" aria-label="Search options" placeholder="Search…" value={query} onChange={(event) => { setQuery(event.target.value); }} aria-controls={listId} aria-activedescendant={current ? `${listId}-${filtered.indexOf(current)}` : undefined} />}
         <div id={listId} role="listbox" aria-label={attrs['aria-label'] ?? 'Options'} className="select-options" tabIndex={searchable ? -1 : 0} data-autofocus={!searchable || undefined} aria-activedescendant={current ? `${listId}-${filtered.indexOf(current)}` : undefined}>
           {filtered.map((option, index) => <button id={`${listId}-${index}`} key={option.value} type="button" role="option" tabIndex={-1} aria-selected={option.value === value}
-            className={`popup-item${current?.value === option.value ? ' highlighted' : ''}`} onPointerMove={() => setActive(option.value)} onClick={() => choose(option.value)}>
-            <span>{option.label}</span><span aria-hidden="true">{option.value === value ? '✓' : ''}</span>
+            className={`popup-item${highlight && current?.value === option.value ? ' highlighted' : ''}`} onPointerMove={() => { setActive(option.value); setHighlight(true); }} onClick={() => choose(option.value)}>
+            <span aria-hidden="true" className="dropdown-menu-check">{option.value === value ? '✓' : ''}</span><span>{option.label}</span>
           </button>)}
           {!filtered.length && <p className="popup-empty">No matches</p>}
         </div>

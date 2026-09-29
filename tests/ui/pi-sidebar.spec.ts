@@ -90,7 +90,8 @@ test('Pi keeps project conversations visible while switching sessions', async ({
   const gate = new Promise<void>((resolve) => { release = resolve; });
   await page.route('**/api/v1/pi/start', async (route) => { await gate; await route.fallback(); });
   await tree.getByRole('button', { name: 'Earlier work', exact: true }).click();
-  await expect(page.getByTestId('pi-prompt')).toBeDisabled();
+  await expect(page.getByTestId('pi-conversation-loading')).toBeVisible();
+  await expect(page.getByTestId('pi-prompt')).toHaveCount(0);
   await expect(rows).toHaveText(before);
   await expect(tree.getByText('No chats yet')).toHaveCount(0);
   await expect(tree.getByRole('button', { name: 'Earlier work', exact: true })).toHaveAttribute('aria-current', 'page');

@@ -782,7 +782,7 @@ func (req *ActionRequest) validate() *apiError {
 			return &apiError{Code: "validation_failed", Message: "expected planId must match arguments.planId."}
 		}
 	}
-	if req.Action == "apps.plan" && ((req.Arguments.AppID != "docker" && req.Arguments.AppID != "nginx") || (req.Arguments.Operation != "" && req.Arguments.Operation != "install" && req.Arguments.Operation != "uninstall" && req.Arguments.Operation != "update")) {
+	if req.Action == "apps.plan" && ((req.Arguments.AppID != "docker" && req.Arguments.AppID != "nginx" && req.Arguments.AppID != "git") || (req.Arguments.Operation != "" && req.Arguments.Operation != "install" && req.Arguments.Operation != "uninstall" && req.Arguments.Operation != "update")) {
 		return &apiError{Code: "validation_failed", Message: "Choose a supported application."}
 	}
 	if req.Action == "files.writePrivileged" {

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { PiProvider, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiArchivedSession, PiSession, PiCommand, PiReply, PiEvents } from './pi';
+import type { GitSnapshot, GitDiff, GitAction } from './git';
+import type { PiConversationReference, PiCompaction, PiCompactionChange, PiProvider, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiArchivedSession, PiSession, PiCommand, PiReply, PiEvents } from './pi';
 import type { SkillCatalog, SkillDetail } from './skills';
 import type { ProcessInfo } from './source';
 import type { TrashItem, TrashSelection } from './trash';
@@ -157,11 +158,17 @@ function resolveFilePath(homeDir: string, path: string[]): string {
 }
 
 export class LiveDataSource implements DataSource {
+  gitRepository(path: string): Promise<GitSnapshot> { return apiGet('/git/repository', { path }); }
+  gitDiff(path: string, file: string, commit: string, staged: boolean): Promise<GitDiff> { return apiGet('/git/diff', { path, file, commit, staged: String(staged) }); }
+  async gitAction(request: GitAction): Promise<void> { await apiPost('/git/action', { requestId: crypto.randomUUID(), ...request }); }
   piProviders(): Promise<{ providers: PiProvider[] }> { return apiGet('/pi/providers'); }
   piAuthStart(provider: string, method: PiAuthMethod, operation: 'login' | 'logout'): Promise<PiAuthState> { return apiPost('/pi/auth/start', { requestId: crypto.randomUUID(), provider, method, operation }); }
   piAuthState(id: string): Promise<PiAuthState> { return apiGet('/pi/auth', { id }); }
   piAuthReply(id: string, promptId: string, value: string): Promise<void> { return apiPost('/pi/auth/reply', { requestId: crypto.randomUUID(), id, promptId, value }); }
   piAuthCancel(id: string): Promise<void> { return apiPost('/pi/auth/cancel', { requestId: crypto.randomUUID(), id }); }
+  piReference(project: string, session: string): Promise<Omit<PiConversationReference, 'name'>> { return apiGet('/pi/reference', { project, session }); }
+  piCompaction(model: string): Promise<PiCompaction> { return apiGet('/pi/compaction', { model }); }
+  piSaveCompaction(change: PiCompactionChange): Promise<PiCompaction> { return apiPost('/pi/compaction', { requestId: crypto.randomUUID(), ...change }); }
   piSettings(kind: PiInstructionKind): Promise<PiInstruction> { return apiGet('/pi/settings', { kind }); }
   piSaveSettings(kind: PiInstructionKind, content: string, revision: string): Promise<PiInstruction> { return apiPost('/pi/settings', { requestId: crypto.randomUUID(), kind, content, revision }); }
   async piSessions(project: string): Promise<PiSession[]> { return (await apiGet<{ sessions: PiSession[] }>('/pi/sessions', { project })).sessions; }
@@ -555,12 +562,12 @@ export class LiveDataSource implements DataSource {
     return data.entries.map(mapFileEntry).sort(sortEntries);
   }
 
-  readFile(path: string[]): Promise<FileRead> {
-    return this.readSystemFile(resolveFilePath(this.homeDir, path));
+  readFile(path: string[], preview?: 'image'): Promise<FileRead> {
+    return this.readSystemFile(resolveFilePath(this.homeDir, path), preview);
   }
 
-  async readSystemFile(path: string): Promise<FileRead> {
-    const data = await apiGet<WireFileRead>('/files/read', { path });
+  async readSystemFile(path: string, preview?: 'image'): Promise<FileRead> {
+    const data = await apiGet<WireFileRead>('/files/read', { path, ...(preview ? { preview } : {}) });
     const content = data.encoding === 'utf-8' || data.encoding === 'ascii' ? base64ToText(data.content) : null;
     return {
       content,

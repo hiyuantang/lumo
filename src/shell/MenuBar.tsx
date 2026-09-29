@@ -9,11 +9,13 @@ import { timezoneLabel } from '../utils/timezone';
 import { useShell } from './ShellContext';
 import { canSnap, COMPACT_WIDTH, MENUBAR_H } from './windowGeometry';
 import '../styles/menubar.css';
+import { useMenuInput } from './useMenuInput';
 
 type MenuId = 'app' | 'file' | 'edit' | 'view' | 'window';
 const order: MenuId[] = ['app', 'file', 'edit', 'view', 'window'];
 
 export function MenuBar() {
+  const input = useMenuInput();
   const { state, actions } = useShell();
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const { instant, timezone } = useServerClock();
@@ -68,7 +70,7 @@ export function MenuBar() {
     const selection = window.getSelection();
     const selectedNode = selection?.toString() ? selection.anchorNode?.parentElement : null;
     const field = editTarget.current;
-    const target = field?.isConnected && (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) ? field : selectedNode?.closest('.window') ? selectedNode : field;
+    const target = field?.isConnected && (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field.isContentEditable) ? field : selectedNode?.closest('.window') ? selectedNode : field;
     const windowNode = target?.closest<HTMLElement>('.window');
     const valid = !!target?.isConnected && windowNode?.dataset.testid === `window-${state.focused}`;
     setEditing(editCommands(valid ? target : null, () => actions.notify('Edit command unavailable', 'Use the keyboard shortcut to complete this action.')));
@@ -117,7 +119,9 @@ export function MenuBar() {
   }
 
   function onMenuButtonKey(e: ReactKeyboardEvent, menuId: MenuId) {
-    if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+    if (openMenu && (e.key === 'Home' || e.key === 'End')) {
+      onMenuListKey(e, menuId);
+    } else if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       open(menuId);
       requestAnimationFrame(() => {
@@ -196,7 +200,7 @@ export function MenuBar() {
                 aria-checked={item.checked}
                 data-testid={menuId === 'app' && item.id === 'auto-save' ? 'preview-autosave' : `menu-${item.id}`}
                 data-menu-item
-                className="menubar-item"
+                className="popup-item menubar-item"
                 disabled={item.disabled}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
@@ -216,7 +220,7 @@ export function MenuBar() {
   }
 
   return (
-    <header ref={barRef} className="menubar" data-testid="menu-bar" style={{ height: MENUBAR_H }}>
+    <header {...input} ref={barRef} className="menubar menu-surface" data-testid="menu-bar" style={{ height: MENUBAR_H }}>
       <div className="menubar-left">
         <nav className="menubar-menus" role="menubar" aria-label="Application menus">
           {order.map(renderMenu)}

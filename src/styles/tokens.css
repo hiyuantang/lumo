@@ -64,6 +64,12 @@
   --button-shadow: none;
   --danger-contrast: #ffffff;
   --folder: #2277d4;
+  --file-icon-stroke: #757575;
+  --file-icon-fill: #fafafa;
+  --folder-icon-stroke: #237dcc;
+  --folder-icon-fill: #8acbff;
+  --conversation-icon-stroke: #8063bd;
+  --conversation-icon-fill: #ddd1ff;
   --wallpaper-tone: #ffffff;
   --icon-monitor: linear-gradient(145deg, #ff8074, #e53252);
   --icon-files: linear-gradient(145deg, #54c5ff, #1671ed);

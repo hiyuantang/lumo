@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, test } from '../offline';
+import { piFixture } from './pi-fixture';
 
 test('Monitor combines resources, processes and logs; Updates belongs to Settings', async ({ page }) => {
   const errors: string[] = [];
@@ -59,11 +60,6 @@ test('Dock menus sit above icons and Trash offers confirmed emptying', async ({ 
 });
 
 test('Files remembers dotfile visibility and opens each folder as an Pi workspace', async ({ page }) => {
-  const workspaces: string[] = [];
-  await page.routeWebSocket(/\/api\/v1\/ws/, (socket) => socket.onMessage((raw) => {
-    const frame = JSON.parse(String(raw));
-    if (frame.type === 'subscribe' && frame.capability === 'terminal.open') workspaces.push(frame.params.directory);
-  }));
   await page.route('**/api/v1/**', (route) => {
     const path = new URL(route.request().url()).pathname;
     const data = path.endsWith('/auth/session') ? { user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/user' } }
@@ -71,6 +67,7 @@ test('Files remembers dotfile visibility and opens each folder as an Pi workspac
       : path.endsWith('/files/list') ? { path: '/home/user', entries: ['workspace one', 'workspace two', '.config', '.profile'].map((name) => ({ name, type: name === '.profile' ? 'file' : 'directory', sizeBytes: 0, modifiedAt: '2026-09-26T12:00:00Z' })) } : {};
     return route.fulfill({ json: { ok: true, data } });
   });
+  const fixture = await piFixture(page);
   await page.goto('http://localhost:5200');
   await page.getByTestId('dock-app-files').click();
   await expect(page.getByTestId('file-row-workspace one')).toBeVisible();
@@ -89,13 +86,13 @@ test('Files remembers dotfile visibility and opens each folder as an Pi workspac
     await page.getByRole('menuitem', { name: 'Open in Pi', exact: true }).click();
   }
   await expect(page.getByTestId('app-pi')).toHaveCount(2);
-  await expect.poll(() => [...new Set(workspaces)]).toEqual(['/home/user/workspace one', '/home/user/workspace two']);
-  const subscriptions = workspaces.length;
+  await expect.poll(() => [...new Set(fixture.starts.map((start) => start.project))]).toEqual(['/home/user/workspace one', '/home/user/workspace two']);
+  const subscriptions = fixture.starts.length;
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-workspace one').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Open in Pi', exact: true }).click();
   await expect(page.getByTestId('app-pi')).toHaveCount(2);
-  expect(workspaces.length).toBe(subscriptions);
+  expect(fixture.starts.length).toBe(subscriptions);
 });
 
 for (const legacy of ['logs', 'updates', 'services']) {

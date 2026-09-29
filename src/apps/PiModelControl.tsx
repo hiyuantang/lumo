@@ -16,6 +16,7 @@ export function PiModelControl({ model, models, levels, level, disabled, onModel
   const slider = useRef<HTMLInputElement>(null);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const [choosing, setChoosing] = useState(false);
+  const [keyboard, setKeyboard] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const lock = useRef(false);
@@ -50,7 +51,7 @@ export function PiModelControl({ model, models, levels, level, disabled, onModel
     <button ref={trigger} type="button" className="pi-model-trigger" data-testid="pi-model" disabled={unavailable || !models.length} aria-haspopup="dialog" aria-expanded={Boolean(anchor)} aria-controls={anchor ? id : undefined} onClick={() => anchor ? close() : open()}>
       <span className="pi-model-name">{model?.name || model?.id || (disabled ? 'Loading models…' : 'No models')}</span><span className="pi-model-effort">{model ? label(current) : ''}</span><IconChevronDown size={14}/>
     </button>
-    {anchor && <Popup key={String(choosing)} x={anchor.left + anchor.width / 2} y={anchor.top - 10} width={248} placement="above" anchorElement={trigger.current} onClose={() => close()}>
+    {anchor && <Popup keyboard={keyboard} key={String(choosing)} x={anchor.left + anchor.width / 2} y={anchor.top - 10} width={248} placement="above" anchorElement={trigger.current} onClose={() => close()}>
       <div id={id} className="pi-model-card" role="dialog" aria-label="Model and effort" aria-busy={saving} onKeyDown={(event) => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (choosing) setChoosing(false); else close(true); }
         if (event.key === 'Tab') {
@@ -68,11 +69,11 @@ export function PiModelControl({ model, models, levels, level, disabled, onModel
             const next = event.key === 'ArrowDown' ? Math.min(active + 1, options.length - 1) : event.key === 'ArrowUp' ? Math.max(active - 1, 0) : event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : -1;
             if (next >= 0) { event.preventDefault(); options[next]?.focus(); }
           }}>
-            {models.map((item) => <button key={modelKey(item)} type="button" role="option" aria-label={`${item.name || item.id} · ${item.provider}`} aria-selected={Boolean(model && modelKey(item) === modelKey(model))} data-autofocus={Boolean(model && modelKey(item) === modelKey(model)) || undefined} disabled={unavailable} onClick={() => void changeModel(item)}><span className="pi-model-check" aria-hidden="true">{model && modelKey(item) === modelKey(model) ? '✓' : ''}</span><strong>{item.name || item.id}</strong><small>{item.provider}</small></button>)}
+            {models.map((item) => <button className="popup-item" key={modelKey(item)} type="button" role="option" aria-label={`${item.name || item.id} · ${item.provider}`} aria-selected={Boolean(model && modelKey(item) === modelKey(model))} data-autofocus={Boolean(model && modelKey(item) === modelKey(model)) || undefined} disabled={unavailable} onClick={() => void changeModel(item)}><span className="pi-model-check" aria-hidden="true">{model && modelKey(item) === modelKey(model) ? '✓' : ''}</span><strong>{item.name || item.id}</strong><small>{item.provider}</small></button>)}
           </div>
         </> : <>
           <header className="pi-model-card-heading"><span className="pi-effort-value" aria-live="polite">{label(selected)}</span></header>
-          <button className="pi-model-choice" type="button" aria-label="Choose model" disabled={unavailable} onClick={() => { setChoosing(true); }}><span>{model?.name || model?.id || 'Choose model'}</span></button>
+          <button className="pi-model-choice" type="button" aria-label="Choose model" disabled={unavailable} onClick={(event) => { setKeyboard(event.detail === 0); setChoosing(true); }}><span>{model?.name || model?.id || 'Choose model'}</span></button>
           <div className={`pi-effort-slider${available.length < 2 ? ' is-fixed' : ''}`} style={{ '--pi-effort-progress': `${progress}%`, '--pi-effort-offset': `${17 - progress * .34}px` } as CSSProperties}>
             <div className="pi-effort-track" aria-hidden="true"><span/><div className="pi-effort-stops">{available.map((value, stop) => <i key={value} className={stop <= index ? 'is-filled' : ''} style={{ left: `${available.length > 1 ? stop / (available.length - 1) * 100 : 0}%` }}/>)}</div></div>
             <input ref={slider} type="range" data-autofocus aria-label="Effort" aria-valuetext={label(selected)} min={0} max={Math.max(1, available.length - 1)} step={1} value={index} disabled={unavailable || available.length < 2} onChange={(event) => setPreview(available[Number(event.target.value)])} onPointerUp={(event) => void changeLevel(available[Number(event.currentTarget.value)])} onPointerCancel={() => setPreview(null)} onKeyUp={(event) => { if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) void changeLevel(available[Number(event.currentTarget.value)]); }} onBlur={(event) => { if (preview) void changeLevel(available[Number(event.currentTarget.value)]); }}/>

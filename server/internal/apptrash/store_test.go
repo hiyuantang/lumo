@@ -122,3 +122,36 @@ func TestAppTrashDeleteChecksRevisionAndDoesNotFollowNestedSymlinks(t *testing.T
 		t.Fatal(items)
 	}
 }
+
+func TestGitCleanupPreservesRepositoriesAndAccountSettings(t *testing.T) {
+	s := fixture(t)
+	for _, path := range []string{"/etc/gitconfig", "/home/alice/.gitconfig", "/home/alice/project/.git/config", "/home/alice/.ssh/id_test"} {
+		if err := os.MkdirAll(filepath.Dir(s.host(path)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(s.host(path), []byte(path), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Move("git", 1000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(s.host("/etc/gitconfig")); !os.IsNotExist(err) {
+		t.Fatal("system config not moved")
+	}
+	for _, path := range []string{"/home/alice/.gitconfig", "/home/alice/project/.git/config", "/home/alice/.ssh/id_test"} {
+		if _, err := os.Stat(s.host(path)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	items, err := s.List(1000)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("%v %v", items, err)
+	}
+	if _, err := s.Restore(1000, files.TrashSelection{ID: items[0].ID, Revision: items[0].Revision}); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(s.host("/etc/gitconfig")); err != nil || string(data) != "/etc/gitconfig" {
+		t.Fatal("system config not restored")
+	}
+}

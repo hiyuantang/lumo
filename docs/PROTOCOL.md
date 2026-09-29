@@ -690,7 +690,21 @@ Listing runs as the logged-in user; unreadable directories return
 `revision` is a content hash taken at read time; it is the token later
 used as `expected.revision` in `files.write`. Content is base64;
 `encoding` records the detected text encoding, and binary files are
-flagged in `details` rather than decoded.
+returned with `encoding: "binary"` and null content by default.
+
+For read-only image viewing, `GET /api/v1/files/read?path=...&preview=image`
+returns complete base64 bytes for PNG, JPEG, GIF, WebP, AVIF, BMP and ICO
+files, including uppercase extensions. This mode accepts regular files only
+and retains the authenticated user's filesystem permissions. The response
+uses `encoding: "binary"` and an empty revision; it is not an editing token.
+Images are limited to 32 MiB before base64 encoding. Larger files return
+`truncated: true` with null content, never a partial image. Preview displays
+these bytes in an image element with fit-to-window and actual-size views;
+decoding failures show an error. Ordinary text reads retain their 1 MiB limit.
+HTML files use the text-reading contract and can switch between an isolated
+rendered preview and raw editing. Inline styling and embedded data images are
+supported. Scripts, forms, external navigation and external resources are
+blocked; related local CSS and image files are not resolved in this view.
 
 ## Phase 3 subset — full examples
 
@@ -1249,7 +1263,7 @@ See [SERVER_APPS.md](SERVER_APPS.md) for scope and design references.
 
 ### Catalog and installation
 
-`GET /api/v1/apps` also reports `pi` installation for the current Linux account. Pi has a separate unprivileged install/update worker; the APT package-plan endpoint continues to accept only Docker and Nginx.
+`GET /api/v1/apps` also reports `pi` installation for the current Linux account. Pi has a separate unprivileged install/update worker; the APT package-plan endpoint accepts Docker, Nginx and Git.
 
 `GET /api/v1/apps` returns:
 
@@ -1263,10 +1277,10 @@ See [SERVER_APPS.md](SERVER_APPS.md) for scope and design references.
 Installation detection checks the standard system executables, independently
 of whether their services are running or the user can access them.
 `POST /api/v1/apps/plan` accepts `{ "requestId": "unique-id", "appId": "docker" }`
-or `nginx`. It forwards `apps.plan` to the privileged package worker and returns
+or `nginx` or `git`. It forwards `apps.plan` to the privileged package worker and returns
 `{ "plan": <updates.plan shape with appId> }`. Unknown app IDs and extra request
 fields are rejected. Docker plans target `docker.io` and `docker-compose-v2`;
-Nginx plans target `nginx`, from configured APT sources.
+Nginx plans target `nginx`; Git plans target `git`, from configured APT sources.
 
 Apply through the existing `POST /api/v1/updates/apply`, then subscribe to
 `updates.progress` using the returned request ID. Plans expire after 15 minutes;
@@ -1346,13 +1360,75 @@ apply. Pi has the Linux account's ordinary filesystem and command permissions.
   Linked instruction files must be edited directly in Files. Credentials and
   arbitrary configuration paths are not exposed by these endpoints. Changes
   take effect on the next Pi process start.
+- `GET /api/v1/pi/compaction?model=provider/modelId` reads account compaction
+  defaults and the optional exact, case-sensitive model override. It returns
+  `{model, enabled, reserveTokens, keepRecentTokens, defaultReserveTokens,
+  defaultKeepRecentTokens, customized, revision}`. An empty model selects defaults.
+  Omitted values use Pi's documented defaults: enabled, 16384 reserved tokens,
+  and 20000 recent tokens. Each model budget inherits independently.
+- `POST /api/v1/pi/compaction` accepts `{requestId, model, enabled, reserveTokens,
+  keepRecentTokens, customized, revision}`. The toggle is account-wide. For a
+  named model, `customized: false` removes its two budget overrides and restores
+  inheritance. Budgets are non-negative safe integers. Writes merge only these
+  fields into Pi's agent-directory `settings.json`, preserve unrelated fields
+  and other models, check a whole-file revision, and replace the file atomically
+  with account-only permissions. Invalid, oversized or linked files are rejected.
+  Model/effort persistence and compaction writes share the same operation lock.
+  These endpoints never return credentials or arbitrary settings fields.
+  Changes apply at the next Pi process start; running conversations are not
+  interrupted. Project settings retain Pi's native precedence.
+
+  Pi Settings → Context & compaction displays the current model's reported
+  capacity as read-only metadata and a threshold preview computed as capacity
+  minus reserved tokens. The preview excludes project overrides, and the
+  defaults preview also excludes model overrides. The reserve also affects
+  Pi's summarization budget; it is not a separate percentage setting or a way
+  to increase a provider's context capacity. Manual compaction remains available
+  when automatic compaction is off. The specification is the installed Pi
+  documentation: `settings.md` (Compaction), `compaction.md` (Configuration and
+  per-model overrides), and `rpc-commands.md` (`get_state`).
+- `GET /api/v1/pi/reference?project=...&session=...` resolves an existing saved
+  conversation within that account's project session folder. It returns
+  `{project, session, path, reader}` without loading the transcript into the
+  browser. Invalid session filenames are rejected; archived files remain
+  readable through the original reference. The reader is the installed `lumod`.
+  Dragging a sidebar chat into the composer (or choosing Reference in message)
+  adds one removable chip, deduplicated by path, up to eight references.
+  Prompt serialization adds reference metadata and concise lookup guidance;
+  rendered messages, queued drafts and Edit & resend retain the chips.
+  Files, folders and conversation references retain their addition order.
+  Each serialized conversation reference may include a zero-based
+  `attachmentIndex` among all attached items; file paths fill the remaining
+  positions in their existing order. Legacy prompts without positions retain
+  their original display order. Duplicate additions do not move an item.
+
+  `lumod pi-history --file /absolute/session.jsonl --limit 8` provides a bounded
+  JSON index of user messages and compaction/branch summaries. `--query TEXT`
+  searches user/assistant text and summaries with 240-character excerpts.
+  `--entry ID --offset N` expands one record by at most 4,000 Unicode characters.
+  `--before LINE` pages older index/search results; limits are 1–20. Output
+  includes IDs, parent IDs, line numbers and continuation offsets. Results span
+  the saved branch tree; the model is instructed to check ancestry, treat all
+  historical content as reference data, and retrieve only relevant pieces.
+  The reader skips malformed or >2 MiB records, reports skipped records, and
+  caps each scan at 128 MiB (`limited: true` means later data was not scanned).
+  It uses ordinary account file permissions, rejects leaf symlinks, and never
+  executes history content. This bounds reader output; the model still controls
+  which follow-up lookups it makes.
+
+  After the first message, one context ring beside the model selector shows
+  Pi's reported current usage; its hover/focus tooltip contains percentage,
+  token usage, maximum model context and conversation cost. Unknown usage is
+  shown explicitly. Running sidebar chats display a spinner, replaced by the
+  archive affordance on hover/focus, with reduced motion respected.
+
 - `GET /api/v1/pi/sessions?project=...` lists Pi-written sessions for the project.
 - `POST /api/v1/pi/sessions/archive` and `/pi/sessions/restore` accept
   `{requestId, project, session}` and return `{moved: true}`. Archive moves the
   original Pi JSONL into `.archive/` inside its project session folder; restore
   moves it back. Contents and filename stay intact. This is Lumo's archive
   feature; Pi has no native archive RPC command. Existing targets are never
-  replaced. Both operations require the project's Lumo Pi processes to exit;
+  replaced. Both operations require the matching conversation's Lumo Pi process to exit;
   they share the installation/start lock. The browser stops its idle connection
   before moving and reopens the retained chat, or a fresh chat when archiving
   the current one. Drafts and attachments remain. Another window's connection
@@ -1375,7 +1451,9 @@ apply. Pi has the Linux account's ordinary filesystem and command permissions.
   account home). Session IDs are basenames from the project list; traversal and
   symlinked session files are rejected. A matching live `resume` process ID
   reconnects the same account and project without starting another process.
-  The browser keeps this ID per window in tab storage for refresh recovery.
+  The browser keeps each chat's process ID in tab storage for refresh recovery.
+  Different saved chats may run concurrently in the same project; opening the
+  same saved chat in a second process is rejected.
 - `POST /api/v1/pi/command` accepts `{requestId, id, command}`. The allowlist covers
   prompt, steer, follow-up, abort, queue clearing, model/thinking selection,
   state/messages/models/thinking-level/statistics queries, rename, compaction,
@@ -1404,13 +1482,22 @@ branching remains available through Edit & resend.
 Tool events expose arguments, progress, result,
 and failures. `agent_settled` signals completion, including queued work and
 retries. Selecting a saved session starts it with Pi's `--session` option.
+Successful model and effort selections also save the confirmed model, provider,
+and supported thinking level in Pi's agent-directory `settings.json` as defaults
+for new conversations. Other settings and other models' effort preferences are
+preserved. Saved conversations restore their own native Pi session choices;
+opening them does not update the new-conversation defaults. Explicit project
+settings retain Pi's normal precedence over agent-directory defaults.
 Sessions are Pi-owned JSONL files in
 `~/.local/state/lumo/pi-sessions/<project-hash>/`; Lumo does not duplicate their
 conversation state in a database.
 
-There are at most eight subprocesses per Linux user. Closing a workspace stops
-its process; a disconnected browser lease expires after two minutes. Running
-workspaces and active provider setup count toward agent activity. Credentials
+There are at most eight subprocesses per Linux user. Switching chats preserves
+running processes, event streams, drafts, attachments and queued messages. Idle
+background chats release their process and reopen their saved session when selected.
+Closing a Pi window stops its processes after the running-work confirmation; a
+disconnected browser lease expires after two minutes. Running
+chats and active provider setup count toward agent activity. Credentials
 remain managed by Pi through its public SDK; provider setup never opens a
 terminal. Native RPC
 starts with extensions, prompt templates, and trust-gated project resources
@@ -1695,3 +1782,124 @@ Cross-filesystem moves copy regular files and symbolic links with permissions an
 modification times, retaining originals until configuration commit. Special files
 are rejected. No privileged broker operation is used; filesystem permissions
 remain authoritative.
+
+
+## Git repositories
+
+Git is an APT-managed App Library application (`git`). Install, update and
+uninstall use the existing broker package-plan flow. Normal uninstall keeps
+configuration and repositories; clean uninstall moves `/etc/gitconfig` to
+recoverable app Trash. Account Git settings, credentials, SSH keys and all
+repositories are preserved.
+
+All Git routes run in the authenticated per-user agent, as that Linux user,
+behind the gateway session and CSRF checks. No privileged broker command is
+used for repository operations. Paths identify existing, accessible working
+repositories; bare repositories are not editable through this interface.
+
+- `GET /api/v1/git/repository?path=<absolute-folder>` returns `path`, `branch`,
+  `head`, `revision`, `upstream`, `ahead`, `behind`, `branches`, `remotes`,
+  `files`, `history`, `branchDetails` and `operation`. Branch details include
+  `name`, full `ref`, optional `remote`, last-commit ISO `date`, `upstream`,
+  and `default`. Default markers come from the preferred remote’s symbolic
+  HEAD; no default is guessed when it is unavailable. An empty `branch` means detached HEAD;
+  an empty `head` means no commits. Files have `path`, optional `original`,
+  porcelain `index` and `worktree` status characters, and `conflict`.
+  History contains the most recent 50 commits with `id`, `subject`, `author`,
+  ISO `date` and `body`. Counts compare HEAD with its configured upstream,
+  independently of the remote selected in the UI.
+- `GET /api/v1/git/diff?path=...&file=...&commit=...&staged=true|false`
+  returns `{text, truncated}`. Working and index diffs are separate; a full
+  commit ID requests its patch. Untracked regular files have a bounded text
+  preview; binary and nonregular files show an explanation. External diff
+  drivers and text conversion are disabled. Paths are always literal.
+- `POST /api/v1/git/action` accepts `{requestId, path, revision, action}`.
+  Actions: `stage`/`unstage` with `file` or `files` (up to 10,000 paths); `commit` with `message`;
+  `switch`/`create-branch` with a local `branch`; `switch-remote`/`merge`
+  with a full branch ref from `branchDetails`; `abort-merge` without extra
+  fields; `fetch`/`pull`/`push` with `remote`.
+  `init` creates an empty repository on `main`; `clone` also accepts `url`.
+  These two actions use an empty revision and an absolute, new destination
+  `path` inside an existing parent directory. Existing destinations are
+  refused, including empty directories. Failed operations remove only an
+  empty destination; any partial repository is retained and reported.
+  Clone supports HTTPS, SSH and local server paths without recursive submodules.
+  Mutations are serialized per agent, replayed by request ID and rejected
+  with `stale_revision` if the inspected snapshot changed (except new repository creation). The revision
+  includes HEAD, branch refs and their object IDs, configured remote names,
+  status, staged object IDs, and changed-file metadata.
+  Git's own index/ref locks also apply; external edits are not locked for
+  the duration of an API request.
+
+Batch staging validates every selected path against the same revision before
+issuing one Git command. The header checkbox applies to visible, non-conflicting
+files and leaves already-selected partial staging intact.
+
+Commit uses the existing index, preserving unstaged edits. It respects the
+account's author, signing and hook configuration. Active merge/rebase,
+cherry-pick, revert and bisect operations must be finished in Terminal.
+Branch changes, merges and pulls require a clean working tree. Remote
+checkout creates a local tracking branch and rejects local-name collisions.
+Merge requires UI confirmation, permits fast-forward or a merge commit,
+disables automatic stashing, and refuses to overwrite ignored files.
+Conflicts remain visible with a confirmed Abort merge action; conflict
+resolution and completion use Terminal. Abort is offered only while
+`MERGE_HEAD` exists and warns that resolution edits will be discarded. Pull explicitly uses
+fast-forward only, disables automatic stashing and never creates a merge.
+Pull and push use the tracked branch when it belongs to the selected remote,
+otherwise the current local branch name. Push publishes only HEAD to that branch,
+sets its upstream, and never forces or mirrors. The UI asks before publishing.
+
+Remote operations use the Linux account's configured credentials. Terminal
+prompts and SSH password/host-key prompts are disabled; configure credentials
+and trusted host keys in Terminal first. Commands have a 90-second timeout;
+refresh after a timeout to inspect the outcome. Output is bounded to 4 MiB,
+and the UI limits diff rendering to 6,000 lines. Git errors remain visible
+without clearing the commit draft. The UI polls the open repository every
+15 seconds while visible and refreshes on browser focus; it does not maintain
+a separate server repository database. Recent paths are account-scoped UI
+preferences. The UI defaults to the branch’s tracking remote, then origin or
+the first configured remote. Remote selection appears in Sync options only
+when multiple remotes exist. A single toolbar action follows the branch state:
+Push when there are unpublished commits (including when both branches have new
+commits), Publish branch when it has no tracking branch on the selected remote,
+Pull when only behind, otherwise Fetch. Fetch updates the state; pulling requires
+a separate click. A rejected push stops and shows the error, preserving local
+commits without automatically pulling, merging or forcing. Refresh the state and
+merge remote changes through the branch menu before retrying a rejected push.
+Fetch stays available in Sync options.
+Create/clone defaults to `~/GitHub`, created through the ordinary Files API on
+submission if absent. A successfully used destination is remembered per account;
+opening existing repositories does not change this preference.
+
+The design references are `DESKTOP_STYLE.md`, `DESIGN_PRINCIPLES.md`, and the
+standard Git CLI documentation for status, diff, commit, switch and remote
+operations at https://git-scm.com/docs. The original layout groups repository
+and branch controls in a compact toolbar, a Changes/History list and commit
+composer at left, and a readable diff at right. Shared neutral tokens keep
+both themes consistent; an original coral branch icon identifies Git.
+
+### Shared Pi context budget
+
+The compaction response may include `usageBudget: {mode: "percent" | "tokens", value}`.
+The account-level POST (empty `model`) accepts this optional object: percentages
+are integers from 1 to 99; token counts are positive safe integers. Saving it
+replaces account per-model compaction token overrides while retaining unrelated
+keys. It is stored as `lumoContextBudget` in the account Pi settings file.
+
+On a fresh Lumo Pi process start, Lumo queries configured model definitions and
+the selected model through Pi RPC. It translates the shared budget to native
+per-model `reserveTokens`, caps recent tokens at the usable budget, and restarts
+the idle process if these settings changed. No prompt or provider request is
+sent. New models are included on the next fresh start. After saving through Lumo,
+the UI reopens the current saved conversation once the process is idle and its
+queued messages have completed, preserving the composer draft. It then reloads
+the effective session statistics and settings revision. Fixed budgets leave a 16,384-token response reserve, capped at one quarter of
+the window for small models (minimum one token). Unknown capacities retain Pi's native fallback.
+Project settings retain Pi's normal precedence.
+
+Session statistics may include `compaction: {enabled, threshold}`. This reflects
+the account and project compaction settings captured when the process started,
+resolved for its current model and reported context capacity. Reconnecting to
+an existing process retains its original settings. The field is omitted if the
+context window or effective settings cannot be resolved.

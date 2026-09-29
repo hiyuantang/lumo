@@ -48,7 +48,7 @@ export interface Website {
 export interface WebsiteSnapshot { installed: boolean; sites: Website[]; warnings: string[] }
 export interface WebsiteResult { site: Website; rollbackRef: string; reloaded: boolean }
 
-export type ServerAppID = 'docker' | 'nginx';
+export type ServerAppID = 'docker' | 'nginx' | 'git';
 export type LibraryAppID = ServerAppID | 'pi';
 export type AppOperation = 'install' | 'uninstall' | 'update';
 export interface AppCatalog { canInstall: boolean; apps: { id: LibraryAppID; installed: boolean; canUninstall?: boolean; canInstall?: boolean; canUpdate?: boolean }[] }

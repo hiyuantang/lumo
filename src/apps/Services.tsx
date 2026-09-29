@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { Disclosure } from '../shell/Disclosure';
 import { useAppMenus } from '../shell/appMenus';
 import { useContextMenu } from '../shell/ContextMenu';
 import { useAppState } from '../shell/useAppState';
@@ -312,13 +313,12 @@ export function Services() {
                 )}
                 <div className="services-unit-files" data-testid="service-unit-files">
                   {detail?.files.map((file) => (
-                    <details key={file.path}>
-                      <summary>
+                    <Disclosure key={file.path} label={<>
                         <span className="mono">{file.path}</span>
                         {file.override && <span className="pill">override</span>}
-                      </summary>
+                      </>}>
                       {file.error ? <p>{file.error}</p> : <pre>{file.content}</pre>}
-                    </details>
+                    </Disclosure>
                   ))}
                 </div>
               </section>

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { copyText, readClipboard } from '../utils/clipboard';
 import { createContext, useContext, useState, type MouseEvent, type ReactNode } from 'react';
+import { editCommands } from './editCommands';
 import { Popup } from './Popup';
 import { useShell } from './ShellContext';
 
@@ -17,7 +18,7 @@ export const useContextMenu = () => useContext(ContextMenuContext);
 
 export function ContextMenuProvider({ children }: { children: ReactNode }) {
   const { state, actions } = useShell();
-  const [menu, setMenu] = useState<{ x: number; y: number; items: ContextAction[]; target: HTMLElement; placement?: 'above' } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: ContextAction[]; target: HTMLElement; placement?: 'above'; keyboard: boolean } | null>(null);
   const open: OpenMenu = (event, items) => {
     event.preventDefault();
     event.stopPropagation();
@@ -25,7 +26,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     const target = ((event.currentTarget as HTMLElement).style.display === 'contents' ? event.target : event.currentTarget) as HTMLElement;
     const box = target.getBoundingClientRect();
     const dock = !!target.closest('.dock');
-    setMenu({ x: dock ? box.left + box.width / 2 : event.clientX || box.left + 12, y: dock ? box.top - 10 : event.clientY || box.top + 12, items, target, placement: dock ? 'above' : undefined });
+    setMenu({ keyboard: event.clientX === 0 && event.clientY === 0, x: dock ? box.left + box.width / 2 : event.clientX || box.left + 12, y: dock ? box.top - 10 : event.clientY || box.top + 12, items, target, placement: dock ? 'above' : undefined });
   };
   function close(restore = false) {
     if (restore) menu?.target.focus();
@@ -33,6 +34,10 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
   }
   function fallback(event: MouseEvent) {
     const target = event.target as HTMLElement;
+    if (target.closest('[data-rich-editor="true"]')) {
+      open(event, editCommands(target, () => actions.notify('Clipboard unavailable', 'Use the keyboard shortcut to copy or paste.')).map((item) => ({ label: item.label, disabled: item.disabled, run: item.run ?? (() => {}), separator: item.separatorAbove })));
+      return;
+    }
     const input = target.closest('input, textarea') as HTMLInputElement | HTMLTextAreaElement | null;
     if (input && ['text', 'search', 'url', 'tel', 'password', 'textarea'].includes(input.type)) {
       const start = input.selectionStart ?? 0;
@@ -62,7 +67,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
   }
   return <ContextMenuContext.Provider value={open}>
     <div style={{ display: 'contents' }} onContextMenu={fallback}>{children}</div>
-    {menu && <Popup x={menu.x} y={menu.y} above={menu.y - 6} placement={menu.placement} onClose={() => close()}>
+    {menu && <Popup keyboard={menu.keyboard} x={menu.x} y={menu.y} above={menu.y - 6} placement={menu.placement} onClose={() => close()}>
       <div role="menu" aria-label="Context menu" data-testid="context-menu" onKeyDown={(event) => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); }
         if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;

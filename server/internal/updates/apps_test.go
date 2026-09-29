@@ -31,7 +31,7 @@ func installWorker(runner *installRunner) *Worker {
 }
 
 func TestAppPlansUseFixedPackagesAndIncludeDependencies(t *testing.T) {
-	for app, targets := range map[string]string{"docker": "docker.io docker-compose-v2", "nginx": "nginx"} {
+	for app, targets := range map[string]string{"docker": "docker.io docker-compose-v2", "nginx": "nginx", "git": "git"} {
 		t.Run(app, func(t *testing.T) {
 			command := "apt-get -s -V --no-remove -o Dpkg::Use-Pty=0 install -- " + targets
 			runner := &installRunner{fakeRunner: fakeRunner{outputs: map[string]string{

@@ -96,12 +96,6 @@
   white-space: nowrap;
 }
 
-.menubar-item:hover:not(:disabled),
-.menubar-item:focus-visible {
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
-
 .menubar-item:disabled {
   color: var(--text-faint);
   cursor: default;
@@ -119,10 +113,7 @@
   color: var(--text-faint);
 }
 
-.menubar-item:hover kbd,
-.menubar-item:focus-visible kbd {
-  color: inherit;
-}
+.menubar-item kbd { color: var(--menu-detail-color); }
 
 .menubar-clock {
   color: var(--text-muted);

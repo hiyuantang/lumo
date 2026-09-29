@@ -163,21 +163,21 @@ func (w *Worker) CalculatePlan(ctx context.Context) (Plan, error) {
 }
 
 func (w *Worker) CalculateInstallPlan(ctx context.Context, appID string) (Plan, error) {
-	if appID != "docker" && appID != "nginx" {
+	if appID != "docker" && appID != "nginx" && appID != "git" {
 		return Plan{}, errors.New("unsupported application")
 	}
 	return w.calculatePlan(ctx, appID, "install")
 }
 
 func (w *Worker) CalculateRemovalPlan(ctx context.Context, appID string) (Plan, error) {
-	if appID != "docker" && appID != "nginx" {
+	if appID != "docker" && appID != "nginx" && appID != "git" {
 		return Plan{}, errors.New("unsupported application")
 	}
 	return w.calculatePlan(ctx, appID, "uninstall")
 }
 
 func (w *Worker) CalculateAppUpdatePlan(ctx context.Context, appID string) (Plan, error) {
-	if appID != "docker" && appID != "nginx" {
+	if appID != "docker" && appID != "nginx" && appID != "git" {
 		return Plan{}, errors.New("unsupported application")
 	}
 	return w.calculatePlan(ctx, appID, "update")
@@ -185,6 +185,9 @@ func (w *Worker) CalculateAppUpdatePlan(ctx context.Context, appID string) (Plan
 
 func (w *Worker) installedAppPackages(ctx context.Context, appID string) ([]string, error) {
 	candidates := []string{"nginx"}
+	if appID == "git" {
+		candidates = []string{"git"}
+	}
 	if appID == "docker" {
 		candidates = []string{"docker.io", "docker-compose-v2", "containerd", "runc", "docker-ce", "docker-ce-cli", "containerd.io", "docker-buildx-plugin", "docker-compose-plugin", "docker-ce-rootless-extras"}
 	}
@@ -206,7 +209,7 @@ func (w *Worker) installedAppPackages(ctx context.Context, appID string) ([]stri
 	if appID == "docker" && has("docker.io") && has("docker-ce") {
 		return nil, errors.New("Multiple Docker package families are installed. Resolve the package configuration before updating.")
 	}
-	if (appID == "docker" && !has("docker.io") && !has("docker-ce")) || (appID == "nginx" && !has("nginx")) {
+	if (appID == "docker" && !has("docker.io") && !has("docker-ce")) || (appID == "nginx" && !has("nginx")) || (appID == "git" && !has("git")) {
 		return nil, errors.New("This app is not installed through a supported APT package. Update it using its original installer.")
 	}
 	if appID == "docker" {
@@ -236,6 +239,9 @@ func (w *Worker) calculatePlan(ctx context.Context, appID, operation string) (Pl
 	args := []string{"-s", "-V", "-o", "Dpkg::Use-Pty=0", "upgrade"}
 	if appID != "" {
 		packages := []string{"nginx"}
+		if appID == "git" {
+			packages = []string{"git"}
+		}
 		if appID == "docker" {
 			packages = []string{"docker.io", "docker-compose-v2"}
 		}

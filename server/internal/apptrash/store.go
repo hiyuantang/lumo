@@ -23,6 +23,7 @@ import (
 var idPattern = regexp.MustCompile(`^apptrash_[a-f0-9]{24}$`)
 var targets = map[string][]string{
 	"docker": {"/etc/docker", "/var/lib/docker"},
+	"git":    {"/etc/gitconfig"},
 	"nginx":  {"/etc/nginx", "/var/cache/nginx", "/var/lib/nginx", "/var/log/nginx"},
 }
 

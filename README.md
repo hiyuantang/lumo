@@ -13,8 +13,9 @@ permissions. Service changes made over SSH also appear in Lumo.
 | Monitor | View server health, per-core CPU, memory, network traffic, running processes, services and searchable logs |
 | Trash | Restore deleted files or permanently remove them |
 | Files | Browse folders and Trash, pin favorite folders, create files, inspect details, upload, download and edit text |
-| Pi | Native coding chat, streamed tool activity, model selection and saved project sessions |
-| Preview | Read and edit text files; switch Markdown between rendered and raw views |
+| Pi | Concurrent coding chats, queued messages, conversation references, skills, model selection and configurable compaction |
+| Git | Open, create and clone repositories; review diffs and history, commit changes, manage branches and sync remotes |
+| Preview | View images, read and edit text, and switch Markdown or HTML between rendered and raw views |
 | Terminal | Run commands as your Linux user |
 | Skills | Browse account skills from `~/.agents/skills`, search descriptions and read their instructions |
 | App Library | Discover apps, install or remove them, apply updates and view update history |
@@ -36,8 +37,10 @@ The project targets **Ubuntu 26.04 LTS**, with **Ubuntu 24.04 LTS**
 compatibility, on amd64 and arm64. The automated Docker environment uses
 Ubuntu 24.04; it does not establish coverage for every supported system.
 
-Markdown preview, dedicated storage management, user and SSH-key management,
-and firewall controls are planned. Files already supports basic text editing.
+Dedicated storage management, user and SSH-key management, and firewall
+controls are planned. HTML preview supports inline styles and embedded images;
+scripts and external assets are disabled. Image previews support PNG, JPEG,
+WebP, GIF, AVIF, BMP and ICO files up to 32 MiB.
 
 ## Install on your server
 

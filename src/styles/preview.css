@@ -48,3 +48,12 @@
   .preview-toolbar .btn { padding: 6px 8px; font-size: 12px; }
   .preview-toolbar .preview-modes { padding: 2px; gap: 2px; }
 }
+
+.preview-image-content { position: relative; flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 20px; background: var(--surface-sunken); }
+.preview-image-content > img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; min-height: 0; min-width: 0; }
+.preview-image-content.preview-image-actual { display: flex; align-items: safe center; justify-content: safe center; }
+.preview-image-actual > img { flex: none; max-width: none; max-height: none; }
+.preview-image-status { margin: auto; color: var(--text-muted); font-size: 13px; text-align: center; }
+.preview-image-status.preview-error { color: var(--danger); }
+.preview-html-content { display: flex; flex-direction: column; }
+.preview-html { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; color-scheme: light; }

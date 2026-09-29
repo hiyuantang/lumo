@@ -16,6 +16,9 @@ var version = "0.4.0"
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "pi-history":
+			runPiHistory(os.Args[2:])
+			return
 		case "gateway":
 			runGateway(os.Args[2:])
 			return
@@ -36,6 +39,6 @@ func main() {
 			return
 		}
 	}
-	fmt.Fprintln(os.Stderr, "Usage: lumod {gateway|sessiond|agent|broker|version}")
+	fmt.Fprintln(os.Stderr, "Usage: lumod {gateway|sessiond|agent|broker|pi-history|version}")
 	os.Exit(2)
 }

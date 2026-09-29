@@ -28,7 +28,6 @@
 .skills-document .markdown { font-size: 13px; padding: 26px 30px; }
 .skills-document .markdown h1 { font-size: 24px; }
 .skills-document .markdown h2 { font-size: 18px; }
-.skills-file-path { padding: 12px 30px; color: var(--text-muted); font: 10px/1.6 var(--font-mono); border-top: 1px solid var(--border); overflow-wrap: anywhere; }
 .skills-notice { margin: 14px 24px; padding: 12px; border-radius: 9px; background: var(--amber-soft); color: var(--amber); font-size: 12px; }
 .skills-status { padding: 22px 30px; color: var(--text-muted); font-size: 13px; }
 .skills-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px; text-align: center; gap: 14px; color: var(--text-muted); }

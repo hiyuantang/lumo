@@ -56,8 +56,9 @@ test('closing Preview clears its document and mode while retaining window placem
   await page.setViewportSize({ width: 800, height: 650 });
   await page.reload();
   const fitted = await bounds(page, 'preview');
-  expect(fitted.x).toBeGreaterThanOrEqual(0);
-  expect(fitted.x + fitted.width).toBeLessThanOrEqual(800);
+  expect(fitted.width).toBeLessThanOrEqual(800);
+  expect(Math.min(fitted.x + fitted.width, 800) - Math.max(fitted.x, 0)).toBeGreaterThanOrEqual(120);
+  expect(fitted.y).toBeGreaterThanOrEqual(32);
 });
 
 test('closing apps resets their views and keeps account preferences separate', async ({ page }) => {

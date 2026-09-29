@@ -6,6 +6,7 @@ import { describeError, getDataSource, type InstalledPackage, type PackageCatalo
 import { useShell } from '../shell/ShellContext';
 import { formatSize } from '../utils/file-format';
 import { ApiError } from '../api/transport';
+import { AppModal } from '../shell/AppModal';
 import { Select } from '../shell/Select';
 import '../styles/apps.css';
 import '../styles/updates.css';
@@ -27,7 +28,6 @@ export function Updates({ active = true }: { active?: boolean }) {
   const [confirming, setConfirming] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<PackageGroup | 'all'>('all');
-  const confirmation = useRef<HTMLDialogElement>(null);
   const readSequence = useRef(0);
 
   const readCatalog = useCallback(async () => {
@@ -44,7 +44,6 @@ export function Updates({ active = true }: { active?: boolean }) {
     void readCatalog().catch((err) => { if (alive) setError(describeError(err)); });
     return () => { alive = false; };
   }, [active, readCatalog]);
-  useEffect(() => { if (confirming) confirmation.current?.showModal(); }, [confirming]);
 
   useEffect(() => {
     if (!requestId) return;
@@ -126,12 +125,12 @@ export function Updates({ active = true }: { active?: boolean }) {
         {installed.length > 0 && <PackageList key={`${filter}:${query}`} items={installed}/>}
       </section>
     </div>
-    {confirming && plan && <dialog ref={confirmation} className="updates-confirm-dialog" aria-labelledby="updates-confirm-title" data-testid="updates-confirm" onCancel={(event) => { event.preventDefault(); setConfirming(false); }}>
+    {confirming && plan && <AppModal onCancel={() => setConfirming(false)}><div role="dialog" className="updates-confirm-dialog" aria-labelledby="updates-confirm-title" data-testid="updates-confirm">
       <h3 id="updates-confirm-title">Install {plan.packages.length} package updates?</h3>
       <p>{formatSize(plan.downloadBytes)} to download. This cannot be undone automatically.</p>
       <div className="updates-confirm-packages">{plan.packages.map((pkg) => <div key={pkg.name}><strong>{pkg.name}</strong><span>{pkg.fromVersion || 'Not installed'} → {pkg.toVersion}</span></div>)}</div>
       <div className="app-toolbar-actions"><button type="button" className="btn" autoFocus onClick={() => setConfirming(false)}>Cancel</button><button type="button" className="btn" data-testid="updates-confirm-apply" onClick={() => void applyPlan()}>Install</button></div>
-    </dialog>}
+    </div></AppModal>}
   </div>;
 }
 
