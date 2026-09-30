@@ -24,7 +24,8 @@ test('Pi settings uses a navigation card and persistent rail and saves account i
   await expect(page.getByTestId('server-app-confirm')).toContainText('unsaved settings');
   await page.getByTestId('server-app-confirm').getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('region', { name: 'Agent instructions', exact: true }).getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Agent instructions', exact: true }).getByRole('status')).toHaveText('Saved');
+  await expect(page.getByTestId('pi-notification')).toHaveText('Saved');
+  await expect(page.getByRole('region', { name: 'Agent instructions', exact: true }).getByRole('status')).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'Instruction file' })).toHaveCount(0);
   await expect(page.getByTestId('pi-append-instructions')).toHaveValue('');
   await expect(page.getByTestId('pi-settings')).toContainText('/home/user/.pi/agent/APPEND_SYSTEM.md');
@@ -32,7 +33,8 @@ test('Pi settings uses a navigation card and persistent rail and saves account i
   await page.getByTestId('pi-instructions').fill('Another agent draft');
   const additional = page.getByRole('region', { name: 'Additional system instructions', exact: true });
   await additional.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(additional.getByRole('status')).toHaveText('Saved');
+  await expect(page.getByTestId('pi-notification')).toHaveText('Saved');
+  await expect(additional.getByRole('status')).toHaveCount(0);
   await expect(page.getByTestId('pi-instructions')).toHaveValue('Another agent draft');
   await page.getByRole('region', { name: 'Agent instructions', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByTestId('pi-instructions')).toContainText('日本語');
@@ -76,6 +78,7 @@ test('Pi settings keeps a draft on save conflict and can reload server changes',
   await page.getByTestId('pi-instructions').fill('My pending changes');
   await page.getByRole('region', { name: 'Agent instructions', exact: true }).getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('changed on the server');
+  await expect(page.getByTestId('pi-notification')).toHaveCount(0);
   await expect(page.getByTestId('pi-instructions')).toHaveValue('My pending changes');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Reload instructions', exact: true }).click();
@@ -114,4 +117,26 @@ test('Pi keeps Home and Settings at opposite rail ends and supports vertical key
   await page.screenshot({ path: '/tmp/lumo-pi-settings-rail-narrow.png', animations: 'disabled' });
   expect(await page.getByTestId('app-pi').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
   await expect(home).toBeVisible(); await expect(settings).toBeVisible();
+});
+
+
+test('Pi keeps sidebar and New chat rail buttons disabled in Settings', async ({ page }) => {
+  await piPage(page); await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-pi').click();
+  await expect(page.getByTestId('pi-prompt')).toBeEnabled();
+  const toggle = page.getByTestId('pi-sidebar-toggle');
+  await toggle.click();
+  const rail = page.getByTestId('pi-app-rail'); const newChat = rail.getByTestId('pi-new');
+  const controls = rail.locator('button');
+  const before = await controls.evaluateAll((nodes) => nodes.map((node) => { const {x,y,width,height}=node.getBoundingClientRect(); return {x,y,width,height}; }));
+  await page.getByTestId('pi-settings-button').click();
+  await expect(toggle).toBeVisible(); await expect(toggle).toBeDisabled();
+  await expect(newChat).toBeVisible(); await expect(newChat).toBeDisabled();
+  await expect(toggle).toHaveCSS('opacity','0.5'); await expect(newChat).toHaveCSS('opacity','0.5');
+  expect(await controls.evaluateAll((nodes) => nodes.map((node) => { const {x,y,width,height}=node.getBoundingClientRect(); return {x,y,width,height}; }))).toEqual(before);
+  await page.getByTestId('pi-home-button').click();
+  await expect(toggle).toBeEnabled(); await expect(newChat).toBeEnabled();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click(); await page.getByTestId('pi-settings-button').click();
+  await expect(toggle).toBeDisabled(); await expect(newChat).toBeVisible(); await expect(newChat).toBeDisabled();
 });

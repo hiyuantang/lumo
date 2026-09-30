@@ -7,8 +7,8 @@ import { attachmentPrompt, splitAttachmentPrompt, fileAttachmentKey, conversatio
 test('Conversation references round trip without exposing lookup instructions in visible text', () => {
   const reference = { project: "/home/user/it's a project", session: 'chat.jsonl', name: 'Earlier work', path: "/home/user/it's a project/chat.jsonl", reader: '/usr/local/bin/lumod' };
   const prompt = attachmentPrompt('Find the previous decision', ['/home/user/a b.md'], [reference]);
-  expect(prompt).toContain("it'\\''s a project/chat.jsonl");
-  expect(splitAttachmentPrompt(prompt)).toEqual({ text: 'Find the previous decision', paths: ['/home/user/a b.md'], references: [reference] });
+  expect(prompt).toContain(JSON.stringify(reference.path));
+  expect(splitAttachmentPrompt(prompt)).toEqual({ text: 'Find the previous decision', paths: ['/home/user/a b.md'], references: [reference], order: [conversationAttachmentKey(reference), fileAttachmentKey('/home/user/a b.md')] });
   expect(splitAttachmentPrompt('[Lumo conversation references]\ninvalid')).toEqual({ text: '[Lumo conversation references]\ninvalid', paths: [], references: [] });
 });
 
@@ -18,11 +18,40 @@ test('Mixed context order survives serialization and removal without leaking met
   const paths = ['/home/user/a.txt', '/home/user/folder/'];
   const order = [fileAttachmentKey(paths[0]), conversationAttachmentKey(first), fileAttachmentKey(paths[1]), conversationAttachmentKey(second)];
   const prompt = attachmentPrompt('Review these', paths, [second, first], order);
-  expect(splitAttachmentPrompt(prompt)).toEqual({ text: 'Review these', paths, references: [second, first], order });
+  expect(splitAttachmentPrompt(prompt)).toEqual({ text: 'Review these', paths, references: [first, second], order });
   const removed = splitAttachmentPrompt(attachmentPrompt('Review these', paths.slice(1), [first], order));
   expect(removed.order).toEqual([conversationAttachmentKey(first), fileAttachmentKey(paths[1])]);
-  expect(splitAttachmentPrompt(prompt.replace('"attachmentIndex":3', '"attachmentIndex":1')).order).toBeUndefined();
-  expect(splitAttachmentPrompt(prompt.replace('"attachmentIndex":3', '"attachmentIndex":999999')).order).toBeUndefined();
+});
+
+test('Multiple chats, files and folders share guidance and preserve one ordered entry each', () => {
+  const first = { project: '/home/user', session: 'one.jsonl', name: 'One', path: '/sessions/one.jsonl', reader: '/usr/local/bin/lumod' };
+  const second = { ...first, session: 'two.jsonl', name: 'Two', path: '/sessions/two.jsonl' };
+  const paths = ['/home/user/report.md', '/home/user/assets/'];
+  const order = [fileAttachmentKey(paths[0]), conversationAttachmentKey(first), fileAttachmentKey(paths[1]), conversationAttachmentKey(second)];
+  const prompt = attachmentPrompt('Compare these', [...paths, paths[0]], [first, second, first], order);
+  expect(prompt.match(/pi-history --file/g)).toHaveLength(1);
+  expect(prompt.match(/Never read or paste an entire chat history file at once/g)).toHaveLength(1);
+  for (const path of [...paths, first.path, second.path, first.reader]) expect(prompt.split(path)).toHaveLength(2);
+  expect(splitAttachmentPrompt(prompt)).toEqual({ text: 'Compare these', paths, references: [first, second], order });
+  const filesOnly = attachmentPrompt('', paths);
+  expect(filesOnly).not.toContain('pi-history');
+  expect(filesOnly).not.toContain('Chats are');
+  expect(splitAttachmentPrompt(filesOnly)).toEqual({ text: '', paths, references: [], order: paths.map(fileAttachmentKey) });
+  expect(attachmentPrompt('  Just text  ', [])).toBe('Just text');
+});
+
+test('Legacy attachment messages remain editable and malformed new metadata remains visible', () => {
+  const reference = { project: '/home/user', session: 'one.jsonl', name: 'One', path: '/sessions/one.jsonl', reader: '/usr/local/bin/lumod' };
+  const legacy = `[Lumo conversation references]\n${JSON.stringify([{ ...reference, attachmentIndex: 1 }])}\nOld lookup guidance\n[/Lumo conversation references]\n\nread: "/home/user/a.txt"\n\nOriginal message`;
+  const parts = splitAttachmentPrompt(legacy);
+  expect(parts).toEqual({ text: 'Original message', paths: ['/home/user/a.txt'], references: [reference], order: [fileAttachmentKey('/home/user/a.txt'), conversationAttachmentKey(reference)] });
+  expect(splitAttachmentPrompt(attachmentPrompt(parts.text, parts.paths, parts.references, parts.order))).toEqual(parts);
+  expect(splitAttachmentPrompt(legacy.replace('"attachmentIndex":1', '"attachmentIndex":999999')).order).toBeUndefined();
+  expect(splitAttachmentPrompt('read: "/home/user/a.txt"\n\nOld file')).toEqual({ text: 'Old file', paths: ['/home/user/a.txt'], references: [] });
+  for (const metadata of ['invalid', '{"items":[{"type":"file","path":3}]}', '{"items":[{"type":"conversation","path":"/chat.jsonl"}]}']) {
+    const text = `[Lumo attachments]\n${metadata}\n[/Lumo attachments]\n\nKeep me`;
+    expect(splitAttachmentPrompt(text)).toEqual({ text, paths: [], references: [] });
+  }
 });
 
 test('Pi supports removable dragged chat references, compact context usage and working indicators', async ({ page }) => {
@@ -39,7 +68,9 @@ test('Pi supports removable dragged chat references, compact context usage and w
   await composer.getByRole('button', { name: 'Remove conversation Earlier work' }).click();
   await expect(composer.getByTestId('pi-conversation-reference')).toHaveCount(0);
   await chat.click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Reference in message' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Reference in message' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await chat.dragTo(input);
   await expect(composer.getByTestId('pi-conversation-reference')).toHaveCount(1);
   await chat.dragTo(input);
   await expect(composer.getByTestId('pi-conversation-reference')).toHaveCount(1);
@@ -47,8 +78,8 @@ test('Pi supports removable dragged chat references, compact context usage and w
   await page.getByTestId('pi-send').click();
   await expect(page.getByTestId('pi-context-meter')).toHaveAttribute('aria-label', '8.8% of compaction budget used');
   await expect(page.getByTestId('pi-chat-working').first()).toBeVisible();
-  expect(fixture.commands.find((command) => command.type === 'prompt')).toMatchObject({ message: expect.stringContaining("'/usr/local/bin/lumod' pi-history --file") });
-  await expect(page.getByTestId('pi-messages')).not.toContainText('Never use cat');
+  expect(fixture.commands.find((command) => command.type === 'prompt')).toMatchObject({ message: expect.stringContaining('<reader> pi-history --file <path> --limit 8') });
+  await expect(page.getByTestId('pi-messages')).not.toContainText('Never read or paste');
   await expect(composer.getByTestId('pi-conversation-reference')).toHaveCount(0);
   const spinner = page.getByTestId('pi-chat-working').first();
   const archive = spinner.locator('..').getByRole('button', { name: /^Archive / });
@@ -96,7 +127,7 @@ test('References survive queue take-back and edit/resend while unavailable refer
   const input = page.getByTestId('pi-prompt'); const composer = page.locator('.pi-compose form');
   await input.fill('Start'); await page.getByTestId('pi-send').click();
   await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeEnabled();
-  await expect(page.getByTestId('pi-tool')).toContainText('read README.md');
+  await expect(page.getByTestId('pi-tool')).toContainText('Read README.md');
   const chat = page.getByRole('navigation', { name: 'Pi projects', exact: true }).getByRole('button', { name: 'Earlier work', exact: true });
   await chat.dragTo(input);
   await expect(composer.getByTestId('pi-conversation-reference')).toHaveCount(1);

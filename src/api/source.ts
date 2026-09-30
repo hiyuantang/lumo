@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { DesktopRequest, PiExtensionSettings } from './lumo-use';
 import type { GitSnapshot, GitDiff, GitAction } from './git';
-import type { PiConversationReference, PiCompaction, PiCompactionChange, PiProvider, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiArchivedSession, PiSession, PiCommand, PiReply, PiEvents } from './pi';
+import type { PiImageSettings, PiTemplate, PiConversationReference, PiCompaction, PiCompactionChange, PiProvider, PiConnection, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiArchivedSession, PiSession, PiCommand, PiReply, PiEvents, PiAnswer, PiPermissionMode, PiStart } from './pi';
 import type { SkillCatalog, SkillDetail } from './skills';
 import type { TrashItem, TrashSelection } from './trash';
 import { LiveDataSource } from './client';
@@ -346,7 +347,11 @@ export interface DataSource {
   gitRepository(path: string): Promise<GitSnapshot>;
   gitDiff(path: string, file: string, commit: string, staged: boolean): Promise<GitDiff>;
   gitAction(request: GitAction): Promise<void>;
+  piTemplates(): Promise<PiTemplate[]>;
+  piSaveTemplate(template: Pick<PiTemplate, 'name' | 'content' | 'revision'>, remove?: boolean): Promise<void>;
+  piUploadImage(content: string): Promise<{ path: string }>;
   piProviders(): Promise<{ providers: PiProvider[] }>;
+  piConnections(): Promise<{ providers: PiConnection[] }>;
   piAuthStart(provider: string, method: PiAuthMethod, operation: 'login' | 'logout'): Promise<PiAuthState>;
   piAuthState(id: string): Promise<PiAuthState>;
   piAuthReply(id: string, promptId: string, value: string): Promise<void>;
@@ -354,6 +359,8 @@ export interface DataSource {
   piReference(project: string, session: string): Promise<Omit<PiConversationReference, 'name'>>;
   piCompaction(model: string): Promise<PiCompaction>;
   piSaveCompaction(change: PiCompactionChange): Promise<PiCompaction>;
+  piImageSettings(): Promise<PiImageSettings>;
+  piSaveImageSettings(change: PiImageSettings): Promise<PiImageSettings>;
   piSettings(kind: PiInstructionKind): Promise<PiInstruction>;
   piSaveSettings(kind: PiInstructionKind, content: string, revision: string): Promise<PiInstruction>;
   piSessions(project: string): Promise<PiSession[]>;
@@ -361,9 +368,14 @@ export interface DataSource {
   piArchivedSessions(): Promise<PiArchivedSession[]>;
   piArchiveSession(project: string, session: string): Promise<void>;
   piRestoreSession(project: string, session: string): Promise<void>;
-  piStart(project: string, session?: string, resume?: string): Promise<{ id: string; project: string }>;
+  piStart(project: string, session?: string, resume?: string, permissionMode?: PiPermissionMode, rememberPermissionMode?: boolean): Promise<PiStart>;
   piCommand(id: string, command: PiCommand): Promise<PiReply>;
+  piAnswer(id: string, answer: PiAnswer, requestId: string): Promise<void>;
   piEvents(id: string, after: number): Promise<PiEvents>;
+  piExtensions(): Promise<PiExtensionSettings>;
+  piSaveExtensions(value: PiExtensionSettings): Promise<PiExtensionSettings>;
+  piDesktopClaim(id: string, desktopId: string): Promise<DesktopRequest>;
+  piDesktopResult(id: string, desktopId: string, text: string, error: boolean): Promise<void>;
   piStop(id: string): Promise<void>;
   listSkills(): Promise<SkillCatalog>;
   readSkill(id: string): Promise<SkillDetail>;
@@ -422,7 +434,7 @@ export interface DataSource {
   createEntry(path: string[], kind: 'file' | 'directory'): Promise<void>;
   listDir(path: string[]): Promise<FsEntry[]>;
   readFile(path: string[], preview?: 'image'): Promise<FileRead>;
-  readSystemFile(path: string): Promise<FileRead>;
+  readSystemFile(path: string, preview?: 'image'): Promise<FileRead>;
   writeFile(path: string[], contentBase64: string, expectedRevision: string | null): Promise<FileWrite>;
   writePrivilegedFile(path: string, contentBase64: string, expectedRevision: string, restartUnit?: string): Promise<PrivilegedFileWrite>;
   listTrash(): Promise<TrashItem[]>;

@@ -38,7 +38,7 @@ export function DropdownMenu({ label, testId, items, className = '', ariaLabel, 
       }}>
         {items.map((item, index) => <div key={`${item.label}-${index}`}>
           {item.separator && <div className="popup-separator" role="separator" />}
-          <button type="button" data-testid={item.testId} role={item.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={item.checked} className={`popup-item dropdown-menu-item${item.danger ? ' danger' : ''}`} data-autofocus={item === initial || undefined} disabled={item.disabled} onClick={() => { close(true); item.run(); }}>{hasChecks && <span aria-hidden="true" className="dropdown-menu-check">{item.checked ? '✓' : ''}</span>}<span>{item.label}</span></button>
+          <button type="button" data-testid={item.testId} role={item.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={item.checked} className={`popup-item dropdown-menu-item${item.danger ? ' danger' : ''}`} data-autofocus={item === initial || undefined} disabled={item.disabled} onClick={() => { close(true); item.run(); }}><span>{item.label}</span>{hasChecks && <span aria-hidden="true" className="dropdown-menu-check">{item.checked ? '✓' : ''}</span>}</button>
         </div>)}
       </div>
     </Popup>}

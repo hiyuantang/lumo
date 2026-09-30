@@ -28,7 +28,7 @@ test('footer folders navigate directly and Copy copies the displayed absolute pa
   await page.getByTestId('file-row-notes.txt').click();
   await copy.click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('/home/user/notes.txt');
-  await expect(copy).toHaveText('Copied');
+  await expect(copy).toHaveAccessibleName('Copied');
   await trail.getByRole('button', { name: 'user', exact: true }).click();
   await expect(trail).toHaveText('/home/user');
   await expect(page.getByTestId('file-row-notes.txt')).toHaveAttribute('aria-selected', 'false');

@@ -45,13 +45,17 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 7px 10px;
+  height: var(--field-height);
+  min-height: var(--field-height);
+  padding: 0 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-s);
   background: var(--surface);
   color: var(--text);
   text-align: left;
   min-width: 0;
+  font-size: 13px;
+  line-height: 20px;
 }
 .custom-select > span:first-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .custom-select:disabled { opacity: .5; cursor: default; }
@@ -60,7 +64,7 @@
 .select-search { width: 100%; margin-bottom: 6px; }
 
 .popup-item.dropdown-menu-item, .select-options .popup-item { justify-content: flex-start; gap: 8px; }
-.dropdown-menu-check { flex: 0 0 14px; text-align: center; }
+.dropdown-menu-check { flex: 0 0 14px; margin-left: auto; text-align: center; }
 
 .custom-select > svg { display: block; flex-shrink: 0; }
 

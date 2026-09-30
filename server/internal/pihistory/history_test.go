@@ -71,16 +71,30 @@ func TestHistoryRejectsOtherFiles(t *testing.T) {
 }
 
 func TestHistoryIndexesUserTextWithoutReferenceBoilerplate(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "chat.jsonl")
-	text := "[Lumo conversation references]\n[]\nLookup instructions\n[/Lumo conversation references]\n\nFind my earlier design decision"
-	data, _ := json.Marshal(map[string]any{"type": "message", "id": "a", "message": map[string]string{"role": "user", "content": text}})
-	os.WriteFile(path, append([]byte("{\"type\":\"session\"}\n"), data...), 0600)
-	result, err := Read(path, Options{})
-	if err != nil || len(result.Entries) != 1 || result.Entries[0].Text != "Find my earlier design decision" {
-		t.Fatalf("index: %+v %v", result, err)
-	}
-	result, err = Read(path, Options{Entry: "a"})
-	if err != nil || result.Entries[0].Text != text {
-		t.Fatalf("original: %+v %v", result, err)
+	for _, prefix := range []string{
+		"[Lumo conversation references]\n[]\nLookup instructions\n[/Lumo conversation references]",
+		"[Lumo attachments]\n{\"items\":[]}\nLookup instructions\n[/Lumo attachments]",
+		"[Lumo skill references]\n[]\nSkill instructions\n[/Lumo skill references]\n\n[Lumo attachments]\n{\"items\":[]}\nLookup instructions\n[/Lumo attachments]",
+	} {
+		path := filepath.Join(t.TempDir(), "chat.jsonl")
+		text := prefix + "\n\nFind my earlier design decision"
+		data, _ := json.Marshal(map[string]any{"type": "message", "id": "a", "message": map[string]string{"role": "user", "content": text}})
+		os.WriteFile(path, append([]byte("{\"type\":\"session\"}\n"), data...), 0600)
+		result, err := Read(path, Options{})
+		if err != nil || len(result.Entries) != 1 || result.Entries[0].Text != "Find my earlier design decision" {
+			t.Fatalf("index: %+v %v", result, err)
+		}
+		result, err = Read(path, Options{Query: "Lookup instructions"})
+		if err != nil || len(result.Entries) != 0 {
+			t.Fatalf("boilerplate search: %+v %v", result, err)
+		}
+		result, err = Read(path, Options{Query: "design decision"})
+		if err != nil || len(result.Entries) != 1 {
+			t.Fatalf("user text search: %+v %v", result, err)
+		}
+		result, err = Read(path, Options{Entry: "a"})
+		if err != nil || len(result.Entries) != 1 || result.Entries[0].Text != text {
+			t.Fatalf("original: %+v %v", result, err)
+		}
 	}
 }

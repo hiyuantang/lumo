@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, test } from '../offline';
+import { splitAttachmentPrompt } from '../../src/apps/piAttachments';
 import { piPage } from './pi-fixture';
 
 test('Pi centers a new chat, selects a workspace, and shows file cards and sends read paths without uploading', async ({ page }) => {
@@ -43,7 +44,9 @@ test('Pi centers a new chat, selects a workspace, and shows file cards and sends
   await page.screenshot({ path: '/tmp/lumo-pi-compose-dark.png', animations: 'disabled' });
   await page.getByTestId('pi-send').click();
   await expect(page.getByTestId('pi-messages')).toContainText('Inspecting your project');
-  expect(fixture.commands).toContainEqual({ type: 'prompt', message: 'read: "/home/user/my project/design notes.md"\n\nReview the design' });
+  const sent = fixture.commands.find((item) => item.type === 'prompt');
+  if (!sent || !('message' in sent)) throw new Error('No prompt sent');
+  expect(splitAttachmentPrompt(sent.message)).toMatchObject({ text: 'Review the design', paths: ['/home/user/my project/design notes.md'] });
   await expect(page.locator('.pi-compose').getByTestId('pi-attachment')).toHaveCount(0);
   await expect(page.locator('.pi-message-user').getByTestId('pi-attachment')).toContainText('design notes.md');
   await expect(page.locator('.pi-message-user')).not.toContainText('read:');
@@ -125,7 +128,9 @@ test('Pi keeps removable attachments on failure and restores queued file cards',
   await expect(prompt).toHaveText('Compare the files');
   await page.getByTestId('pi-send').click();
   await expect(cards).toHaveCount(0);
-  expect(fixture.commands).toContainEqual({ type: 'prompt', message: `read: "/home/user/${files[0]}", "/home/user/notes.txt"\n\nCompare the files` });
+  const sent = fixture.commands.find((item) => item.type === 'prompt');
+  if (!sent || !('message' in sent)) throw new Error('No prompt sent');
+  expect(splitAttachmentPrompt(sent.message)).toMatchObject({ text: 'Compare the files', paths: [`/home/user/${files[0]}`, '/home/user/notes.txt'] });
   await add(files[1]);
   await page.getByTestId('pi-send').click();
   await expect(page.getByTestId('pi-queued-message')).toBeVisible();
@@ -139,4 +144,36 @@ test('Pi keeps removable attachments on failure and restores queued file cards',
   await page.getByRole('navigation', { name: 'Pi projects', exact: true }).getByRole('button', { name: 'Project notes', exact: true }).click();
   await expect(cards).toContainText('notes.txt');
   expect(fileReads).toEqual([]);
+});
+
+test('Changing workspace retains the composer and editable draft while reconnecting', async ({ page }) => {
+  const fixture = await piPage(page);
+  await page.addInitScript(() => localStorage.setItem('lumo.view.v1:demo:pi:projects', JSON.stringify(['/home/user/other'])));
+  await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-pi').click();
+  const input = page.getByTestId('pi-prompt'); await expect(input).toBeEnabled();
+  await input.fill('Keep my workspace draft');
+  const composer = (await page.locator('.pi-compose').elementHandle())!;
+  const editor = (await input.elementHandle())!;
+  let release!: () => void; let pending = false;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/api/v1/pi/start', async (route) => { pending = true; await gate; await route.fallback(); });
+  try {
+    await page.getByRole('combobox', { name: 'Workspace project' }).click();
+    await page.getByRole('option', { name: 'other', exact: true }).click();
+    await expect.poll(() => pending).toBe(true);
+    expect(await composer.evaluate((node) => node.isConnected)).toBe(true);
+    expect(await editor.evaluate((node) => node.isConnected)).toBe(true);
+    await expect(page.getByTestId('pi-conversation-loading')).toHaveCount(0);
+    await expect(page.getByTestId('pi-model')).toContainText('Balanced');
+    await expect(input).toHaveText('Keep my workspace draft');
+    await expect(input).toBeEnabled(); await input.fill('Keep typing during the workspace change');
+    await expect(page.getByTestId('pi-send')).toBeDisabled();
+    await input.press('Enter');
+    expect(fixture.commands.some((item) => item.type === 'prompt')).toBe(false);
+  } finally { release(); }
+  await expect(page.getByTestId('pi-send')).toBeEnabled();
+  await expect(input).toHaveText('Keep typing during the workspace change');
+  expect(await composer.evaluate((node) => node.isConnected)).toBe(true);
+  expect(fixture.starts.at(-1)?.project).toBe('/home/user/other');
+  expect(fixture.starts.at(-1)?.session).toBeFalsy();
 });

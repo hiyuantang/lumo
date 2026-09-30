@@ -13,7 +13,7 @@ function terminal(message: PiMessage | undefined) {
   return message?.role === 'assistant' && !message.streaming && !message.errorMessage && !['toolUse', 'error', 'aborted'].includes(message.stopReason ?? '') && !(Array.isArray(message.content) && message.content.some((block) => block.type === 'toolCall')) && Boolean(messageText(message).trim());
 }
 function hasWorkContent(message: PiMessage) {
-  return message.role === 'toolResult' || Boolean(message.errorMessage?.trim()) || (typeof message.content === 'string' ? Boolean(message.content.trim()) : message.content.some((block) => block.type === 'text' ? Boolean(block.text?.trim()) : block.type === 'thinking' && Boolean(block.thinking?.trim())));
+  return message.role === 'retry' || message.role === 'toolResult' || Boolean(message.errorMessage?.trim()) || (typeof message.content === 'string' ? Boolean(message.content.trim()) : message.content.some((block) => block.type === 'text' ? Boolean(block.text?.trim()) : block.type === 'thinking' && Boolean(block.thinking?.trim())));
 }
 export function workGroups(messages: PiMessage[], busy: boolean): PiWorkGroup[] {
   const toolArguments = new Map(messages.flatMap((message) => Array.isArray(message.content) ? message.content.flatMap((block) => block.type === 'toolCall' && block.id && block.arguments ? [[block.id, block.arguments] as const] : []) : []));

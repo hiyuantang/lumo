@@ -69,7 +69,7 @@ export function Select({ value, options, onChange, disabled, className = '', ...
         <div id={listId} role="listbox" aria-label={attrs['aria-label'] ?? 'Options'} className="select-options" tabIndex={searchable ? -1 : 0} data-autofocus={!searchable || undefined} aria-activedescendant={current ? `${listId}-${filtered.indexOf(current)}` : undefined}>
           {filtered.map((option, index) => <button id={`${listId}-${index}`} key={option.value} type="button" role="option" tabIndex={-1} aria-selected={option.value === value}
             className={`popup-item${highlight && current?.value === option.value ? ' highlighted' : ''}`} onPointerMove={() => { setActive(option.value); setHighlight(true); }} onClick={() => choose(option.value)}>
-            <span aria-hidden="true" className="dropdown-menu-check">{option.value === value ? '✓' : ''}</span><span>{option.label}</span>
+            <span>{option.label}</span><span aria-hidden="true" className="dropdown-menu-check">{option.value === value ? '✓' : ''}</span>
           </button>)}
           {!filtered.length && <p className="popup-empty">No matches</p>}
         </div>

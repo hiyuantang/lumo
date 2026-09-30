@@ -85,7 +85,7 @@ test('Thinking and tool disclosures stay compact, align icons and animate in bot
   await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-pi').click();
   const thinking = page.locator('.pi-thinking'); const tools = page.getByTestId('pi-tool');
   await expect(thinking).toHaveCount(4);
-  await expect(tools.first().getByRole('button')).toHaveAccessibleName('read notes.txt Done');
+  await expect(tools.first().getByRole('button')).toHaveAccessibleName('Read notes.txt Done');
   expect(await page.getByTestId('pi-messages').evaluate((node) => { const heading = node.querySelector('.pi-work-summary')!.getBoundingClientRect(); const thinking = node.querySelector('.pi-thinking .pi-step-label>span')!.getBoundingClientRect(); const tool = node.querySelector('.pi-tool .pi-step-label>span')!.getBoundingClientRect(); return Math.abs((thinking.top - heading.bottom) - (tool.top - thinking.bottom)); })).toBeLessThan(1);
   await expect(tools.first()).toHaveCSS('border-top-width', '0px');
   await expect(tools.first()).toHaveCSS('border-radius', '0px');

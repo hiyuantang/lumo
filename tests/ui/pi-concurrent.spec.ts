@@ -16,8 +16,8 @@ test('Pi keeps two chats running independently with drafts, queues and backgroun
     if (path.endsWith('/sessions')) return reply({ sessions: [...sessions].map(([id, value]) => ({ id, name: value.name, modified: '2026-09-28T12:00:00Z' })) });
     if (path.endsWith('/start')) {
       const body = request.postDataJSON();
-      if (body.resume && runs.has(body.resume)) return reply({ id: body.resume, project: '/home/user' });
-      const id = `run-${++next}`; runs.set(id, body.session || 'first.jsonl'); return reply({ id, project: '/home/user' });
+      if (body.resume && runs.has(body.resume)) return reply({ id: body.resume, project: '/home/user', permissionMode: body.permissionMode ?? 'ask' });
+      const id = `run-${++next}`; runs.set(id, body.session || 'first.jsonl'); return reply({ id, project: '/home/user', permissionMode: body.permissionMode ?? 'ask' });
     }
     if (path.endsWith('/stop')) { const { id } = request.postDataJSON(); stopped.push(id); runs.delete(id); return reply({ closed: true }); }
     if (path.endsWith('/events')) {
@@ -51,9 +51,17 @@ test('Pi keeps two chats running independently with drafts, queues and backgroun
   await expect(input).toHaveText(''); await expect(input).toBeEnabled();
   await input.fill('Second task'); await page.getByTestId('pi-send').click();
   await expect(sidebar.getByTestId('pi-chat-working')).toHaveCount(2);
+  await expect(page.getByTestId('desktop-pet')).toHaveAttribute('data-mood', 'working');
   expect(stopped).toEqual([]);
   await page.screenshot({ path: '/tmp/lumo-pi-concurrent-running.png', animations: 'disabled' });
   await input.fill('Unsent second draft');
+  const started = next;
+  await page.getByTestId('pi-settings-button').click(); await page.getByRole('tab', { name: 'Extensions', exact: true }).click();
+  const extensions = page.getByTestId('pi-lumo-use');
+  await expect(extensions).toBeEnabled(); await extensions.click(); await expect(extensions).not.toBeChecked();
+  await expect(extensions).toBeEnabled(); await extensions.click(); await expect(extensions).toBeChecked();
+  await expect(extensions).toBeEnabled(); expect(next).toBe(started); expect(stopped).toEqual([]);
+  await page.getByTestId('pi-home-button').click(); await expect(input).toHaveText('Unsent second draft');
   await sidebar.getByRole('button', { name: 'first', exact: true }).click();
   await expect(input).toHaveText('Unsent first draft');
   await expect(page.getByLabel('Queued messages')).toContainText('First follow-up');
@@ -63,6 +71,7 @@ test('Pi keeps two chats running independently with drafts, queues and backgroun
   await expect(input).toHaveText('Unsent second draft');
   await input.fill(''); await page.getByTestId('pi-send').click();
   await expect(sidebar.getByTestId('pi-chat-working')).toHaveCount(1);
+  await expect(page.getByTestId('desktop-pet')).toHaveAttribute('data-mood', 'working');
   expect(calls.filter((call) => call.type === 'abort').map((call) => call.id)).toEqual(['run-2']);
   await page.getByTestId('window-close-pi').click();
   await expect(page.getByRole('alertdialog')).toContainText('other running chats');
@@ -71,11 +80,20 @@ test('Pi keeps two chats running independently with drafts, queues and backgroun
   const message: PiMessage = { role: 'assistant', content: 'First completed in the background', stopReason: 'stop' }; first.messages.push(message);
   first.events.push({ type: 'message_start', message }, { type: 'message_end', message }, { type: 'agent_settled' });
   await expect(sidebar.getByTestId('pi-chat-working')).toHaveCount(0);
+  await expect(page.getByTestId('desktop-pet')).toHaveAttribute('data-mood', 'done');
+  await expect(page.getByTestId('pet-bubble')).toContainText('Work done');
   await expect.poll(() => stopped.includes('run-1')).toBe(true);
   await sidebar.getByRole('button', { name: 'first', exact: true }).click();
   await expect(input).toHaveText('Unsent first draft');
   await expect(page.getByTestId('pi-messages')).toContainText('First completed in the background');
   await expect(page.getByLabel('Queued messages')).toHaveCount(0);
+  await page.getByTestId('notifications-button').click();
+  await expect(page.getByTestId('notification-item')).toHaveCount(2);
+  await expect(page.getByTestId('notification-item').first()).toContainText('Pi finished');
+  await expect(page.getByTestId('notification-item').first()).toContainText('first');
+  await expect(page.getByTestId('notification-item').last()).toContainText('Pi stopped');
+  await expect(page.getByTestId('notification-item').last()).toContainText('second');
+  await page.keyboard.press('Escape');
   await page.screenshot({ path: '/tmp/lumo-pi-independent-chats.png', animations: 'disabled' });
 });
 

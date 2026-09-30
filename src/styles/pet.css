@@ -1,0 +1,73 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.desktop-pet { position:fixed; width:84px; height:84px; z-index:3100; pointer-events:none; }
+.pet-handle { display:block; width:84px; height:84px; padding:0; border:0; background:transparent; pointer-events:auto; cursor:grab; touch-action:none; border-radius:20px; }
+.desktop-pet.is-passive .pet-handle,.desktop-pet.is-passive .pet-bubble {pointer-events:none;}
+.pet-handle:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.desktop-pet.is-dragging .pet-handle { cursor:grabbing; }
+.pet-sprite {display:block;width:100%;height:100%;overflow:visible;--pet-coat:#b7b4cf;--pet-light:#eee9e1;--pet-mark:#81748e;--pet-ink:#34313e;--pet-paper:#fffaf0;}
+.pet-fox {--pet-coat:#e6a15d;--pet-light:#fff0da;--pet-mark:#a96846;--pet-ink:#47372f;}
+.pet-robot {--pet-coat:#91bbae;--pet-light:#e5f2e9;--pet-mark:#548d7d;--pet-ink:#2d4741;}
+.pet-ground {fill:var(--text);opacity:.08;transform-origin:48px 87px;animation:pet-shadow 4s ease-in-out infinite;}
+.pet-body {transform-origin:48px 85px;animation:pet-breathe 4s ease-in-out infinite;}
+.pet-head {transform-origin:48px 54px;animation:pet-look 9s ease-in-out infinite;}
+.pet-tail {transform-origin:65px 77px;animation:pet-tail-sway 3.2s ease-in-out infinite;}
+.pet-ear-left {transform-origin:32px 32px;animation:pet-ear-twitch 8s ease-in-out infinite;}
+.pet-ear-right {transform-origin:64px 32px;animation:pet-ear-twitch 8s 1.2s ease-in-out infinite;}
+.pet-eyes {transform-origin:48px 39px;animation:pet-blink 6.4s ease-in-out infinite;}
+.pet-arm-left {transform-origin:30px 59px;}
+.pet-arm-right {transform-origin:67px 58px;}
+.pet-arm-wave,.pet-work-prop,.pet-pencil,.pet-mouth-happy,.pet-sparkles,.pet-thoughts {opacity:0;transition:opacity 200ms ease;}
+.pet-mouth-rest,.pet-arm-rest {transition:opacity 200ms ease;}
+.pet-working .pet-body {animation:pet-working-breathe 2.4s ease-in-out infinite;}
+.pet-working .pet-head {animation:pet-study 2.4s ease-in-out infinite;}
+.pet-working .pet-tail {animation-duration:1.8s;}
+.pet-working .pet-arm-left {transform:rotate(-45deg);}
+.pet-working .pet-arm-right {animation:pet-write 700ms ease-in-out infinite;}
+.pet-working .pet-work-prop,.pet-working .pet-pencil {opacity:1;}
+.pet-working .pet-thoughts {animation:pet-thinking 2.4s ease-in-out infinite;}
+.pet-working .pet-thoughts circle:nth-child(2) {animation:pet-dot 1.2s 200ms ease-in-out infinite;}
+.pet-working .pet-thoughts circle:nth-child(3) {animation:pet-dot 1.2s 400ms ease-in-out infinite;}
+.pet-done .pet-body {animation:pet-hop 900ms cubic-bezier(.4,0,.3,1) infinite;}
+.pet-done .pet-ground {animation:pet-hop-shadow 900ms ease-in-out infinite;}
+.pet-done .pet-head {animation:pet-happy-nod 900ms ease-in-out infinite;}
+.pet-done .pet-arm-right {animation:pet-wave 600ms ease-in-out infinite;}
+.pet-done .pet-tail {animation-duration:800ms;}
+.pet-done .pet-mouth-rest,.pet-done .pet-arm-rest {opacity:0;}
+.pet-done .pet-arm-wave {opacity:1;}
+.pet-done .pet-mouth-happy {opacity:1;}
+.pet-done .pet-sparkles {transform-origin:48px 30px;animation:pet-sparkle 1.8s ease-in-out infinite;}
+.desktop-pet.is-dragging .pet-sprite * {animation-play-state:paused;}
+.pet-bubble { position:absolute; bottom:86px; display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:38px; padding:8px 10px 8px 13px; border:1px solid var(--border-strong); border-radius:12px; background:var(--surface); color:var(--text); box-shadow:var(--shadow-menu); pointer-events:auto; font-size:12px; font-weight:550; line-height:1.4; animation:pet-bubble-in 160ms var(--ease-out); }
+.pet-bubble::after { content:''; position:absolute; bottom:-5px; left:clamp(14px, var(--pet-tail), calc(100% - 18px)); width:8px; height:8px; border-right:1px solid var(--border-strong); border-bottom:1px solid var(--border-strong); background:var(--surface); rotate:45deg; }
+.pet-bubble.below { bottom:auto; top:86px; }
+.pet-bubble.below::after { bottom:auto; top:-5px; rotate:225deg; }
+.pet-bubble-close { flex:none; display:grid; place-items:center; width:20px; height:20px; padding:0; border-radius:5px; color:var(--text-muted); }
+.pet-bubble-close:hover { color:var(--text); background:var(--surface-chrome); }
+.pi-pet-settings .pi-pet-character { display:flex; align-items:center; gap:10px; flex:none; }
+.pi-pet-character .pet-sprite { width:54px; height:54px; flex:none; animation:none; }
+
+@keyframes pet-breathe {0%,100% {transform:translateY(0) scale(1);} 50% {transform:translateY(-1px) scale(1.01,1.025);}}
+@keyframes pet-shadow {0%,100% {transform:scaleX(1);} 50% {transform:scaleX(.94);}}
+@keyframes pet-look {0%,25%,65%,100% {transform:rotate(0);} 35%,50% {transform:rotate(-5deg);} 78%,88% {transform:rotate(4deg);}}
+@keyframes pet-tail-sway {0%,100% {transform:rotate(-8deg);} 50% {transform:rotate(10deg);}}
+@keyframes pet-ear-twitch {0%,70%,80%,100% {transform:rotate(0);} 73%,77% {transform:rotate(-9deg);} 75% {transform:rotate(4deg);}}
+@keyframes pet-blink {0%,43%,49%,94%,100% {transform:scaleY(1);} 46%,97% {transform:scaleY(.08);}}
+@keyframes pet-working-breathe {0%,100% {transform:translateY(0);} 50% {transform:translateY(1px) scale(1.01,.99);}}
+@keyframes pet-study {0%,100% {transform:translateY(1px) rotate(4deg);} 50% {transform:translateY(3px) rotate(-3deg);}}
+@keyframes pet-write {0%,100% {transform:rotate(54deg);} 50% {transform:rotate(66deg);}}
+@keyframes pet-thinking {0%,100% {opacity:.25;} 50% {opacity:.8;}}
+@keyframes pet-dot {0%,100% {opacity:.25;} 50% {opacity:1;}}
+@keyframes pet-hop {0%,100% {transform:translateY(0) scale(1.03,.98);} 40%,55% {transform:translateY(-6px) scale(.99,1.03);} 80% {transform:translateY(0) scale(1.05,.96);}}
+@keyframes pet-hop-shadow {0%,100% {transform:scaleX(1);opacity:.08;} 45% {transform:scaleX(.8);opacity:.04;}}
+@keyframes pet-happy-nod {0%,100% {transform:rotate(-3deg);} 50% {transform:rotate(4deg);}}
+@keyframes pet-wave {0%,100% {transform:rotate(-12deg);} 50% {transform:rotate(8deg);}}
+@keyframes pet-sparkle {0%,100% {opacity:0;transform:scale(.8);} 40%,60% {opacity:.8;transform:scale(1);}}
+@keyframes pet-bubble-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+.motion-reduced .pet-sprite *,.motion-reduced .pet-bubble {animation:none;transition:none;}
+.motion-reduced .pet-working .pet-arm-right {transform:rotate(60deg);}
+.motion-reduced .pet-done .pet-arm-right {transform:rotate(-6deg);}
+@media (prefers-reduced-motion:reduce) {.pet-sprite *,.pet-bubble {animation:none;transition:none;}.pet-working .pet-arm-right {transform:rotate(60deg);}.pet-done .pet-arm-right {transform:rotate(-6deg);}}
+
+.pi-pet-settings .pi-settings-toggle > span { min-width:0; }
+
+.pi-pet-character .pet-sprite * {animation:none;transition:none;}

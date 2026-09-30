@@ -147,7 +147,8 @@
 .menubar-right, .menubar-menus, .menubar-brand { flex-shrink: 0; }
 
 .menubar-app-name { font-weight: 700; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.menubar-check { display: inline-block; width: 20px; }
+.menubar-trailing { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.menubar-check { flex: 0 0 14px; text-align: center; }
 .menubar-dropdown { max-height: calc(100dvh - 48px); overflow-y: auto; max-width: calc(100vw - 16px); }
 @media (max-width: 700px) {
   .menubar-date { display: none; }

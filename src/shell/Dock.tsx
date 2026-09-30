@@ -12,6 +12,7 @@ import { WindowThumbnail } from './WindowThumbnail';
 import { windowTitle } from './WindowContext';
 import { useReorder } from './useReorder';
 import { useDockLayout } from './useDockLayout';
+import { DOCK_SCALE } from './windowGeometry';
 import '../styles/dock.css';
 
 export function Dock({ onOverview }: { onOverview: () => void }) {
@@ -58,7 +59,7 @@ export function Dock({ onOverview }: { onOverview: () => void }) {
   }
 
   return (
-    <nav className="dock" data-testid="dock" aria-label="Dock" onKeyDown={onKeyDown}>
+    <nav className="dock" data-testid="dock" aria-label="Dock" style={{ '--dock-scale': DOCK_SCALE } as CSSProperties} onKeyDown={onKeyDown}>
       <div ref={tray} className="dock-tray" style={{ '--dock-app-count': CORE_APP_COUNT + 1, '--dock-count': visible.length + 2 + Math.min(dockWindows.length, 3) } as CSSProperties}>
         <div className="dock-surface" data-testid="dock-surface" aria-hidden="true" />
         <div className="dock-apps" aria-label="Applications"><button type="button" className="dock-app" data-testid="dock-overview" aria-label="Overview" aria-haspopup="dialog" title="Overview" onClick={onOverview}><span className="dock-icon"><svg className="app-icon" viewBox="75 78 1105 1105" aria-hidden="true"><image href={overviewIcon} width="1254" height="1254"/></svg></span><span className="dock-label" aria-hidden="true">Overview</span><span className="dock-dot" aria-hidden="true"/></button>{visible.map((appId) => {

@@ -12,3 +12,5 @@ cd "$ROOT/server"
 "$ROOT/.tools/go/bin/go" test ./...
 cd "$ROOT"
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v
+
+node --test tests/pi-questions.test.mjs tests/pi-model-images.test.mjs tests/lumo-use.test.mjs

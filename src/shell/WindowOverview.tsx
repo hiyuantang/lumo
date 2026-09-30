@@ -18,11 +18,6 @@ const rectOf = (element: Element): Rect => {
 };
 const transform = (from: Rect, to: Rect) => `translate(${from.x - to.x}px, ${from.y - to.y}px) scale(${from.w / to.w}, ${from.h / to.h})`;
 
-function dockRect(win: WindowState): Rect | undefined {
-  const dock = document.querySelector(`[data-testid="dock-minimized-${win.id}"] .dock-window-canvas`) ?? document.querySelector(`[data-testid="dock-app-${win.appId}"] .dock-icon`);
-  return dock ? rectOf(dock) : undefined;
-}
-
 export function WindowOverview({ onClose }: { onClose: () => void }) {
   const { state, actions, reducedMotion } = useShell();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -32,7 +27,7 @@ export function WindowOverview({ onClose }: { onClose: () => void }) {
   const animations = useRef<Animation[]>([]);
   const previous = useRef(new Map<WindowId, Rect>());
   const [placements, setPlacements] = useState<Placement[]>([]);
-  const windowIds = Object.keys(state.windows).join('|');
+  const windowIds = Object.values(state.windows).filter((win) => win && !win.minimized).map((win) => win!.id).join('|');
   const windowsRef = useRef(state.windows);
   windowsRef.current = state.windows;
 
@@ -46,7 +41,7 @@ export function WindowOverview({ onClose }: { onClose: () => void }) {
     const signature = `${windowIds}:${state.viewport.w}:${state.viewport.h}`;
     if (measured.current === signature) return;
     measured.current = signature;
-    const windows = Object.values(windowsRef.current).filter((win): win is WindowState => Boolean(win)).sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id));
+    const windows = Object.values(windowsRef.current).filter((win): win is WindowState => !!win && !win.minimized).sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id));
     const sources = windows.map((win) => {
       const element = document.querySelector<HTMLElement>(`[data-testid="window-${win.id}"]`);
       if (!element) return { x: win.x, y: win.y, w: win.w, h: win.h };
@@ -60,7 +55,7 @@ export function WindowOverview({ onClose }: { onClose: () => void }) {
     });
     const padding = state.viewport.w < 600 ? 16 : 24;
     const targets = overviewLayout(sources, { x: padding, y: MENUBAR_H + 16, w: state.viewport.w - padding * 2, h: Math.max(60, state.viewport.h - MENUBAR_H - 32 - dockSpace(state.viewport)) });
-    setPlacements(windows.map((win, index) => ({ win, source: sources[index], origin: win.minimized ? dockRect(win) ?? sources[index] : sources[index], target: targets[index] })));
+    setPlacements(windows.map((win, index) => ({ win, source: sources[index], origin: sources[index], target: targets[index] })));
   }, [state.viewport.w, state.viewport.h, windowIds]);
 
   useLayoutEffect(() => {
@@ -94,11 +89,10 @@ export function WindowOverview({ onClose }: { onClose: () => void }) {
       const button = dialog.current?.querySelector<HTMLElement>(`[data-overview-window="${win.id}"]`);
       if (!button || reducedMotion) return;
       const current = rectOf(button);
-      const destination = win.minimized && win.id !== selected ? dockRect(win) ?? source : source;
       button.style.zIndex = String(win.id === selected ? 10000 : win.z);
       const animation = button.animate([
         { transform: transform(current, target) },
-        { transform: transform(destination, target) },
+        { transform: transform(source, target) },
       ], { duration, easing, fill: 'forwards' });
       animations.current.push(animation);
       pending.push(animation.finished.catch(() => {}));
@@ -136,11 +130,11 @@ export function WindowOverview({ onClose }: { onClose: () => void }) {
   return <dialog ref={dialog} className="window-overview" data-testid="window-overview" aria-labelledby="overview-title" onCancel={(event) => { event.preventDefault(); close(); }} onKeyDown={keyboard} onClick={(event) => { if (event.target === event.currentTarget) close(); }}>
     <h1 id="overview-title" className="overview-title">Overview</h1>
     {!windowIds && <button type="button" className="btn overview-done" onClick={() => close()} aria-label="Close overview">Done</button>}
-    {!windowIds && <p className="overview-empty">Your open windows will appear here.</p>}
-    {placements.map(({ win, target }, index) => <div key={win.id} className="overview-window" role="group" style={{ left: target.x, top: target.y, width: target.w, height: target.h, zIndex: win.z }} data-overview-window={win.id} data-testid={`overview-window-${win.id}`} aria-label={`${windowTitle(win)}${win.minimized ? ', minimized' : ''}`}>
+    {!windowIds && <p className="overview-empty">Your desktop windows will appear here.</p>}
+    {placements.map(({ win, target }, index) => <div key={win.id} className="overview-window" role="group" style={{ left: target.x, top: target.y, width: target.w, height: target.h, zIndex: win.z }} data-overview-window={win.id} data-testid={`overview-window-${win.id}`} aria-label={windowTitle(win)}>
       <button type="button" className="overview-select" data-overview-select={win.id} aria-label={`Show ${windowTitle(win)}`} onClick={() => close(win.id)}>
         <span className="overview-preview"><WindowThumbnail win={win} overview/></span>
-        <span className="overview-caption"><span className="overview-icon"><AppIcon appId={win.appId}/></span><strong>{windowTitle(win)}</strong>{win.minimized && <small>Minimized</small>}</span>
+        <span className="overview-caption"><span className="overview-icon"><AppIcon appId={win.appId}/></span><strong>{windowTitle(win)}</strong></span>
       </button>
       <button type="button" className="overview-close" data-testid={`overview-close-${win.id}`} aria-label={`Close ${windowTitle(win)}`} title={`Close ${windowTitle(win)}`} onClick={() => {
         if (closing.current) return;

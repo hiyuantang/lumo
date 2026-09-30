@@ -1,15 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { PiContextBudget, PiCompaction, PiCompactionChange, PiProvider, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiCommand, PiData, PiEvent, PiEvents, PiMessage, PiModel, PiReply, PiSession } from '../api/pi';
+import type { PiImageSettings, PiTemplate, PiPermissionMode, PiContextBudget, PiCompaction, PiCompactionChange, PiProvider, PiConnection, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiCommand, PiData, PiEvent, PiEvents, PiMessage, PiModel, PiReply, PiSession } from '../api/pi';
 const models: PiModel[] = [{ id: 'demo-balanced', name: 'Balanced', provider: 'Demo', reasoning: true }, { id: 'demo-fast', name: 'Fast', provider: 'Demo' }];
-interface Saved { archived?: boolean; session: PiSession; project: string; messages: PiMessage[]; model: PiModel; level: string }
+interface Saved { permissionMode?: PiPermissionMode; archived?: boolean; session: PiSession; project: string; messages: PiMessage[]; model: PiModel; level: string }
 interface Run { saved: Saved; events: PiEvent[]; busy: boolean; queue: { type: 'steer' | 'follow_up'; message: string }[]; model: PiModel; level: string; timer?: number }
+const templates = new Map<string, PiTemplate>();
 const instructions = new Map<PiInstructionKind, PiInstruction>();
+let imageSettings: PiImageSettings = { mode: 'original', revision: 'initial' };
 let compactionDefaults: { usageBudget?: PiContextBudget; enabled: boolean; reserveTokens: number; keepRecentTokens: number; revision: string } = { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000, revision: 'initial' };
 const compactionOverrides = new Map<string, { reserveTokens: number; keepRecentTokens: number }>();
 const saved: Saved[] = [];
+let lastPermissionMode: PiPermissionMode = 'ask';
 let lastSelection = { model: models[0], level: 'medium' };
 const runs = new Map<string, Run>();
 export const mockPi = {
+  async imageSettings(): Promise<PiImageSettings> { return { ...imageSettings }; },
+  async saveImageSettings(change: PiImageSettings): Promise<PiImageSettings> {
+    if (change.revision !== imageSettings.revision) throw new Error('Pi settings changed on the server. Reload before saving.');
+    imageSettings = { mode: change.mode, revision: crypto.randomUUID() }; return { ...imageSettings };
+  },
+  async templates() { return [...templates.values()]; },
+  async saveTemplate(template: Pick<PiTemplate, 'name' | 'content' | 'revision'>, remove = false) { if (remove) templates.delete(template.name); else templates.set(template.name, { ...template, path: `/home/user/.pi/agent/prompts/${template.name}.md`, revision: crypto.randomUUID() }); },
   async reference(project: string, session: string) { if (!saved.some((item) => item.project === project && item.session.id === session)) throw new Error('This saved conversation is unavailable.'); return { project, session, path: `/home/user/.local/state/lumo/pi-sessions/demo/${session}.jsonl`, reader: '/usr/local/bin/lumod' }; },
   async compaction(model: string): Promise<PiCompaction> {
     return { ...compactionDefaults, model, defaultReserveTokens: compactionDefaults.reserveTokens, defaultKeepRecentTokens: compactionDefaults.keepRecentTokens, customized: compactionOverrides.has(model), ...compactionOverrides.get(model) };
@@ -23,6 +33,7 @@ export const mockPi = {
     else compactionOverrides.delete(change.model);
     return mockPi.compaction(change.model);
   },
+  async connections(): Promise<{ providers: PiConnection[] }> { return { providers: [{ id: 'demo', name: 'Demo', credential: 'api_key', keyPreview: '••••demo' }] }; },
   async providers(): Promise<{ providers: PiProvider[] }> { return { providers: [{ id: 'demo', name: 'Demo', methods: [], credential: 'api_key' }] }; },
   async authStart(_provider: string, _method: PiAuthMethod, _operation: 'login' | 'logout'): Promise<PiAuthState> { throw new Error('Provider sign-in is available on your server. Demo never stores credentials.'); },
   async authState(_id: string): Promise<PiAuthState> { throw new Error('No provider setup is running.'); },
@@ -34,7 +45,7 @@ export const mockPi = {
     if (before.revision !== revision) throw new Error('Instructions changed on the server. Reload before saving.');
     const value = { ...before, content, exists: true, revision: crypto.randomUUID() }; instructions.set(kind, value); return value;
   },
-  clear() { compactionDefaults = { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000, revision: 'initial' }; compactionOverrides.clear(); instructions.clear(); for (const run of runs.values()) window.clearTimeout(run.timer); runs.clear(); saved.length = 0; lastSelection = { model: models[0], level: 'medium' }; },
+  clear() { templates.clear(); imageSettings = { mode: 'original', revision: 'initial' }; compactionDefaults = { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000, revision: 'initial' }; compactionOverrides.clear(); instructions.clear(); for (const run of runs.values()) window.clearTimeout(run.timer); runs.clear(); saved.length = 0; lastSelection = { model: models[0], level: 'medium' }; lastPermissionMode = 'ask'; },
   async sessions(project: string) { project = project === '~' ? '/home/user' : project; return saved.filter((item) => item.project === project && !item.archived).map((item) => item.session); },
   async deleteSession(project: string, session: string) {
     project = project === '~' ? '/home/user' : project;
@@ -53,13 +64,16 @@ export const mockPi = {
     const item = saved.find((item) => item.project === project && item.session.id === session);
     if (!item) throw new Error('Conversation is unavailable.'); item.archived = false;
   },
-  async start(project: string, session?: string) {
+  async start(project: string, session?: string, _resume?: string, permissionMode?: PiPermissionMode, rememberPermissionMode = false) {
     project = project === '~' ? '/home/user' : project;
     const id = crypto.randomUUID();
     let item = saved.find((item) => item.session.id === session && item.project === project && !item.archived);
     if (!item) { item = { ...lastSelection, project, messages: [], session: { id: `${id}.jsonl`, name: 'New conversation', modified: new Date().toISOString() } }; saved.unshift(item); }
+    permissionMode ??= item.permissionMode ?? lastPermissionMode;
+    item.permissionMode = permissionMode;
+    if (rememberPermissionMode) lastPermissionMode = permissionMode;
     runs.set(id, { saved: item, events: [], busy: false, queue: [], model: item.model, level: item.level });
-    return { id, project: project === '~' ? '/home/user' : project };
+    return { id, project: project === '~' ? '/home/user' : project, permissionMode };
   },
   async command(id: string, command: PiCommand): Promise<PiReply> {
     const run = runs.get(id); if (!run) throw new Error('Pi has stopped.');

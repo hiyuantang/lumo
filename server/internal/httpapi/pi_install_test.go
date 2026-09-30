@@ -28,6 +28,13 @@ type piFixture struct {
 func piTestWorker(t *testing.T, version string) (*piWorker, *piFixture) {
 	t.Helper()
 	home := t.TempDir()
+	bin := t.TempDir()
+	for _, name := range []string{"node", "npm"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	fixture := &piFixture{version: version}
 	if version != "" {
 		fixture.path = filepath.Join(home, ".local/share/lumo/pi/bin/pi")
@@ -238,7 +245,11 @@ func TestPiOperationKeepsAgentActiveAndExcludesAnotherMutation(t *testing.T) {
 	if err := worker.start("pi_active", plan.ID); err != nil {
 		t.Fatal(err)
 	}
-	<-entered
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Pi installation did not reach npm")
+	}
 	if server.ActiveOperations() != 1 {
 		t.Error("running operation not counted")
 	}

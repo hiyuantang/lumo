@@ -15,6 +15,7 @@ async function openSettings(page: Page) {
     const failure = (status: number, code: string, message: string, details = {}) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify({ ok: false, error: { code, message, details } }) });
     if (path === '/api/v1/auth/session') return failure(401, 'unauthorized', 'Sign in');
     if (path === '/api/v1/auth/login') return data({ user: { name: 'demo', uid: 1000, home: '/home/demo' }, csrf: 'test-csrf' });
+    if (path === '/api/v1/apps') return data({ canInstall: false, apps: [] });
     if (path === '/api/v1/auth/reauth') { authenticated = true; return data({}); }
     if (path === '/api/v1/system/identity') return data({ hostname: settings.hostname, os: { prettyName: 'Ubuntu test', kernel: 'test-kernel' }, architecture: 'aarch64', serverTime: settings.serverTime });
     if (path === '/api/v1/system/overview') return data({ uptimeSeconds: 86400, memoryUsedBytes: 1073741824, memoryTotalBytes: 4294967296, failedUnits: 0, updatesPending: 3, securityUpdatesPending: 1 });

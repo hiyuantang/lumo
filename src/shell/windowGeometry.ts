@@ -18,11 +18,12 @@ export type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
 export const MENUBAR_H = 32;
 export const COMPACT_WIDTH = 700;
+export const DOCK_SCALE = 0.9;
 const SNAP_DISTANCE = 20;
 const TILE_GAP = 8;
 
 export function dockSpace(viewport: Viewport): number {
-  return viewport.w <= 850 ? Math.min(38, Math.max(20, (viewport.w - 32) / (CORE_APP_COUNT + 1) - 7)) + 35 : 96;
+  return viewport.w <= 900 ? (Math.min(38, Math.max(20, (viewport.w - 32) / (CORE_APP_COUNT + 1) - 7)) + 33) * DOCK_SCALE + 2 : 94 * DOCK_SCALE + 2;
 }
 
 export function workArea(viewport: Viewport): Rect {

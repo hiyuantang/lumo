@@ -68,7 +68,7 @@ test('Skill references preserve displayed text and attachment round trips', () =
   const text = 'Review this with /skill:review please';
   const expanded = expandSkillCommands(attachmentPrompt(text, ['/home/user/main.ts']), [{ id: 'review', name: 'review', path: '/home/user/.agents/skills/review/SKILL.md', description: '' }]);
   expect(expanded).toContain('Read the listed SKILL.md files');
-  expect(splitAttachmentPrompt(expanded)).toEqual({ text, paths: ['/home/user/main.ts'], references: [], skills: [{ name: 'review', path: '/home/user/.agents/skills/review/SKILL.md' }] });
+  expect(splitAttachmentPrompt(expanded)).toEqual({ text, paths: ['/home/user/main.ts'], references: [], order: ['file:/home/user/main.ts'], skills: [{ name: 'review', path: '/home/user/.agents/skills/review/SKILL.md' }] });
   expect(expandSkillCommands('https://host/skill:review /home/user', [])).toBe('https://host/skill:review /home/user');
 });
 

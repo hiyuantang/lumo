@@ -2,6 +2,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -55,6 +56,22 @@ func readPiSettingsJSON(dir string) (map[string]json.RawMessage, string, error) 
 	return result, "sha256:" + hex.EncodeToString(hash[:]), nil
 }
 
+func piSettingsRevision(dir string, settings map[string]json.RawMessage, keys ...string) string {
+	selected := map[string]any{}
+	for _, key := range keys {
+		if raw, ok := settings[key]; ok {
+			var value any
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			decoder.UseNumber()
+			_ = decoder.Decode(&value)
+			selected[key] = value
+		}
+	}
+	data, _ := json.Marshal(selected)
+	hash := sha256.Sum256(append([]byte(filepath.Join(dir, "settings.json")+"\x00"+strings.Join(keys, ",")+"\x00"), data...))
+	return "sha256:" + hex.EncodeToString(hash[:])
+}
+
 func writePiSettingsJSON(dir string, settings map[string]json.RawMessage) error {
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
@@ -105,7 +122,7 @@ func piTokenSetting(object map[string]json.RawMessage, key string, fallback int6
 
 func readPiCompaction(dir, model string) (piCompaction, error) {
 	value := piCompaction{Model: model, Enabled: true}
-	settings, revision, err := readPiSettingsJSON(dir)
+	settings, _, err := readPiSettingsJSON(dir)
 	if err != nil {
 		return value, err
 	}
@@ -113,7 +130,7 @@ func readPiCompaction(dir, model string) (piCompaction, error) {
 	if err != nil {
 		return value, err
 	}
-	value.Revision = revision
+	value.Revision = piSettingsRevision(dir, settings, "compaction", "lumoContextBudget")
 	compaction, err := piSettingsObject(settings, "compaction")
 	if err != nil {
 		return value, err
@@ -208,12 +225,12 @@ func (s *Server) handlePiCompaction(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, NewError(CodeConflict, "Pi settings changed on the server. Reload before saving."))
 			return
 		}
-		settings, revision, err := readPiSettingsJSON(dir)
+		settings, _, err := readPiSettingsJSON(dir)
 		if err != nil {
 			WriteError(w, err)
 			return
 		}
-		if revision != before.Revision {
+		if piSettingsRevision(dir, settings, "compaction", "lumoContextBudget") != before.Revision {
 			WriteError(w, NewError(CodeConflict, "Pi settings changed on the server. Reload before saving."))
 			return
 		}

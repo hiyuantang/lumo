@@ -47,3 +47,33 @@ test('Dock expands and contracts smoothly as snapshots arrive and leave', async 
   await expect(page.getByTestId('dock-minimized-files')).toHaveCount(0);
   expect(await surface.evaluate((element) => element.getAnimations().length)).toBe(0);
 });
+
+for (const width of [1440, 390]) {
+  test(`Dock fits more minimized windows and keeps overflow reachable at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: width === 390 ? 'dark' : 'light' });
+    await page.goto('/');
+    await page.getByTestId('login-username').fill('demo');
+    await page.getByTestId('login-password').fill('demo');
+    await page.getByTestId('login-submit').click();
+    for (const app of ['files', 'terminal', 'library', 'settings', 'home', 'skills']) {
+      await page.getByTestId(`dock-app-${app}`).click();
+      await page.getByTestId(`window-minimize-${app}`).click();
+      await expect(page.getByTestId(`dock-minimized-${app}`)).toBeVisible();
+    }
+    const tray = (await page.locator('.dock-tray').boundingBox())!;
+    expect(tray.x).toBeGreaterThanOrEqual(0);
+    expect(tray.x + tray.width).toBeLessThanOrEqual(width);
+    const windows = page.getByTestId('dock-windows');
+    await expect(windows.getByRole('button')).toHaveCount(6);
+    if (width === 1440) expect((await windows.boundingBox())!.width).toBeGreaterThan(286);
+    await page.getByTestId('dock-app-trash').focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.getByTestId('dock-minimized-skills')).toBeFocused();
+    await expect(page.getByTestId('dock-minimized-skills')).toBeInViewport();
+    await page.screenshot({ path: `/tmp/lumo-dock-capacity-${width}.png`, animations: 'disabled' });
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('window-skills')).toBeVisible();
+    await expect(page.getByTestId('dock-minimized-skills')).toHaveCount(0);
+  });
+}

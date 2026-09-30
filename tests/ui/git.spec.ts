@@ -18,6 +18,45 @@ async function open(page: Page) {
   await expect(page.getByTestId('git-file-src/agent.ts')).toBeVisible();
 }
 
+test('Git restores the last repository after closing and reloading', async ({ page }) => {
+  const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message));
+  await open(page);
+  await page.getByRole('button', { name: 'Close Git', exact: true }).click();
+  await expect(page.getByTestId('app-git')).toHaveCount(0);
+  await page.getByTestId('dock-app-git').click();
+  await expect(page.getByTestId('git-repository')).toContainText('lumo-agent');
+  await expect(page.getByTestId('git-diff')).toContainText('os.freemem()');
+  await page.getByRole('button', { name: 'Close Git', exact: true }).click();
+  await expect(page.getByTestId('app-git')).toHaveCount(0);
+  await page.reload();
+  await page.getByTestId('dock-app-git').click();
+  await expect(page.getByTestId('git-repository')).toContainText('lumo-agent');
+  await expect(page.getByTestId('git-file-src/agent.ts')).toBeVisible();
+  await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('Git recovers from an unavailable remembered repository', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('lumo.view.v1:demo:git:recent', JSON.stringify(['/home/user/missing', '/home/user/projects/lumo-agent']));
+  });
+  await page.goto('/');
+  await page.getByTestId('login-username').fill('demo');
+  await page.getByTestId('login-password').fill('demo');
+  await page.getByTestId('login-submit').click();
+  await page.getByTestId('dock-app-git').click();
+  await expect(page.getByRole('alert')).toContainText('This folder is not a Git repository.');
+  await expect(page.getByTestId('git-choose-folder')).toBeEnabled();
+  await page.getByTestId('git-repository').click();
+  await page.getByRole('menuitemradio', { name: 'lumo-agent', exact: true }).click();
+  await expect(page.getByTestId('git-file-src/agent.ts')).toBeVisible();
+  await page.getByRole('button', { name: 'Close Git', exact: true }).click();
+  await expect(page.getByTestId('app-git')).toHaveCount(0);
+  await page.getByTestId('dock-app-git').click();
+  await expect(page.getByTestId('git-repository')).toContainText('lumo-agent');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
 test('Git stages selected files, commits, and shows history without losing other changes', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message));
   await open(page);
@@ -124,6 +163,8 @@ test('Git uninstall and install reuse App Library and restore the dock entry', a
   await expect(page.getByTestId('library-primary')).toHaveText('Uninstall');
   await page.getByTestId('library-primary').click();
   await expect(page.getByTestId('uninstall-normal')).toBeChecked();
+  const uninstallChoice = page.locator('.library-uninstall-options label').first();
+  expect((await uninstallChoice.locator('input').boundingBox())!.x).toBeGreaterThan((await uninstallChoice.locator('span').boundingBox())!.x);
   await expect(page.getByRole('alertdialog')).toContainText('Repositories, SSH keys and account Git settings are preserved.');
   await page.getByTestId('server-app-confirm-ok').click();
   await expect(page.getByTestId('library-primary')).toHaveText('Install');
@@ -360,6 +401,7 @@ test('The header checkbox stages visible files and clears all without a redundan
   await page.getByTestId('git-file-src/agent.ts').click();
   await expect(page.getByTestId('git-stage-src/agent.ts')).not.toBeChecked();
   expect((await page.getByTestId('git-stage-all').boundingBox())!.x).toBeCloseTo((await page.getByTestId('git-stage-src/agent.ts').boundingBox())!.x, 0);
+  expect((await page.getByTestId('git-stage-src/agent.ts').boundingBox())!.x).toBeGreaterThan((await page.getByTestId('git-file-src/agent.ts').boundingBox())!.x);
   await page.getByTestId('git-stage-src/agent.ts').check();
   await expect(page.getByTestId('git-stage-all')).toHaveJSProperty('indeterminate', true);
   await page.getByLabel('Filter changed files').fill('README');
@@ -453,6 +495,7 @@ test('Selected menu items use checkmarks with only one transient highlight in bo
     await page.keyboard.press('Escape');
     await page.getByTestId('git-branch').click();
     const branch = page.getByRole('button', { name: 'Switch to main', exact: true });
+    expect((await branch.locator('.git-branch-check').boundingBox())!.x).toBeGreaterThan((await branch.locator('.git-branch-copy').boundingBox())!.x);
     await expect(branch).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
     await page.screenshot({ path: `/tmp/lumo-menu-branch-${theme}.png`, animations: 'disabled' });
     await page.keyboard.press('Escape');
@@ -468,4 +511,44 @@ test('Selected menu items use checkmarks with only one transient highlight in bo
     await expect(page.getByRole('option', { selected: true })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
     await page.keyboard.press('Escape');
   }
+});
+
+test('Git keeps file positions and selection stable when staging changes native status order', async ({ page }) => {
+  let staged = false; let revision = 0;
+  await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/git/action')) {
+      const body = route.request().postDataJSON();
+      expect(body.file ?? body.files?.[0]).toBe('notes.md');
+      staged = body.action === 'stage'; revision++;
+      return route.fulfill({ json: { ok: true, data: {} } });
+    }
+    const tracked = [{ path: 'README.md', index: ' ', worktree: 'M', conflict: false }, { path: 'server.json', index: ' ', worktree: 'M', conflict: false }];
+    const notes = { path: 'notes.md', index: staged ? 'A' : '?', worktree: staged ? ' ' : '?', conflict: false };
+    const data = path.endsWith('/auth/session') ? { user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/user' } }
+      : path.endsWith('/apps') ? { canInstall: true, apps: [{ id: 'git', installed: true }] }
+      : path.endsWith('/git/repository') ? { path: '/home/user/project', branch: 'main', head: 'a'.repeat(40), revision: String(revision), upstream: '', ahead: 0, behind: 0, branches: ['main'], remotes: [], operation: '', history: [], files: staged ? [notes, ...tracked] : [...tracked, notes] }
+      : path.endsWith('/git/diff') ? { text: 'File diff', truncated: false } : {};
+    return route.fulfill({ json: { ok: true, data } });
+  });
+  await page.addInitScript(() => localStorage.setItem('lumo.view.v1:demo:git:recent', JSON.stringify(['/home/user/project'])));
+  await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-git').click();
+  const rows = page.locator('.git-file-row button');
+  await expect(rows).toHaveText(['notes.md', 'README.md', 'server.json']);
+  await page.getByTestId('git-file-server.json').click();
+  for (const checked of [true, false, true, false]) {
+    await page.getByTestId('git-stage-notes.md').click();
+    await expect(page.getByTestId('git-stage-notes.md')).toBeChecked({ checked });
+    await expect(page.getByTestId('git-stage-notes.md')).toBeEnabled();
+    await expect(rows).toHaveText(['notes.md', 'README.md', 'server.json']);
+    await expect(page.getByTestId('git-file-server.json')).toHaveAttribute('aria-pressed', 'true');
+  }
+  await page.getByLabel('Filter changed files').fill('notes');
+  await page.getByTestId('git-stage-all').click();
+  await expect(page.getByTestId('git-stage-notes.md')).toBeChecked();
+  await page.getByLabel('Filter changed files').fill('');
+  await page.getByTestId('git-refresh').click();
+  await expect(page.getByTestId('git-refresh')).toBeEnabled();
+  await expect(rows).toHaveText(['notes.md', 'README.md', 'server.json']);
 });

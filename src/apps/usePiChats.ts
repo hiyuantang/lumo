@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getDataSource } from '../api/source';
-import type { PiSession } from '../api/pi';
+import type { PiSession, PiPermissionMode } from '../api/pi';
 import { useShell } from '../shell/ShellContext';
 import { useCurrentWindow } from '../shell/WindowContext';
 
-export interface PiChatEntry { key: string; project: string; session?: string; running: boolean; dirty: boolean }
+export interface PiChatEntry { key: string; project: string; session?: string; permissionMode?: PiPermissionMode; autoRetry?: boolean; running: boolean; dirty: boolean }
 export function usePiChats() {
   const source = getDataSource();
   const { state } = useShell();
@@ -27,8 +27,8 @@ export function usePiChats() {
   }), []);
   const [sessionLists, setSessionLists] = useState<Record<string, PiSession[]>>({});
   const launches = useRef<Promise<unknown>>(Promise.resolve());
-  const start = useCallback((project: string, session?: string, resume?: string) => {
-    const next = launches.current.catch(() => {}).then(() => source.piStart(project, session, resume));
+  const start = useCallback((project: string, session?: string, resume?: string, permissionMode?: PiPermissionMode, rememberPermissionMode = false) => {
+    const next = launches.current.catch(() => {}).then(() => source.piStart(project, session, resume, permissionMode, rememberPermissionMode));
     launches.current = next;
     return next;
   }, [source]);

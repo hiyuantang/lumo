@@ -49,7 +49,8 @@ test('Pi sidebar groups project chats, paginates, and opens recents in the corre
   await expect(page.getByRole('button', { name: 'Collapse sidebar', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
   await expect(sidebar).toHaveClass(/is-collapsed/);
-  await expect(sidebar.getByRole('button', { name: 'New chat', exact: true })).toBeVisible();
+  await expect(sidebar).toBeHidden();
+  await expect(page.getByTestId('pi-app-rail').getByRole('button', { name: 'New chat', exact: true })).toBeVisible();
   await expect(page.getByTestId('pi-settings-button')).toBeVisible();
   await page.screenshot({ animations: 'disabled', path: '/tmp/lumo-pi-rail-narrow.png' });
   await page.getByTestId('pi-settings-button').click();
@@ -69,7 +70,7 @@ test('Pi sidebar groups project chats, paginates, and opens recents in the corre
   });
   expect(movement.animated).toBe(true);
   expect(movement.start).toBeGreaterThan(movement.end);
-  expect(movement.end).toBe(52);
+  expect(movement.end).toBe(0);
   await page.screenshot({ animations: 'disabled', path: '/tmp/lumo-pi-rail-dark.png' });
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await page.screenshot({ animations: 'disabled', path: '/tmp/lumo-pi-rail-light.png' });
@@ -170,4 +171,37 @@ test('Pi animates Recents and remembers its expansion across reopen and refresh'
   await page.reload();
   await expect(page.getByTestId('pi-prompt')).toBeEnabled();
   await expect(recentToggle).toHaveAttribute('aria-expanded', 'true');
+});
+
+
+test('Pi collapse toggle sits above Home and leaves one rail with accessible New chat', async ({ page }) => {
+  const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message));
+  await piPage(page); await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-pi').click();
+  await expect(page.getByTestId('pi-prompt')).toBeEnabled();
+  const toggle = page.getByTestId('pi-sidebar-toggle'); const home = page.getByTestId('pi-home-button');
+  const toggleBox = (await toggle.boundingBox())!; const homeBox = (await home.boundingBox())!;
+  expect(toggleBox.x).toBe(homeBox.x); expect(toggleBox.y + toggleBox.height).toBeLessThan(homeBox.y);
+  await page.getByTestId('pi-prompt').fill('Keep this draft');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('navigation', { name: 'Pi projects', exact: true })).toHaveCount(0);
+  for (const width of [1440, 390]) for (const colorScheme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: 900 }); await page.emulateMedia({ colorScheme });
+    await expect.poll(async () => {
+      const rail = (await page.getByTestId('pi-app-rail').boundingBox())!;
+      const main = (await page.locator('.pi-main').boundingBox())!;
+      return Math.round(main.x - rail.x - rail.width);
+    }).toBe(0);
+    expect(await page.getByTestId('pi-sidebar').evaluate((node) => node.getBoundingClientRect().width)).toBe(0);
+    await expect(page.getByTestId('pi-app-rail').getByTestId('pi-new')).toBeVisible();
+    await expect(page.getByTestId('pi-prompt')).toHaveText('Keep this draft');
+    await page.screenshot({ path: `/tmp/lumo-pi-single-rail-${width}-${colorScheme}.png`, animations: 'disabled' });
+  }
+  await page.reload(); await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByTestId('pi-app-rail').getByTestId('pi-new')).toBeEnabled();
+  await toggle.click(); await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('navigation', { name: 'Pi projects', exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
 });

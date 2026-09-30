@@ -2,7 +2,7 @@
 import { expect, test } from '../offline';
 import { piPage } from './pi-fixture';
 
-test('Pi remembers each chat and uses the last explicit selection for new chats', async ({ page }) => {
+test('Pi remembers model, effort and approval per chat and uses the last choices for new chats', async ({ page }) => {
   await page.goto('http://localhost:5199');
   await page.getByRole('textbox', { name: 'Username' }).fill('demo');
   await page.getByLabel('Password', { exact: true }).fill('demo');
@@ -15,6 +15,8 @@ test('Pi remembers each chat and uses the last explicit selection for new chats'
   await page.getByTestId('dock-app-pi').click();
   const trigger = page.getByTestId('pi-model');
   const chats = page.getByRole('navigation', { name: 'Pi projects', exact: true });
+  const mode = page.getByTestId('pi-permission-mode');
+  const chooseMode = async (label: string) => { await mode.click(); await page.getByRole('option', { name: label, exact: true }).click(); await expect(mode).toBeEnabled(); await expect(mode).toHaveText(label); };
   await expect(trigger).toHaveText('BalancedMedium');
   await page.getByTestId('pi-prompt').fill('First chat');
   await page.getByTestId('pi-send').click();
@@ -23,8 +25,10 @@ test('Pi remembers each chat and uses the last explicit selection for new chats'
   await page.getByRole('slider', { name: 'Effort', exact: true }).press('End');
   await expect(trigger).toHaveText('BalancedHigh');
   await page.getByRole('slider', { name: 'Effort', exact: true }).press('Escape');
+  await chooseMode('Approve for me');
   await page.getByTestId('pi-new').click();
   await expect(trigger).toHaveText('BalancedHigh');
+  await expect(mode).toHaveText('Approve for me');
   await page.getByTestId('pi-prompt').fill('Second chat');
   await page.getByTestId('pi-send').click();
   await expect(trigger).toBeEnabled();
@@ -33,17 +37,23 @@ test('Pi remembers each chat and uses the last explicit selection for new chats'
   await page.getByRole('option', { name: 'Fast · Demo', exact: true }).click();
   await expect(trigger).toHaveText('FastOff');
   await page.getByRole('button', { name: 'Choose model', exact: true }).press('Escape');
+  await chooseMode('Read only');
   await chats.getByRole('button', { name: 'First chat', exact: true }).click();
   await expect(trigger).toHaveText('BalancedHigh');
+  await expect(mode).toHaveText('Approve for me');
   await chats.getByRole('button', { name: 'Second chat', exact: true }).click();
   await expect(trigger).toHaveText('FastOff');
+  await expect(mode).toHaveText('Read only');
   await chats.getByRole('button', { name: 'First chat', exact: true }).click();
   await expect(trigger).toHaveText('BalancedHigh');
+  await expect(mode).toHaveText('Approve for me');
   await page.getByTestId('pi-new').click();
   await expect(trigger).toHaveText('FastOff');
+  await expect(mode).toHaveText('Read only');
   await page.getByTestId('window-close-pi').click();
   await page.getByTestId('dock-app-pi').click();
   await expect(trigger).toHaveText('FastOff');
+  await expect(mode).toHaveText('Read only');
 });
 
 test('Pi combines model and effort with a keyboard accessible slider and provider-aware model picker', async ({ page }) => {
@@ -130,4 +140,32 @@ test('Pi commits pointer effort once and keeps the confirmed value when a change
   await page.mouse.up();
   await expect(trigger).toContainText('Off');
   expect(fixture.commands.filter((command) => command.type === 'set_thinking_level')).toEqual([{ type: 'set_thinking_level', level: 'off' }]);
+});
+
+test('Effort keeps its card and preview steady while the change is pending', async ({ page }) => {
+  await piPage(page);
+  let release!: () => void; let pending = false;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/api/v1/pi/command', async (route) => {
+    if (route.request().postDataJSON().command.type === 'set_thinking_level') { pending = true; await gate; }
+    await route.fallback();
+  });
+  await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-pi').click();
+  const trigger = page.getByTestId('pi-model'); await expect(trigger).toBeEnabled(); await trigger.click();
+  const card = page.getByRole('dialog', { name: 'Model and effort' });
+  const element = (await card.elementHandle())!;
+  const slider = card.getByRole('slider', { name: 'Effort', exact: true });
+  try {
+    await slider.press('End'); await expect.poll(() => pending).toBe(true);
+    await expect(card).toHaveAttribute('aria-busy', 'true');
+    await expect(slider).toHaveAttribute('aria-valuetext', 'High');
+    await expect(card.getByRole('button', { name: 'Choose model' })).toHaveCSS('opacity', '1');
+    await expect(trigger).toHaveCSS('opacity', '1');
+    await expect(page.getByTestId('pi-send')).toBeDisabled();
+    expect(await element.evaluate((node) => node.isConnected)).toBe(true);
+    await slider.dispatchEvent('focusout');
+    await expect(slider).toHaveAttribute('aria-valuetext', 'High');
+  } finally { release(); }
+  await expect(slider).toBeEnabled(); await expect(trigger).toContainText('High');
+  expect(await element.evaluate((node) => node.isConnected)).toBe(true);
 });

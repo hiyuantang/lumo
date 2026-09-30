@@ -17,10 +17,19 @@ the foundation. No third-party implementation code or assets are used.
 - Content-row dividers stop short of both edges, aligned to the surrounding
   content padding (normally 16px). Preserve already-inset separators. Window,
   toolbar and sidebar boundaries retain their structural borders.
+- Files lists use a uniform background. Hover uses an inset rounded neutral
+  fill; selected rows use the stronger neutral accent with contrasting text
+  and icons. Row highlights have 3px vertical and 8px horizontal margins, keeping
+  them clear of headers and neighboring rows while text stays aligned with
+  column headings. The path copy action uses the shared copy icon and tooltip.
 - Matte buttons use opaque neutral fills and fine borders, without gradients,
   inset highlights or bevel shadows. Labels use 13px medium-weight type.
   Hover changes the fill; pressing moves the button by one pixel.
   Primary buttons retain dark text on a pale neutral surface in both themes.
+- Standard text and icon buttons share a 32px height; icon buttons are square.
+  Compact button groups use one shared height for all their controls. Fields
+  and selectors share a 34px height. Use the shared size tokens and horizontal
+  padding; responsive labels must not add vertical padding or stretch icons.
 - Window controls are 14px matte circles at the top left, ordered close,
   minimize, maximize/restore. Coral, amber and green distinguish actions.
   Bold 11px glyphs appear on group hover or individual keyboard focus.
@@ -30,7 +39,7 @@ the foundation. No third-party implementation code or assets are used.
   and App Library. Ivory tiles with colorful objects alternate with blue,
   indigo and graphite tiles. Large filled shapes and restrained dimensional
   shading keep each application recognizable at dock size.
-- Menu and selector choices use a checkmark in a fixed left column as their only
+- Menu and selector choices use a checkmark in a fixed right column as their only
   persistent selection indicator. A neutral accent background and contrasting
   text highlight only the hovered or keyboard-active row, never the selected
   value by itself. Secondary labels inherit the highlighted text color.
@@ -41,6 +50,8 @@ the foundation. No third-party implementation code or assets are used.
   it does not get a dedicated full-width toolbar. Search belongs in the header
   of the list it filters. App updates are available through “Check for Updates…”
   in the top-left app menu, with updates handled in App Library.
+- Checkmarks, checkboxes and other app selection controls sit to the right of
+  their left-aligned labels, in a consistent trailing column.
 - Checkbox rows and descriptions do not toggle their control. Only the checkbox
   hit target and normal keyboard activation change it; inputs retain accessible
   names without a whole-row activating label.
@@ -69,6 +80,12 @@ a desktop-wide dialog.
   reverses the motion and restores the existing window, including its
   size, placement and app state. A window badge and Restore tooltip identify
   minimized apps. Clicking an already active Dock icon keeps its window open.
+- Dock icons, thumbnails, padding and running indicators use a shared 90% scale.
+  Minimized thumbnails use the available horizontal space before scrolling.
+  Overview includes only desktop windows; minimized windows stay in the dock.
+- Horizontal overscroll navigation is disabled at the page boundary to prevent
+  accidental trackpad swipes from leaving the desktop. Browser navigation buttons
+  and each app's own navigation controls remain available.
 - Minimize and restore can reverse in flight. Reduced motion skips the
   animation, and viewport changes settle it immediately. Hidden windows
   leave the keyboard focus order; restoring returns focus to the last
@@ -155,3 +172,34 @@ palette, quiet sidebar and compact update rows. User refinement superseded its
 full-width Discovery rows with adaptive cards. Existing original icons, actual
 package data and the requested installed-update history replace the concept's
 illustrative icons, figures and recent-activity labels.
+
+## Desktop pet
+
+When Pi is installed, Pi Settings → Pet offers Cat, Fox and Robot, using original articulated SVG characters in
+`src/shell/PetSprite.tsx`. The pet sits above desktop windows and stays below menus. Its
+transparent surroundings allow clicks through; only its handle and speech bubble
+receive input. During file or other native drag operations the pet becomes
+passive so underlying destinations can receive the drop. Lumo Use excludes these controls from observations and actions.
+
+Drag or use arrow keys to move the pet. Shift moves farther; Home resets position.
+Character, visibility, completion bubbles and relative position are remembered per
+account in the current browser. Relative coordinates keep the pet reachable after
+resizing, clear of the menu bar and dock. Right-click offers settings, reset and hide.
+
+The pet breathes, looks around, blinks and sways its tail while idle. While any Pi
+chat is working it studies a notepad and writes; completion brings a small hop,
+a wave and sparkles. Separate SVG body parts move continuously in browser CSS;
+there are no raster frames or sprite-sheet swaps. Completion bubbles use the same typed outcome
+as system notifications: Work done, Stopped or Needs attention. They dismiss after
+eight seconds or through their close control. Enabling Completion bubbles shows
+a temporary Hello greeting beside the pet as a preview. Background and minimized chats update
+the pet; one finishing chat does not cancel another chat's working state. Reduced
+motion keeps the pose changes and disables repeating animation.
+
+## Pi navigation rail
+
+The chat sidebar toggle sits above Home in Pi's left navigation rail. Collapsing
+removes the sidebar's width and border, leaving one rail beside the conversation.
+New chat moves into that rail while collapsed; Settings stays at the bottom.
+Settings keeps the sidebar toggle and New chat visible but disabled.
+Hidden sidebar controls are excluded from keyboard and accessibility navigation.

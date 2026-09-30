@@ -68,6 +68,10 @@ interaction and accessibility requirements.
 
 - **Organize compact areas deliberately.** Place each piece of information where
   it supports the relevant action. Avoid repeated labels, values, and explanations.
+- **Reuse components for design consistency.** Reuse existing shared components,
+  styles and interaction patterns before creating new ones. Extend a shared
+  component when the same design is needed in another place; avoid duplicating
+  controls or styling for equivalent UI.
 - **Use space efficiently.** Keep actions beside the heading or content they
   affect. A single Edit or Refresh button must not consume a whole row.
   Avoid duplicate information, redundant controls and unnecessary metadata.
@@ -88,7 +92,12 @@ interaction and accessibility requirements.
 - **Keep Files concise.** Show only the current folder name in the toolbar.
   Keep the full path below, with clickable folder segments and Copy on the
   right; no path-edit field. Preserve List/Grid views and sorting choices.
-- **Make menus consistent.** Left-align labels with a fixed checkmark column.
+- **Put selection controls on the right.** Place checkmarks, checkboxes and other
+  selection indicators to the right of their labels, across menus, dropdowns,
+  settings and lists. Keep labels left-aligned and controls right-aligned in a
+  consistent trailing column; never place selection marks before the labels.
+- **Make menus consistent.** Left-align labels with a fixed checkmark column on
+  the right.
   A checkmark alone shows the selected choice; never add a persistent selected
   background. Reserve the row highlight for the single hovered or keyboard-active
   item, so adjacent options never appear joined. Use the shared menu input
@@ -118,6 +127,10 @@ interaction and accessibility requirements.
   content rows, aligned with the card's inner padding (normally 16px). Preserve
   existing inset lines. Keep structural window, toolbar and sidebar borders
   distinct from content dividers.
+- **Give rounded row highlights breathing room.** Use small outer margins around
+  hover and selection backgrounds so they do not touch headers, panel edges or
+  neighboring highlighted rows. Files lists use 3px vertically and 8px
+  horizontally, preserving the alignment of row text with column headings.
 - **Keep checkbox activation precise.** Toggle checkboxes only when the checkbox
   itself is clicked or activated with the keyboard. Clicking surrounding text,
   a row, or empty space must not toggle them. Use accessible names on the input

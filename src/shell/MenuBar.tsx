@@ -208,8 +208,8 @@ export function MenuBar() {
                   item.run();
                 }}
               >
-                <span><span className="menubar-check" aria-hidden="true">{item.checked ? '✓' : ''}</span>{item.label}</span>
-                {item.hint && <kbd>{item.hint}</kbd>}
+                <span>{item.label}</span>
+                <span className="menubar-trailing">{item.hint && <kbd>{item.hint}</kbd>}<span className="menubar-check" aria-hidden="true">{item.checked ? '✓' : ''}</span></span>
               </button>
               </Fragment>
             ))}

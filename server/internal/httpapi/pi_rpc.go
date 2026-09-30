@@ -24,6 +24,8 @@ import (
 	"lumo/server/internal/strictjson"
 )
 
+const piRPCMessageLimit = 64 << 20
+
 type piRuntime struct {
 	mu        sync.Mutex
 	processes map[string]*piProcess
@@ -38,10 +40,22 @@ type piProcess struct {
 	base               int
 	eventBytes         int
 	pending            map[string]chan json.RawMessage
+	desktop            []piDesktopRequest
+	desktopClient      string
+	desktopEnabled     bool
+	extensionsRevision string
+	desktopLoaded      bool
+	desktopReady       bool
+	questions          []piQuestion
+	permissionMode     string
+	modelImagesReady   bool
+	metrics            *piSessionMetrics
+	retry              *piRetry
 	done               chan struct{}
 	wake               chan struct{}
 	touched            time.Time
 	closed             bool
+	stopError          string
 	project            string
 	session            string
 }
@@ -145,13 +159,20 @@ func readPiSessions(dir string) ([]piSession, error) {
 }
 func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		RequestID string `json:"requestId"`
-		Project   string `json:"project"`
-		Session   string `json:"session"`
-		Resume    string `json:"resume"`
+		RequestID              string `json:"requestId"`
+		Project                string `json:"project"`
+		Session                string `json:"session"`
+		Resume                 string `json:"resume"`
+		PermissionMode         string `json:"permissionMode"`
+		RememberPermissionMode bool   `json:"rememberPermissionMode"`
+		ClientID               string `json:"clientId"`
 	}
-	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil || !validRequestID(req.RequestID) {
+	if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil || !validRequestID(req.RequestID) || (req.ClientID != "" && !validRequestID(req.ClientID)) {
 		WriteError(w, NewError(CodeValidationFailed, "Choose a project folder."))
+		return
+	}
+	if req.RememberPermissionMode && req.PermissionMode == "" || req.PermissionMode != "" && !validPiPermissionMode(req.PermissionMode) {
+		WriteError(w, NewError(CodeValidationFailed, "Choose a valid Pi permission mode."))
 		return
 	}
 	s.mutate(w, req.RequestID, func(w http.ResponseWriter) {
@@ -165,15 +186,58 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, NewError(CodeValidationFailed, err.Error()))
 			return
 		}
+		agentDir, err := s.piAgentDir()
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		settings, err := readPiExtensionSettings(agentDir)
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		desktopEnabled := settings.LumoUse && req.ClientID != ""
+		if req.PermissionMode == "" {
+			if existing := s.piProcess(req.Resume); existing != nil {
+				existing.mu.Lock()
+				if !existing.closed && existing.project == project && (req.Session == "" || existing.session == req.Session) {
+					req.PermissionMode = existing.permissionMode
+				}
+				existing.mu.Unlock()
+			}
+			if req.PermissionMode == "" {
+				sessionPath := ""
+				if req.Session != "" {
+					sessionPath = filepath.Join(dir, req.Session)
+				}
+				req.PermissionMode, err = readPiPermissionMode(agentDir, sessionPath)
+				if err != nil {
+					WriteError(w, err)
+					return
+				}
+			}
+		}
 		if existing := s.piProcess(req.Resume); existing != nil {
 			existing.mu.Lock()
 			canResume := !existing.closed && existing.project == project && (req.Session == "" || existing.session == req.Session)
+			if canResume && existing.permissionMode != req.PermissionMode {
+				existing.mu.Unlock()
+				WriteError(w, NewError(CodeConflict, "This chat is running with a different permission mode. Stop it before changing modes."))
+				return
+			}
 			if canResume {
 				existing.touched = time.Now()
 			}
+			extensionsChanged := existing.extensionsRevision != settings.Revision || existing.desktopClient == req.ClientID && (existing.desktopLoaded != desktopEnabled || desktopEnabled && !existing.desktopEnabled)
+			desktopEnabled := existing.desktopEnabled && existing.desktopClient == req.ClientID
+			existingSession := existing.session
 			existing.mu.Unlock()
 			if canResume {
-				WriteData(w, map[string]any{"id": req.Resume, "project": project})
+				if err := savePiPermissionMode(agentDir, filepath.Join(dir, existingSession), req.PermissionMode, req.RememberPermissionMode); err != nil {
+					WriteError(w, err)
+					return
+				}
+				WriteData(w, map[string]any{"id": req.Resume, "project": project, "permissionMode": req.PermissionMode, "lumoUse": desktopEnabled, "extensionsChanged": extensionsChanged})
 				return
 			}
 		}
@@ -215,15 +279,41 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, err)
 			return
 		}
-		p, err := startPiProcess(binary, args, project, s.pi.home)
+		extension, err := writePiQuestionsExtension(dir, req.PermissionMode, settings.Questions)
 		if err != nil {
-			WriteError(w, NewError(CodeUnavailable, "Could not start Pi: "+err.Error()))
+			WriteError(w, err)
 			return
 		}
-		agentDir, err := s.piAgentDir()
+		imagesExtension, err := writePiModelImagesExtension(dir, agentDir, s.pi.home)
 		if err != nil {
-			p.cancel()
 			WriteError(w, err)
+			return
+		}
+		if desktopEnabled {
+			desktopExtension, err := writeLumoUseExtension(dir)
+			if err != nil {
+				WriteError(w, err)
+				return
+			}
+			args = append(args, "--extension", desktopExtension)
+		}
+		optionalArgs := piExtensionArgs(settings)
+		args = append(args, optionalArgs...)
+		args = append(args, "--extension", extension, "--extension", imagesExtension)
+		if len(optionalArgs) == 0 {
+			tools := piToolsForMode(req.PermissionMode, desktopEnabled)
+			if !settings.Questions {
+				tools = strings.Replace(tools, ",ask_user", "", 1)
+			}
+			args = append(args, "--tools", tools)
+		} else if req.PermissionMode == "read-only" {
+			args = append(args, "--exclude-tools", "bash,powershell,edit,write,lumo_act")
+		} else {
+			args = append(args, "--exclude-tools", "powershell")
+		}
+		p, err := startManagedPiProcess(r.Context(), binary, args, project, s.pi.home, req.PermissionMode, desktopEnabled)
+		if err != nil {
+			WriteError(w, NewError(CodeUnavailable, "Could not start Pi: "+err.Error()))
 			return
 		}
 		changed, err := preparePiContextBudget(r.Context(), p, agentDir)
@@ -240,7 +330,7 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 				WriteError(w, NewError(CodeUnavailable, "Pi is still restarting to apply its context budget."))
 				return
 			}
-			p, err = startPiProcess(binary, args, project, s.pi.home)
+			p, err = startManagedPiProcess(r.Context(), binary, args, project, s.pi.home, req.PermissionMode, desktopEnabled)
 			if err != nil {
 				WriteError(w, NewError(CodeUnavailable, "Could not reopen Pi: "+err.Error()))
 				return
@@ -253,10 +343,23 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.mu.Lock()
+		p.desktopClient = req.ClientID
+		p.desktopEnabled = desktopEnabled
+		p.desktopLoaded = desktopEnabled
+		p.extensionsRevision = settings.Revision
 		if p.session == "" {
 			p.session = req.Session
 		}
+		sessionPath := ""
+		if p.session != "" {
+			sessionPath = filepath.Join(dir, p.session)
+		}
 		p.mu.Unlock()
+		if err := savePiPermissionMode(agentDir, sessionPath, req.PermissionMode, req.RememberPermissionMode); err != nil {
+			p.cancel()
+			WriteError(w, err)
+			return
+		}
 		id := piID()
 		s.piRPC.processes[id] = p
 		go func() {
@@ -266,7 +369,7 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 			delete(s.piRPC.processes, id)
 			s.piRPC.mu.Unlock()
 		}()
-		WriteData(w, map[string]any{"id": id, "project": project})
+		WriteData(w, map[string]any{"id": id, "project": project, "permissionMode": req.PermissionMode, "lumoUse": desktopEnabled})
 	})
 }
 func startPiProcess(binary string, args []string, project, home string) (*piProcess, error) {
@@ -298,7 +401,7 @@ func startPiProcess(binary string, args []string, project, home string) (*piProc
 	}
 	go func() {
 		scanner := bufio.NewScanner(output)
-		scanner.Buffer(make([]byte, 4096), 8<<20)
+		scanner.Buffer(make([]byte, 4096), piRPCMessageLimit+1)
 		for scanner.Scan() {
 			raw := append(json.RawMessage(nil), scanner.Bytes()...)
 			var record struct {
@@ -326,6 +429,8 @@ func startPiProcess(binary string, args []string, project, home string) (*piProc
 						var reply map[string]any
 						if json.Unmarshal(raw, &reply) == nil {
 							reply["eventCursor"] = p.base + len(p.events)
+							reply["questions"] = p.activeQuestions()
+							reply["retry"] = p.retry
 							raw, _ = json.Marshal(reply)
 						}
 					}
@@ -333,6 +438,28 @@ func startPiProcess(binary string, args []string, project, home string) (*piProc
 					delete(p.pending, record.ID)
 				}
 			} else {
+				p.trackDesktop(record.Type, raw)
+				p.trackQuestion(record.Type, raw)
+				p.trackRetry(record.Type, raw)
+				if record.Type == "extension_ui_request" {
+					var status struct {
+						Method string `json:"method"`
+						Key    string `json:"statusKey"`
+						Text   string `json:"statusText"`
+					}
+					if json.Unmarshal(raw, &status) == nil && status.Method == "setStatus" && status.Key == "lumo-permissions" && validPiPermissionMode(status.Text) {
+						p.permissionMode = status.Text
+					}
+					if status.Method == "setStatus" && status.Key == "lumo-metrics" {
+						p.trackMetrics(status.Text)
+					}
+					if status.Method == "setStatus" && status.Key == "lumo-use" && status.Text == "ready" {
+						p.desktopReady = true
+					}
+					if status.Method == "setStatus" && status.Key == "lumo-model-images" && status.Text == "ready" {
+						p.modelImagesReady = true
+					}
+				}
 				p.events = append(p.events, raw)
 				p.eventBytes += len(raw)
 				for len(p.events) > 1 && (len(p.events) > 512 || p.eventBytes > 8<<20) {
@@ -348,7 +475,8 @@ func startPiProcess(binary string, args []string, project, home string) (*piProc
 			}
 			p.mu.Unlock()
 		}
-		if scanner.Err() != nil {
+		scanErr := scanner.Err()
+		if scanErr != nil {
 			cancel()
 		}
 		err := cmd.Wait()
@@ -357,8 +485,17 @@ func startPiProcess(binary string, args []string, project, home string) (*piProc
 		cancel()
 		p.mu.Lock()
 		p.closed = true
-		if err != nil && !cancelled {
-			raw, _ := json.Marshal(map[string]any{"type": "error", "error": "Pi exited unexpectedly. Check provider setup and the installed Pi version."})
+		p.desktop = nil
+		p.retry = nil
+		if errors.Is(scanErr, bufio.ErrTooLong) {
+			p.stopError = "This conversation exceeds Lumo's 64 MiB response limit. Your saved chat is intact."
+		} else if scanErr != nil {
+			p.stopError = "Lumo could not read Pi's response. Reconnect to reopen your saved chat."
+		} else if err != nil && !cancelled {
+			p.stopError = "Pi exited unexpectedly. Reconnect to reopen your saved chat."
+		}
+		if p.stopError != "" {
+			raw, _ := json.Marshal(map[string]any{"type": "error", "error": p.stopError})
 			p.events = append(p.events, raw)
 		}
 		p.mu.Unlock()
@@ -423,7 +560,7 @@ func (s *Server) handlePiEvents(w http.ResponseWriter, r *http.Request) {
 	if index > len(p.events) {
 		index = len(p.events)
 	}
-	WriteData(w, map[string]any{"events": p.events[index:], "cursor": p.base + len(p.events), "closed": p.closed})
+	WriteData(w, map[string]any{"events": p.events[index:], "cursor": p.base + len(p.events), "closed": p.closed, "questions": p.activeQuestions(), "retry": p.retry, "desktop": p.activeDesktop(r.URL.Query().Get("clientId"))})
 }
 func (p *piProcess) command(ctx context.Context, command map[string]any) (json.RawMessage, error) {
 	id := piID()
@@ -443,7 +580,30 @@ func (p *piProcess) command(ctx context.Context, command map[string]any) (json.R
 	p.mu.Unlock()
 	defer func() { p.mu.Lock(); delete(p.pending, id); p.mu.Unlock() }()
 	p.write.Lock()
-	_, err = p.input.Write(append(data, '\n'))
+	data = append(data, '\n')
+	if command["type"] == "abort" {
+		p.mu.Lock()
+		for _, req := range p.desktop {
+			cancel, _ := json.Marshal(map[string]any{"type": "extension_ui_response", "id": req.ID, "cancelled": true})
+			data = append(data, append(cancel, '\n')...)
+		}
+		for _, question := range p.activeQuestions() {
+			cancel, _ := json.Marshal(map[string]any{"type": "extension_ui_response", "id": question.ID, "cancelled": true})
+			data = append(data, append(cancel, '\n')...)
+		}
+		p.mu.Unlock()
+	}
+	_, err = p.input.Write(data)
+	if err == nil && command["type"] == "abort" {
+		p.mu.Lock()
+		p.questions = nil
+		p.desktop = nil
+		select {
+		case p.wake <- struct{}{}:
+		default:
+		}
+		p.mu.Unlock()
+	}
 	p.write.Unlock()
 	if err != nil {
 		return nil, err
@@ -452,7 +612,13 @@ func (p *piProcess) command(ctx context.Context, command map[string]any) (json.R
 	case response := <-ch:
 		return response, nil
 	case <-p.done:
-		return nil, errors.New("Pi stopped. Check your installation and reopen the project.")
+		p.mu.Lock()
+		message := p.stopError
+		p.mu.Unlock()
+		if message == "" {
+			message = "Pi stopped. Reconnect to reopen your saved chat."
+		}
+		return nil, errors.New(message)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
@@ -490,8 +656,18 @@ func (s *Server) handlePiCommand(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, NewError(CodeUnavailable, err.Error()))
 			return
 		}
+		if command["type"] == "get_state" {
+			s.pi.operation.Lock()
+			err := s.rememberPiChatPermission(p)
+			s.pi.operation.Unlock()
+			if err != nil {
+				WriteError(w, NewError(CodeUnavailable, "Could not save this chat's approval mode: "+err.Error()))
+				return
+			}
+			result = piSavedState(result)
+		}
 		if command["type"] == "get_session_stats" {
-			result = p.contextBudgetStats(ctx, result)
+			result = p.metricsStats(p.contextBudgetStats(ctx, result))
 		}
 		if selection {
 			var reply struct {
@@ -522,7 +698,7 @@ func (s *Server) handlePiCommand(w http.ResponseWriter, r *http.Request) {
 func validatePiCommand(raw map[string]json.RawMessage) (map[string]any, error) {
 	var kind string
 	_ = json.Unmarshal(raw["type"], &kind)
-	allowed := map[string][]string{"prompt": {"message", "streamingBehavior"}, "steer": {"message"}, "follow_up": {"message"}, "abort": {}, "clear_queue": {}, "get_state": {}, "get_messages": {}, "get_fork_messages": {}, "fork": {"entryId"}, "clone": {}, "get_available_models": {}, "get_available_thinking_levels": {}, "get_session_stats": {}, "set_model": {"provider", "modelId"}, "set_thinking_level": {"level"}, "set_session_name": {"name"}, "compact": {"customInstructions"}}
+	allowed := map[string][]string{"prompt": {"message", "streamingBehavior"}, "steer": {"message"}, "follow_up": {"message"}, "abort": {}, "clear_queue": {}, "abort_retry": {}, "set_auto_retry": {"enabled"}, "get_state": {}, "get_messages": {}, "get_fork_messages": {}, "fork": {"entryId"}, "clone": {}, "get_available_models": {}, "get_available_thinking_levels": {}, "get_session_stats": {}, "set_model": {"provider", "modelId"}, "set_thinking_level": {"level"}, "set_session_name": {"name"}, "compact": {"customInstructions"}}
 	fields, ok := allowed[kind]
 	if !ok {
 		return nil, errors.New("Unsupported Pi command.")
@@ -541,6 +717,14 @@ func validatePiCommand(raw map[string]json.RawMessage) (map[string]any, error) {
 		if !found {
 			return nil, fmt.Errorf("Unsupported Pi field: %s", key)
 		}
+		if kind == "set_auto_retry" && key == "enabled" {
+			var enabled bool
+			if string(value) == "null" || json.Unmarshal(value, &enabled) != nil {
+				return nil, errors.New("Choose whether to retry automatically.")
+			}
+			result[key] = enabled
+			continue
+		}
 		var text string
 		if json.Unmarshal(value, &text) != nil || len(text) > 100000 {
 			return nil, errors.New("Invalid Pi field.")
@@ -554,6 +738,11 @@ func validatePiCommand(raw map[string]json.RawMessage) (map[string]any, error) {
 		}
 		if strings.HasPrefix(strings.TrimSpace(message), "/") {
 			return nil, errors.New("Slash commands are not enabled in this interface yet.")
+		}
+	}
+	if kind == "set_auto_retry" {
+		if _, ok := result["enabled"]; !ok {
+			return nil, errors.New("Choose whether to retry automatically.")
 		}
 	}
 	if kind == "fork" {
@@ -604,4 +793,27 @@ func (s *Server) piRunning() bool {
 		}
 	}
 	return false
+}
+
+func piSavedState(raw json.RawMessage) json.RawMessage {
+	var reply map[string]json.RawMessage
+	if json.Unmarshal(raw, &reply) != nil {
+		return raw
+	}
+	var data map[string]json.RawMessage
+	if json.Unmarshal(reply["data"], &data) != nil || data == nil {
+		return raw
+	}
+	var path string
+	if json.Unmarshal(data["sessionFile"], &path) != nil || path == "" {
+		return raw
+	}
+	info, err := os.Lstat(path)
+	if err == nil && info.Mode().IsRegular() {
+		return raw
+	}
+	delete(data, "sessionFile")
+	reply["data"], _ = json.Marshal(data)
+	result, _ := json.Marshal(reply)
+	return result
 }

@@ -7,7 +7,7 @@ import { PiMessageView } from './PiMessageView';
 import { splitAttachmentPrompt } from './piAttachments';
 import { messagePreview, messageText, workDuration, workGroups, type PiWorkGroup, type PiWorkSegment } from './piWorkGroups';
 
-export function PiTranscript({ messages, busy, canBranch, onBranch, transcript, onFollow }: { messages: PiMessage[]; busy: boolean; canBranch: boolean; onBranch: () => void; transcript: RefObject<HTMLDivElement>; onFollow: (value: boolean) => void }) {
+export function PiTranscript({ messages, busy, canBranch, onBranch, transcript, onFollow, children }: { children?: ReactNode; messages: PiMessage[]; busy: boolean; canBranch: boolean; onBranch: () => void; transcript: RefObject<HTMLDivElement>; onFollow: (value: boolean) => void }) {
   const previewId = useId();
   const groups = useMemo(() => workGroups(messages, busy), [messages, busy]);
   const markers = useMemo(() => groups.flatMap((group) => group.segments.filter((segment) => segment.user).map((segment) => ({ id: group.id + segment.id, group, segment }))), [groups]);
@@ -52,6 +52,7 @@ export function PiTranscript({ messages, busy, canBranch, onBranch, transcript, 
       if (visible) setActive(Number(visible.dataset.workId));
     }}>
       {groups.map((group, index) => <Work key={group.id} group={group} index={index} onBranch={canBranch && index === groups.length - 1 ? onBranch : undefined}/>)}
+      {children}
     </div>
   </div>;
 }

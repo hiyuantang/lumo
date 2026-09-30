@@ -93,6 +93,7 @@ test('live overview separates loading, failures, empty data and external changes
     const data = (value: unknown) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, data: value }) });
     if (path === '/api/v1/auth/session') return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ ok: false, error: { code: 'unauthorized', message: 'Sign in', details: {} } }) });
     if (path === '/api/v1/auth/login') return data({ user: { name: 'demo', uid: 1000, home: '/home/demo' }, csrf: 'test-csrf' });
+    if (path === '/api/v1/apps') return data({ canInstall: false, apps: [] });
     if (path === '/api/v1/system/identity') return data({ hostname: 'server-one', os: { prettyName: 'Ubuntu', kernel: 'test' }, architecture: 'aarch64', serverTime: new Date().toISOString() });
     if (path === '/api/v1/system/overview') return data({ uptimeSeconds: 86400, memoryUsedBytes: 1024, memoryTotalBytes: 4096, failedUnits: 0, updatesPending: 0, securityUpdatesPending: 0 });
     if (path === '/api/v1/system/metrics') return data({ cpu: { usagePercent: 5 }, network: [], disks: [] });

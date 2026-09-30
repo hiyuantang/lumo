@@ -18,6 +18,16 @@ func TestPiRPCFixtureProcess(t *testing.T) {
 	if os.Getenv("LUMO_PI_RPC_FIXTURE") != "1" {
 		return
 	}
+	if mode := os.Getenv("LUMO_PI_RPC_READY"); mode != "" {
+		event, _ := json.Marshal(map[string]string{"type": "extension_ui_request", "method": "setStatus", "statusKey": "lumo-permissions", "statusText": mode})
+		fmt.Println(string(event))
+		if os.Getenv("LUMO_PI_RPC_IMAGES_MISSING") != "1" {
+			fmt.Println(`{"type":"extension_ui_request","method":"setStatus","statusKey":"lumo-model-images","statusText":"ready"}`)
+		}
+	}
+	if os.Getenv("LUMO_PI_USE_READY") == "1" {
+		fmt.Println(`{"type":"extension_ui_request","method":"setStatus","statusKey":"lumo-use","statusText":"ready"}`)
+	}
 	scanner := bufio.NewScanner(os.Stdin)
 	model, level := "balanced", "medium"
 	for scanner.Scan() {
@@ -26,6 +36,20 @@ func TestPiRPCFixtureProcess(t *testing.T) {
 			os.Exit(2)
 		}
 		kind, _ := command["type"].(string)
+		if kind == "extension_ui_response" {
+			event, _ := json.Marshal(map[string]any{"type": "fixture_answer", "answer": command})
+			fmt.Println(string(event))
+			continue
+		}
+		if kind == "prompt" && command["message"] == "desktop" {
+			fmt.Println(`{"type":"extension_ui_request","id":"desktop-1","method":"input","title":"Lumo Use: {\"action\":\"observe\"}"}`)
+		}
+		if kind == "prompt" && command["message"] == "ask" {
+			fmt.Println(`{"type":"extension_ui_request","id":"question-1","method":"select","title":"Which environment?","options":["Development","Production"]}`)
+		}
+		if kind == "abort" {
+			fmt.Println(`{"type":"agent_settled"}`)
+		}
 		if kind == "prompt" {
 			event, _ := json.Marshal(map[string]any{"type": "message_update", "assistantMessageEvent": map[string]any{"type": "text_delta", "contentIndex": 0, "delta": command["message"]}})
 			fmt.Println(string(event))
@@ -42,6 +66,9 @@ func TestPiRPCFixtureProcess(t *testing.T) {
 			level = "high"
 		}
 		data := map[string]any{"cwd": mustWorkingDirectory(), "home": os.Getenv("HOME")}
+		if kind == "get_messages" && command["fixtureBytes"] != nil {
+			data = map[string]any{"messages": []any{map[string]any{"role": "toolResult", "content": []any{map[string]any{"type": "image", "mimeType": "image/png", "data": strings.Repeat("A", int(command["fixtureBytes"].(float64)))}}}}}
+		}
 		if kind == "get_state" {
 			data = map[string]any{"model": map[string]any{"provider": "fixture", "id": model, "contextWindow": 200000}, "thinkingLevel": level}
 		}
@@ -54,6 +81,50 @@ func TestPiRPCFixtureProcess(t *testing.T) {
 	os.Exit(0)
 }
 func mustWorkingDirectory() string { value, _ := os.Getwd(); return value }
+func TestPiRPCLargeImageHistory(t *testing.T) {
+	t.Setenv("LUMO_PI_RPC_FIXTURE", "1")
+	for _, size := range []int{12 << 20, piRPCMessageLimit + 1024} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			home := t.TempDir()
+			process, err := startPiProcess(os.Args[0], []string{"-test.run=^TestPiRPCFixtureProcess$"}, home, home)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer process.cancel()
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			raw, err := process.command(ctx, map[string]any{"type": "get_messages", "fixtureBytes": size})
+			if size > piRPCMessageLimit {
+				if err == nil || !strings.Contains(err.Error(), "64 MiB response limit") {
+					t.Fatalf("expected a clear response limit error, got %v", err)
+				}
+				process.mu.Lock()
+				defer process.mu.Unlock()
+				if !process.closed || len(process.events) != 1 || !strings.Contains(string(process.events[0]), "saved chat is intact") {
+					t.Fatal("missing transport failure event")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var reply struct {
+				Data struct {
+					Messages []struct {
+						Content []struct{ Data string }
+					}
+				}
+			}
+			if json.Unmarshal(raw, &reply) != nil || len(reply.Data.Messages) != 1 || len(reply.Data.Messages[0].Content) != 1 || len(reply.Data.Messages[0].Content[0].Data) != size {
+				t.Fatal("image history was truncated")
+			}
+			if _, err = process.command(ctx, map[string]any{"type": "get_state"}); err != nil {
+				t.Fatalf("process did not survive large history: %v", err)
+			}
+		})
+	}
+}
+
 func TestPiRPCTransportStreamsUnicodeAndCleansUp(t *testing.T) {
 	t.Setenv("LUMO_PI_RPC_FIXTURE", "1")
 	home := t.TempDir()
@@ -239,7 +310,7 @@ func TestPiReconnectResumesOnlyMatchingLiveProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &piProcess{project: project, touched: time.Now().Add(-time.Minute)}
+	p := &piProcess{project: project, permissionMode: "ask", touched: time.Now().Add(-time.Minute)}
 	s.piRPC.processes["existing"] = p
 	response := httptest.NewRecorder()
 	s.Handler().ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/pi/start", strings.NewReader(`{"requestId":"resume-existing","project":"~","resume":"existing"}`)))
@@ -265,6 +336,7 @@ func TestPiReconnectResumesOnlyMatchingLiveProcess(t *testing.T) {
 }
 
 func TestPiConcurrentSessionsInOneProject(t *testing.T) {
+	t.Setenv("LUMO_PI_RPC_READY", "ask")
 	t.Setenv("LUMO_PI_RPC_FIXTURE", "1")
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -330,5 +402,29 @@ func TestPiConcurrentSessionsInOneProject(t *testing.T) {
 	writePiChat(t, project, filepath.Join(dir, "idle.jsonl"))
 	if response := archivePiRequest(s, project, "idle.jsonl", "archive-idle", "archive"); response.Code != 200 {
 		t.Fatal(response.Body.String())
+	}
+}
+
+func TestPiSavedStateOmitsUnwrittenSessionPaths(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "new.jsonl")
+	raw, _ := json.Marshal(map[string]any{"success": true, "data": map[string]any{"sessionFile": path, "thinkingLevel": "high"}})
+	result := piSavedState(raw)
+	if strings.Contains(string(result), "sessionFile") || !strings.Contains(string(result), "high") {
+		t.Fatalf("provisional state: %s", result)
+	}
+	if err := os.WriteFile(path, []byte(`{"type":"session"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if string(piSavedState(raw)) != string(raw) {
+		t.Fatal("saved conversation path was lost")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(piSavedState(raw)), "sessionFile") {
+		t.Fatal("directory accepted as saved session")
 	}
 }

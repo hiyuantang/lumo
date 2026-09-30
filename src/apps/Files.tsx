@@ -15,7 +15,7 @@ import { FileDetails } from './FileDetails';
 import { Trash } from './Trash';
 import { useContextMenu } from '../shell/ContextMenu';
 import { useShell } from '../shell/ShellContext';
-import { IconTrash, IconChevronRight, IconFile, IconFolder, IconHome, IconUpload, IconSidebar, IconDownload, IconMonitor } from '../shell/icons';
+import { IconTrash, IconChevronRight, IconFile, IconFolder, IconHome, IconUpload, IconSidebar, IconDownload, IconMonitor, IconCopy, IconRefresh } from '../shell/icons';
 import '../styles/apps.css';
 import '../styles/files.css';
 
@@ -365,6 +365,7 @@ export function Files() {
               </div>
             </div>
             {location === 'folder' && <div className="app-toolbar-actions">
+              <button type="button" className="btn btn-icon" data-testid="files-refresh" aria-label="Refresh folder" title="Refresh folder" onClick={refresh}><IconRefresh size={16}/></button>
               <DropdownMenu label="View" testId="files-view" items={[
                 ...displayOptions,
                 { label: showHidden ? 'Hide Hidden Files' : 'Show Hidden Files', separator: true, run: () => setShowHidden((value) => !value) },
@@ -473,7 +474,7 @@ export function Files() {
                   </span>;
                 })}
               </nav>
-            <button type="button" className="files-path-action" data-testid="files-copy-path" aria-label="Copy absolute path" title={`Copy ${absolutePath}`} onClick={() => void copyAbsolutePath()}>{copiedPath === absolutePath ? 'Copied' : 'Copy'}</button>
+            <button type="button" className="files-path-action" data-testid="files-copy-path" aria-label={copiedPath === absolutePath ? 'Copied' : 'Copy absolute path'} title={copiedPath === absolutePath ? 'Copied' : `Copy ${absolutePath}`} onClick={() => void copyAbsolutePath()}><IconCopy size={16}/></button>
           </footer>
           </>}
         </div>

@@ -141,10 +141,14 @@ func Read(path string, options Options) (Result, error) {
 				}
 				match := options.Entry != "" && item.ID == options.Entry
 				if options.Entry == "" {
-					if item.Message.Role == "user" && strings.HasPrefix(text, "[Lumo conversation references]\n") {
-						marker := "\n[/Lumo conversation references]"
-						if end := strings.Index(text, marker); end >= 0 {
-							text = strings.TrimSpace(text[end+len(marker):])
+					if item.Message.Role == "user" {
+						for _, name := range []string{"Lumo skill references", "Lumo attachments", "Lumo conversation references"} {
+							marker := "\n[/" + name + "]"
+							if strings.HasPrefix(text, "["+name+"]\n") {
+								if end := strings.Index(text, marker); end >= 0 {
+									text = strings.TrimSpace(text[end+len(marker):])
+								}
+							}
 						}
 					}
 					visible := item.Type == "compaction" || item.Type == "branch_summary" || item.Type == "message" && (item.Message.Role == "user" || options.Query != "" && item.Message.Role == "assistant")

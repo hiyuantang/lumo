@@ -148,7 +148,7 @@ test('Restoring after workspace removal opens the restored file instead of an un
     const body = route.request().postDataJSON(); starts.push(body.session);
     if (body.session && (!items.some((item) => item.id === body.session) || archived.has(body.session))) return route.fulfill({ status: 404, json: { ok: false, error: { code: 'NOT_FOUND', message: 'Saved session is unavailable.' } } });
     active = body.session || `unsaved-${starts.length}.jsonl`;
-    return route.fulfill({ json: { ok: true, data: { id: 'fixture-run', project: '/home/user' } } });
+    return route.fulfill({ json: { ok: true, data: { id: 'fixture-run', project: '/home/user', permissionMode: body.permissionMode ?? 'ask' } } });
   });
   await page.route('**/api/v1/pi/command', (route) => {
     const command = route.request().postDataJSON().command.type;

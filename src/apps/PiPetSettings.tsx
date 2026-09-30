@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+import { Select } from '../shell/Select';
+import { PetSprite } from '../shell/PetSprite';
+import { PETS, PET_BUBBLE_PREVIEW, usePetPreferences, type PetKind } from '../shell/pet';
+import { PiSettingToggle } from './PiSettingToggle';
+
+export function PiPetSettings() {
+  const pet = usePetPreferences();
+  return <div className="pi-settings-scroll pi-pet-settings"><section aria-label="Pet settings" data-testid="settings-pet">
+    <h2>Pet</h2>
+    <div className="pi-extension-list">
+      <div className="pi-extension-item"><PiSettingToggle label="Desktop pet" description="Drag to move. Use arrow keys when focused." testId="settings-pet-enabled" checked={pet.enabled} onChange={pet.setEnabled}/></div>
+      <div className="pi-extension-item"><div className="pi-settings-toggle"><strong>Character</strong><div className="pi-pet-character"><PetSprite kind={pet.kind}/><Select aria-label="Pet character" data-testid="settings-pet-character" value={pet.kind} options={PETS.map(({ value, label }) => ({ value, label }))} onChange={(value) => pet.setKind(value as PetKind)}/></div></div></div>
+      <div className="pi-extension-item"><PiSettingToggle label="Completion bubbles" testId="settings-pet-bubbles" checked={pet.bubbles} disabled={!pet.enabled} onChange={(enabled) => { pet.setBubbles(enabled); if (enabled) window.dispatchEvent(new Event(PET_BUBBLE_PREVIEW)); }}/></div>
+      <div className="pi-extension-item"><div className="pi-settings-toggle"><strong>Position</strong><button type="button" className="btn" data-testid="settings-pet-reset" disabled={!pet.enabled} onClick={() => pet.setPosition('')}>Reset</button></div></div>
+    </div>
+  </section></div>;
+}

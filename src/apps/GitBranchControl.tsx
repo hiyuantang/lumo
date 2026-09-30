@@ -50,9 +50,9 @@ export function GitBranchControl({ repo, disabled, onSwitch, onCreate, onMerge }
               const date = branch.date ? new Date(branch.date) : null;
               const validDate = date && !Number.isNaN(date.getTime());
               return <button key={branch.ref} type="button" className="popup-item git-branch-option" aria-label={`${merging ? 'Merge' : 'Switch to'} ${branch.name}`} aria-current={current ? 'true' : undefined} disabled={disabled || (blocked && (!current || merging))} onClick={() => choose(branch)}>
-                <span className="git-branch-check" aria-hidden="true">{current ? '✓' : <IconBranch size={15}/>}</span>
                 <span className="git-branch-copy"><span className="git-branch-name" title={branch.name}>{branch.name}</span>{(current || branch.upstream || branch.default) && <span className="git-branch-meta">{current ? 'Current branch' : branch.upstream ? `Tracks ${branch.upstream}` : ''}{branch.default && <span className="git-default-badge">Default</span>}</span>}</span>
                 {validDate && <time dateTime={branch.date} title={`Last commit: ${date.toLocaleString()}`}>{date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time>}
+                <span className="git-branch-check" aria-hidden="true">{current ? '✓' : ''}</span>
               </button>;
             })}
           </div>)}

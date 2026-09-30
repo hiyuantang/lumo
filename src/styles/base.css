@@ -10,6 +10,11 @@ body,
   margin: 0;
 }
 
+html,
+body {
+  overscroll-behavior-x: none;
+}
+
 body {
   font-family: var(--font-sans);
   font-size: 14px;
@@ -32,7 +37,8 @@ textarea {
   appearance: none;
   min-width: 0;
   max-width: 100%;
-  height: 34px;
+  height: var(--field-height);
+  min-height: var(--field-height);
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-s);
@@ -98,3 +104,5 @@ button {
 :where(.files-location, .file-row, .settings-nav-item, .menubar-button, .menubar-item, .palette-item, .library-item) {
   transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
+
+.app-checkbox { accent-color:var(--accent); flex:none; width:16px; height:16px; margin:0; }

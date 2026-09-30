@@ -65,6 +65,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/git/diff", s.handleGit)
 	mux.HandleFunc("POST /api/v1/git/action", s.handleGit)
 	mux.HandleFunc("GET /api/v1/pi/providers", s.handlePiProviders)
+	mux.HandleFunc("GET /api/v1/pi/connections", s.handlePiConnections)
 	mux.HandleFunc("POST /api/v1/pi/auth/start", s.handlePiAuthStart)
 	mux.HandleFunc("GET /api/v1/pi/auth", s.handlePiAuthState)
 	mux.HandleFunc("POST /api/v1/pi/auth/reply", s.handlePiAuthReply)
@@ -72,6 +73,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/pi/reference", s.handlePiReference)
 	mux.HandleFunc("GET /api/v1/pi/compaction", s.handlePiCompaction)
 	mux.HandleFunc("POST /api/v1/pi/compaction", s.handlePiCompaction)
+	mux.HandleFunc("GET /api/v1/pi/image-settings", s.handlePiImageSettings)
+	mux.HandleFunc("POST /api/v1/pi/image-settings", s.handlePiImageSettings)
+	mux.HandleFunc("GET /api/v1/pi/templates", s.handlePiTemplates)
+	mux.HandleFunc("POST /api/v1/pi/templates", s.handlePiTemplates)
+	mux.HandleFunc("POST /api/v1/pi/images", s.handlePiImage)
 	mux.HandleFunc("GET /api/v1/pi/settings", s.handlePiSettings)
 	mux.HandleFunc("POST /api/v1/pi/settings", s.handlePiSettings)
 	mux.HandleFunc("GET /api/v1/pi/sessions", s.handlePiSessions)
@@ -82,6 +88,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/pi/start", s.handlePiStart)
 	mux.HandleFunc("POST /api/v1/pi/command", s.handlePiCommand)
 	mux.HandleFunc("GET /api/v1/pi/events", s.handlePiEvents)
+	mux.HandleFunc("POST /api/v1/pi/answer", s.handlePiAnswer)
+	mux.HandleFunc("GET /api/v1/pi/extensions", s.handlePiExtensions)
+	mux.HandleFunc("POST /api/v1/pi/extensions", s.handlePiExtensions)
+	mux.HandleFunc("POST /api/v1/pi/desktop/claim", s.handlePiDesktop)
+	mux.HandleFunc("POST /api/v1/pi/desktop/result", s.handlePiDesktop)
 	mux.HandleFunc("POST /api/v1/pi/stop", s.handlePiStop)
 	mux.HandleFunc("GET /api/v1/meta/version", s.handleVersion)
 	mux.HandleFunc("GET /api/v1/skills", s.handleSkills)
@@ -159,7 +170,7 @@ func (s *Server) wrap(next http.Handler) http.Handler {
 			}
 		}()
 		limit := int64(maxBodyBytes)
-		if r.URL.Path == "/api/v1/files/write" {
+		if r.URL.Path == "/api/v1/files/write" || r.URL.Path == "/api/v1/pi/images" {
 			limit = maxWriteBodyBytes
 		} else if r.URL.Path == "/api/v1/files/write-privileged" {
 			limit = maxPrivilegedWriteBodyBytes

@@ -28,6 +28,9 @@
   --border: rgba(0, 0, 0, 0.12);
   --border-strong: rgba(0, 0, 0, 0.26);
   --divider-inset: 16px;
+  --button-height: 32px;
+  --field-height: 34px;
+  --file-grid-icon-size: 64px;
 
   --wallpaper-1: #e7e7e7;
   --wallpaper-2: #f5f5f5;

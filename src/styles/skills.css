@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 .skills { container-type: inline-size; overflow: hidden; }
 .skills-layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); flex: 1; min-height: 0; }
-.skills-heading .btn { display: grid; place-items: center; padding: 7px; min-width: 30px; }
 .skills-sidebar { display: flex; flex-direction: column; min-height: 0; padding: 20px 14px 14px; background: var(--surface-sidebar); border-right: 1px solid var(--border); gap: 16px; }
 .skills-heading, .skills-heading > div { display: flex; align-items: center; gap: 10px; }
 .skills-heading { justify-content: space-between; padding: 0 4px; }

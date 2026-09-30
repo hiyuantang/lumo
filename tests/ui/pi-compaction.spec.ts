@@ -38,12 +38,12 @@ test('Pi shares ratio or token budgets across models, preserves drafts and valid
   await page.getByRole('tab', { name: 'Providers', exact: true }).click(); await page.getByRole('tab', { name: 'Context & compaction' }).click(); await expect(input).toHaveValue('75');
   await page.getByTestId('window-close-pi').click(); await expect(page.getByTestId('server-app-confirm')).toContainText('unsaved settings');
   await page.getByTestId('server-app-confirm').getByRole('button', { name: 'Cancel', exact: true }).click();
-  await page.getByTestId('pi-compaction-save').click(); await expect(panel.getByRole('status')).toContainText('Saved');
+  await page.getByTestId('pi-compaction-save').click(); await expect(page.getByTestId('pi-notification')).toHaveText('Saved');
   expect(changes[0]).toMatchObject({ model: '', usageBudget: { mode: 'percent', value: 75 }, keepRecentTokens: 12000 });
   await page.getByRole('combobox', { name: 'Context budget unit' }).click(); await page.getByRole('option', { name: 'Tokens', exact: true }).click();
   await input.fill('150000'); await expect(catalog).toContainText('Compact at 150,000 (75%)'); await expect(catalog).toContainText('Compact at 111,616');
   conflict = true; await page.getByTestId('pi-compaction-save').click(); await expect(panel.getByRole('alert')).toContainText('changed on the server'); await expect(input).toHaveValue('150000');
-  conflict = false; await page.getByTestId('pi-compaction-save').click(); await expect(panel.getByRole('status')).toContainText('Saved');
+  conflict = false; await page.getByTestId('pi-compaction-save').click(); await expect(page.getByTestId('pi-notification')).toHaveText('Saved');
   expect(changes[1]).toMatchObject({ model: '', usageBudget: { mode: 'tokens', value: 150000 } });
   expect(fixture.commands.filter((command) => command.type === 'set_model')).toEqual([]);
   for (const theme of ['light', 'dark'] as const) { await page.emulateMedia({ colorScheme: theme }); await panel.evaluate((node) => { node.scrollTop = 0; }); await page.screenshot({ path: `/tmp/lumo-pi-context-${theme}.png`, animations: 'disabled' }); await catalog.scrollIntoViewIfNeeded(); await page.screenshot({ path: `/tmp/lumo-pi-catalog-${theme}.png`, animations: 'disabled' }); }

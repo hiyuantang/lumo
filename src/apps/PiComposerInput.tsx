@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { composerTokens, composerText, composerSelection, placeComposerCaret } from './piComposerTokens';
+import type { PiTemplate } from '../api/pi';
+import { expandTemplate, templateParts } from './piTemplates';
 import type { Skill } from '../api/skills';
 import { useMenuInput } from '../shell/useMenuInput';
 import { IconCode, IconSkills } from '../shell/icons';
@@ -19,11 +21,13 @@ interface Props {
   onAction: (action: PiChatAction, remaining: string) => void;
   inputRef: RefObject<HTMLDivElement>;
   skills: Skill[];
+  templates?: PiTemplate[];
+  onImages?: (files: File[]) => void;
   disabled: boolean;
   actionDisabled: (action: PiChatAction) => boolean;
 }
 
-export function PiComposerInput({ value, onChange, onSend, onAction, inputRef, skills, disabled, actionDisabled }: Props) {
+export function PiComposerInput({ value, onChange, onSend, onAction, inputRef, skills, templates = [], onImages, disabled, actionDisabled }: Props) {
   const id = useId();
   const [composing, setComposing] = useState(false);
   const pendingCaret = useRef<number | null>(null);
@@ -66,8 +70,9 @@ export function PiComposerInput({ value, onChange, onSend, onAction, inputRef, s
   const query = fragment?.[1].toLowerCase() ?? '';
   const leading = start >= 0 && !value.slice(0, start).trim();
   const options = fragment ? [
-    ...(leading ? chatActions.filter((action) => action.name.startsWith(query)).map((action) => ({ ...action, key: action.name, action: action.name, disabled: actionDisabled(action.name) })) : []),
-    ...skills.filter((skill) => !skill.issue && /^[\w.-]+$/.test(skill.name) && (`skill:${skill.name}`.toLowerCase().startsWith(query) || skill.name.toLowerCase().startsWith(query))).map((skill) => ({ name: `skill:${skill.name}`, description: skill.description || 'Use this skill', key: skill.id, action: undefined, disabled: false })),
+    ...(leading ? chatActions.filter((action) => action.name.startsWith(query)).map((action) => ({ ...action, key: action.name, action: action.name, template: undefined as PiTemplate | undefined, disabled: actionDisabled(action.name) })) : []),
+    ...(leading ? templates.filter((item) => item.name.toLowerCase().startsWith(query)).map((item) => ({ name: item.name, description: templateParts(item.content).description, key: `template:${item.name}`, action: undefined, template: item, disabled: false })) : []),
+    ...skills.filter((skill) => !skill.issue && /^[\w.-]+$/.test(skill.name) && (`skill:${skill.name}`.toLowerCase().startsWith(query) || skill.name.toLowerCase().startsWith(query))).map((skill) => ({ name: `skill:${skill.name}`, description: skill.description || 'Use this skill', key: skill.id, action: undefined, template: undefined as PiTemplate | undefined, disabled: false })),
   ] : [];
   const current = Math.min(active, Math.max(0, options.length - 1));
   const open = Boolean(fragment && options.length);
@@ -83,7 +88,7 @@ export function PiComposerInput({ value, onChange, onSend, onAction, inputRef, s
     if (!option || option.disabled) return;
     setDismissed(true);
     if (option.action) { onAction(option.action, value.slice(0, start) + value.slice(caret).replace(/^\s+/, '')); return; }
-    const inserted = `/${option.name} `;
+    const inserted = option.template ? expandTemplate(option.template) : `/${option.name} `;
     pendingCaret.current = start + inserted.length;
     update(value.slice(0, start) + inserted + value.slice(caret));
   }
@@ -115,7 +120,7 @@ export function PiComposerInput({ value, onChange, onSend, onAction, inputRef, s
         <span className="pi-slash-icon" aria-hidden="true">{option.action ? <IconCode size={16}/> : <IconSkills size={16}/>}</span><span><strong>/{option.name}</strong><small>{option.disabled ? 'Available when this chat is idle and has messages' : option.description}</small></span>
       </button>)}
     </div>}
-    <div ref={inputRef} className="input pi-composer-editor" role="textbox" contentEditable={!disabled} suppressContentEditableWarning tabIndex={disabled ? -1 : 0} data-rich-editor="true" data-testid="pi-prompt" aria-label="Message Pi" aria-disabled={disabled} aria-multiline="true" aria-autocomplete="list" aria-controls={open ? id : undefined} aria-expanded={open} aria-activedescendant={open ? `${id}-${current}` : undefined} data-placeholder="Message Pi… Type / for commands" onFocus={() => { setFocused(true); setDismissed(false); }} onBlur={() => setFocused(false)} onSelect={() => { const selection = inputRef.current && composerSelection(inputRef.current); if (selection) setCaret(selection.end); }} onCompositionStart={() => setComposing(true)} onCompositionEnd={() => { setComposing(false); if (inputRef.current) update(composerText(inputRef.current), true); }} onInput={(event) => { setFocused(true); setDismissed(false); const selection = composerSelection(event.currentTarget); setCaret(selection?.end ?? 0); update(composerText(event.currentTarget), (event.nativeEvent as InputEvent).inputType === 'insertText'); }} onPaste={(event) => { event.preventDefault(); insertText(event.clipboardData.getData('text/plain')); }} onKeyDown={(event) => {
+    <div ref={inputRef} className="input pi-composer-editor" role="textbox" contentEditable={!disabled} suppressContentEditableWarning tabIndex={disabled ? -1 : 0} data-rich-editor="true" data-testid="pi-prompt" aria-label="Message Pi" aria-disabled={disabled} aria-multiline="true" aria-autocomplete="list" aria-controls={open ? id : undefined} aria-expanded={open} aria-activedescendant={open ? `${id}-${current}` : undefined} data-placeholder="Message Pi… Type / for commands" onFocus={() => { setFocused(true); setDismissed(false); }} onBlur={() => setFocused(false)} onSelect={() => { const selection = inputRef.current && composerSelection(inputRef.current); if (selection) setCaret(selection.end); }} onCompositionStart={() => setComposing(true)} onCompositionEnd={() => { setComposing(false); if (inputRef.current) update(composerText(inputRef.current), true); }} onInput={(event) => { setFocused(true); setDismissed(false); const selection = composerSelection(event.currentTarget); setCaret(selection?.end ?? 0); update(composerText(event.currentTarget), (event.nativeEvent as InputEvent).inputType === 'insertText'); }} onPaste={(event) => { event.preventDefault(); const files = [...event.clipboardData.files].filter((file) => file.type.startsWith('image/')); if (files.length && onImages) onImages(files); const text = event.clipboardData.getData('text/plain'); if (text) insertText(text); }} onKeyDown={(event) => {
       if (event.nativeEvent.isComposing) return;
       if ((event.metaKey || event.ctrlKey) && ['z', 'y'].includes(event.key.toLowerCase())) {
         event.preventDefault(); undoEdit(event.shiftKey || event.key.toLowerCase() === 'y');

@@ -1,9 +1,10 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
-.desktop-items { position: absolute; inset: 0; padding: 48px 16px calc(var(--dock-space) + 16px); display: grid; grid-auto-flow: column; grid-template-rows: repeat(var(--desktop-rows), 96px); grid-auto-columns: 96px; gap: 8px 12px; justify-content: start; align-content: start; direction: rtl; overflow: auto; outline: none; }
+.desktop-items { position: absolute; inset: 0; padding: 48px 16px calc(var(--dock-space) + 16px); display: grid; grid-auto-flow: column; grid-template-rows: repeat(var(--desktop-rows), 120px); grid-auto-columns: 112px; gap: 8px; justify-content: start; align-content: start; direction: rtl; overflow: auto; outline: none; }
 .desktop-item { direction: ltr; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px; padding: 5px 3px; min-width: 0; border-radius: 10px; user-select: none; transition: background-color 140ms, box-shadow 140ms; }
 .desktop-item:hover { background: color-mix(in srgb, var(--surface-raised) 35%, transparent); }
 .desktop-item[aria-selected='true'] { background: color-mix(in srgb, var(--surface-raised) 70%, transparent); box-shadow: inset 0 0 0 1px var(--border-strong); }
-.desktop-item-icon { height: 48px; display: grid; place-items: center; filter: drop-shadow(0 2px 2px #0002); flex: none; }
+.desktop-item-icon { height: var(--file-grid-icon-size); display: grid; place-items: center; filter: drop-shadow(0 2px 2px #0002); flex: none; }
+.desktop-item-icon svg { width: var(--file-grid-icon-size); height: var(--file-grid-icon-size); }
 .desktop-item.dir svg { color: var(--folder-icon-stroke); fill: var(--folder-icon-fill); stroke-width: 1.3; }
 .desktop-item.file svg { color: var(--file-icon-stroke); fill: var(--file-icon-fill); stroke-width: 1.3; }
 .desktop-item-name { max-width: 100%; padding: 1px 4px; border-radius: 4px; font-size: 12px; font-weight: 500; line-height: 16px; color: var(--text); text-align: center; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: 0 1px 3px var(--surface-raised); }

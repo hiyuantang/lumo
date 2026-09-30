@@ -286,8 +286,8 @@ export function AppLibrary() {
     </div>
     {confirm && confirmedApp && <AppConfirmation title={`Uninstall ${confirmedApp.name}?`} confirm={cleanUninstall ? 'Clean uninstall' : 'Uninstall'} onCancel={() => setConfirm(null)} onConfirm={() => { if (confirm === 'pi') void uninstallPi(cleanUninstall); else void apply(confirm, cleanUninstall); }}>
         <div className="library-uninstall-options" role="radiogroup" aria-label="Uninstall options">
-          <label className={!cleanUninstall ? 'selected' : ''}><input type="radio" name="uninstall-mode" checked={!cleanUninstall} onChange={() => setCleanUninstall(false)} data-testid="uninstall-normal"/><span><strong>Uninstall</strong><small>Remove the app. Keep settings and stored data.</small></span></label>
-          <label className={cleanUninstall ? 'selected' : ''}><input type="radio" name="uninstall-mode" checked={cleanUninstall} onChange={() => setCleanUninstall(true)} data-testid="uninstall-clean"/><span><strong>Clean uninstall</strong><small>Also move settings, caches and stored app data to Trash.</small></span></label>
+          <label className={!cleanUninstall ? 'selected' : ''}><span><strong>Uninstall</strong><small>Remove the app. Keep settings and stored data.</small></span><input type="radio" name="uninstall-mode" checked={!cleanUninstall} onChange={() => setCleanUninstall(false)} data-testid="uninstall-normal"/></label>
+          <label className={cleanUninstall ? 'selected' : ''}><span><strong>Clean uninstall</strong><small>Also move settings, caches and stored app data to Trash.</small></span><input type="radio" name="uninstall-mode" checked={cleanUninstall} onChange={() => setCleanUninstall(true)} data-testid="uninstall-clean"/></label>
         </div>
         {confirmedApp.id === 'git' && <p>Repositories, SSH keys and account Git settings are preserved. Clean uninstall moves system Git settings to Trash.</p>}
         {confirm !== 'pi' && confirm.plan.packages.length > 1 && <p className="library-uninstall-note">Packages to remove: {confirm.plan.packages.map((pkg) => pkg.name).join(', ')}.</p>}

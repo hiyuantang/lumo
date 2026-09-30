@@ -6,6 +6,14 @@ async function highlighted(rows: Locator, active?: Locator) {
   await expect.poll(() => rows.evaluateAll((nodes) => nodes.filter((node) => getComputedStyle(node).backgroundColor !== 'rgba(0, 0, 0, 0)').length)).toBe(active ? 1 : 0);
   if (active) await expect(active).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 }
+async function trailingCheck(row: Locator, selector = '.dropdown-menu-check') {
+  const check = await row.locator(selector).boundingBox();
+  const bounds = await row.boundingBox();
+  const label = await row.locator(':scope > :first-child').boundingBox();
+  expect(check).not.toBeNull();
+  expect(check!.x).toBeGreaterThanOrEqual(label!.x + label!.width);
+  expect(bounds!.x + bounds!.width - check!.x - check!.width).toBeLessThanOrEqual(12);
+}
 async function login(page: Page) {
   await page.goto('/');
   await page.getByTestId('login-username').fill('demo'); await page.getByTestId('login-password').fill('demo'); await page.getByTestId('login-submit').click();
@@ -24,6 +32,7 @@ for (const width of [1440, 390]) test(`Pi context unit menus have one active hig
     const rows = page.getByRole('option'); const selected = rows.nth(0); const other = rows.nth(1);
     await highlighted(rows); await expect(selected).toHaveAttribute('aria-selected', 'true');
     await expect(selected.locator('.dropdown-menu-check')).toHaveText('✓');
+    await trailingCheck(selected);
     await other.hover(); await highlighted(rows, other);
     await expect(selected).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
     await page.screenshot({ path: `/tmp/lumo-menu-compaction-${width}-${theme}.png` });
@@ -48,10 +57,14 @@ test('Files dropdowns, context menus and the menu bar share one input highlight'
     await page.emulateMedia({ colorScheme: theme });
     await page.getByTestId('files-view').click();
     const dropdown = page.getByTestId('files-view-menu'); const checked = dropdown.locator('[aria-checked=true]').first();
+    await trailingCheck(checked);
     await dropdown.getByRole('menuitemradio', { name: 'Grid', exact: true }).hover();
     await highlighted(dropdown.locator('.popup-item'), dropdown.getByRole('menuitemradio', { name: 'Grid', exact: true }));
     await expect(checked).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
     await page.keyboard.press('End'); await highlighted(dropdown.locator('.popup-item'), dropdown.locator(':focus'));
+    await page.keyboard.press('Escape');
+    await page.locator('[data-menu-button=window]').click();
+    await trailingCheck(page.locator('[data-menu=window] [aria-checked=true]'), '.menubar-check');
     await page.keyboard.press('Escape');
     await page.getByTestId('file-row-Documents').click({ button: 'right' });
     const context = page.getByTestId('context-menu'); const last = context.getByRole('menuitem').last();
@@ -90,6 +103,7 @@ test('Pi model choices use checkmarks and the shared highlight colors', async ({
     const rows = page.getByRole('option');
     await rows.nth(1).hover(); await highlighted(rows, rows.nth(1));
     await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await trailingCheck(rows.nth(0), '.pi-model-check');
     await expect(rows.nth(0)).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
     await page.keyboard.press('End'); await highlighted(rows, rows.nth(1));
     await page.keyboard.press('Home'); await highlighted(rows, rows.nth(0));

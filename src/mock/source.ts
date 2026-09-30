@@ -81,7 +81,11 @@ export class MockDataSource implements DataSource {
   gitRepository(path: string) { return this.git.repository(path); }
   gitDiff(path: string, file: string, commit: string, staged: boolean) { return this.git.diff(path, file, commit, staged); }
   gitAction(request: GitAction) { return this.git.action(request); }
+  piTemplates = mockPi.templates;
+  piSaveTemplate = mockPi.saveTemplate;
+  piUploadImage = async (_content: string): Promise<{ path: string }> => { throw new Error('Image uploads require a connected server.'); };
   piProviders = mockPi.providers;
+  piConnections = mockPi.connections;
   piAuthStart = mockPi.authStart;
   piAuthState = mockPi.authState;
   piAuthReply = mockPi.authReply;
@@ -89,6 +93,8 @@ export class MockDataSource implements DataSource {
   piReference = mockPi.reference;
   piCompaction = mockPi.compaction;
   piSaveCompaction = mockPi.saveCompaction;
+  piImageSettings = mockPi.imageSettings;
+  piSaveImageSettings = mockPi.saveImageSettings;
   piSettings = mockPi.settings;
   piSaveSettings = mockPi.saveSettings;
   piSessions = mockPi.sessions;
@@ -99,6 +105,12 @@ export class MockDataSource implements DataSource {
   piStart = mockPi.start;
   piCommand = mockPi.command;
   piEvents = mockPi.events;
+  private piExtensionSettings: import('../api/lumo-use').PiExtensionSettings = { lumoUse: true, questions: true, revision: 'initial', extensions: [] };
+  piExtensions = async () => this.piExtensionSettings;
+  piSaveExtensions = async (value: typeof this.piExtensionSettings) => { this.piExtensionSettings = { ...value, revision: crypto.randomUUID() }; return this.piExtensionSettings; };
+  piDesktopClaim = async (): Promise<never> => { throw new Error('Lumo Use needs a live Pi chat.'); };
+  piDesktopResult = async () => {};
+  piAnswer = async () => {};
   piStop = mockPi.stop;
 
   constructor() { appFileFixtures('docker'); appFileFixtures('nginx'); }

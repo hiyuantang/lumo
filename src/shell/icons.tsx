@@ -33,6 +33,10 @@ export function IconHome(p: IconProps) {
   );
 }
 
+export function IconImage(p: IconProps) {
+  return base(p, <><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m4 18 6-6 4 4 3-3 4 5"/></>);
+}
+
 export function IconFolder(p: IconProps) {
   return base(
     p,
@@ -149,6 +153,10 @@ export function IconZoom(p: IconProps) {
   );
 }
 
+export function IconEyeOff(p: IconProps) {
+  return base(p, <><path d="M3 3l18 18M9 6.3a10 10 0 0 1 3-.5c6 0 9.5 6.2 9.5 6.2a20 20 0 0 1-3 3.8M6 7.6A22 22 0 0 0 2.5 12s3.5 6.2 9.5 6.2c1.5 0 2.8-.3 4-.8M10 10a2.8 2.8 0 0 0 4 4"/></>);
+}
+
 export function IconEye(p: IconProps) {
   return base(
     p,
@@ -262,4 +270,12 @@ export function IconSend(p: IconProps) {
 
 export function IconStop(p: IconProps) {
   return base(p, <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>);
+}
+
+export function IconPet(p: IconProps) {
+  return base(p, <><ellipse cx="6" cy="9" rx="2" ry="2.5"/><ellipse cx="10" cy="5" rx="2" ry="2.5"/><ellipse cx="16" cy="6" rx="2" ry="2.5"/><ellipse cx="20" cy="11" rx="2" ry="2.5"/><path d="M8 15c1-2 2-3 4-3s3 1 4 3l2 3c1 3-2 4-4 3l-2-1-2 1c-3 1-5-1-4-3Z"/></>);
+}
+
+export function IconNewChat(p: IconProps) {
+  return base(p, <path d="M10 4H6a3 3 0 0 0-3 3v11a3 3 0 0 0 3 3h11a3 3 0 0 0 3-3v-4M15 4l5 5M10 14l-1 4 4-1 8-8a2 2 0 0 0-5-5z"/>);
 }

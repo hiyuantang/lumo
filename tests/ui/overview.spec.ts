@@ -1,9 +1,43 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { test, expect } from '../offline';
 import { overviewLayout } from '../../src/shell/overviewLayout';
+import { piPage } from './pi-fixture';
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`Overview hides expanded Pi content behind previews in ${colorScheme} mode`, async ({ page }) => {
+    await page.setViewportSize({ width: colorScheme === 'light' ? 2048 : 800, height: 1050 });
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await piPage(page);
+    await page.route('**/api/v1/files/list**', (route) => route.fulfill({ json: { ok: true, data: { path: '/home/user', entries: [{ name: 'notes.md', type: 'file', sizeBytes: 20, modifiedAt: '', mode: 420 }] } } }));
+    await page.route('**/api/v1/pi/command', (route) => route.request().postDataJSON().command.type === 'get_messages' ? route.fulfill({ json: { ok: true, data: { success: true, eventCursor: 0, data: { messages: Array.from({ length: 30 }, (_, index) => [
+      { role: 'assistant', content: [{ type: 'thinking', thinking: `Review step ${index}.` }] },
+      { role: 'toolResult', toolName: 'bash', toolCallId: `bash-${index}`, content: [{ type: 'text', text: `Command output ${index}` }] },
+    ]).flat() } } } }) : route.fallback());
+    await page.goto('http://localhost:5200');
+    await page.getByTestId('dock-app-pi').click();
+    const pi = page.getByTestId('window-pi');
+    const tool = pi.getByTestId('pi-tool').last();
+    await tool.getByRole('button').click();
+    await expect(tool.locator('.disclosure-body')).toBeVisible();
+    const transcript = page.getByTestId('pi-messages');
+    await transcript.evaluate((node) => { node.scrollTop = node.scrollHeight; });
+    const scrollTop = await transcript.evaluate((node) => node.scrollTop);
+    expect(scrollTop).toBeGreaterThan(0);
+    await page.getByTestId('dock-app-files').click();
+    await page.getByTestId('dock-overview').click();
+    await expect(page.locator('[data-overview-window]')).toHaveCount(2);
+    await expect.poll(() => pi.evaluate((node) => [...node.querySelectorAll('*')].filter((child) => getComputedStyle(child).visibility === 'visible').length)).toBe(0);
+    await expect(page.getByTestId('overview-window-pi').locator('[data-window-thumbnail]')).toBeVisible();
+    await page.screenshot({ path: `/tmp/lumo-overview-pi-${colorScheme}.png` });
+    await page.getByTestId('overview-window-pi').click();
+    await expect(page.getByTestId('window-overview')).toHaveCount(0);
+    await expect(tool.locator('.disclosure-body')).toBeVisible();
+    expect(await transcript.evaluate((node) => node.scrollTop)).toBe(scrollTop);
+  });
+}
 
 for (const width of [1440, 390]) {
-  test(`Overview shows all windows and restores the chosen session at ${width}px`, async ({ page }) => {
+  test(`Overview shows desktop windows and keeps minimized sessions in the dock at ${width}px`, async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setViewportSize({ width, height: 900 });
@@ -13,7 +47,7 @@ for (const width of [1440, 390]) {
     await page.getByTestId('login-password').fill('demo');
     await page.getByTestId('login-submit').click();
     await page.getByTestId('dock-overview').click();
-    await expect(page.getByTestId('window-overview')).toContainText('Your open windows will appear here.');
+    await expect(page.getByTestId('window-overview')).toContainText('Your desktop windows will appear here.');
     await page.keyboard.press('Escape');
     await page.getByTestId('dock-app-terminal').click();
     await page.getByTestId('terminal-input').fill('echo KEEP_OVERVIEW');
@@ -21,8 +55,8 @@ for (const width of [1440, 390]) {
     await page.getByTestId('dock-app-files').click();
     await page.getByTestId('dock-app-library').click();
     await page.getByTestId('dock-overview').click();
-    await expect(page.getByTestId('window-overview').locator('[data-overview-window]')).toHaveCount(3);
-    await expect(page.getByTestId('overview-window-terminal')).toHaveAccessibleName('Terminal, minimized');
+    await expect(page.getByTestId('window-overview').locator('[data-overview-window]')).toHaveCount(2);
+    await expect(page.getByTestId('overview-window-terminal')).toHaveCount(0);
     for (const thumbnail of await page.getByTestId('window-overview').locator('[data-window-thumbnail]').all()) {
       await expect.poll(async () => (await thumbnail.boundingBox())?.width ?? 0).toBeGreaterThan(40);
     }
@@ -30,14 +64,16 @@ for (const width of [1440, 390]) {
     for (const preview of await page.locator('.overview-preview').all()) {
       await expect(preview).toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
     }
-    await page.getByTestId('overview-window-terminal').hover();
-    await expect(page.getByTestId('overview-window-terminal').locator('.overview-preview')).toHaveCSS('outline-color', 'rgb(82, 155, 255)');
+    await page.getByTestId('overview-window-files').hover();
+    await expect(page.getByTestId('overview-window-files').locator('.overview-preview')).toHaveCSS('outline-color', 'rgb(82, 155, 255)');
     await page.mouse.move(0, 0);
-    await expect(page.getByTestId('overview-close-terminal')).toHaveCSS('opacity', '0');
-    await expect(page.getByTestId('overview-window-terminal').locator('.overview-preview')).toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
+    await expect(page.getByTestId('overview-close-files')).toHaveCSS('opacity', '0');
+    await expect(page.getByTestId('overview-window-files').locator('.overview-preview')).toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
     await page.screenshot({ path: `/tmp/lumo-overview-${width}.png` });
-    await page.getByTestId('overview-window-terminal').click();
+    await page.getByTestId('overview-window-files').click();
     await expect(page.getByTestId('window-overview')).toHaveCount(0);
+    await expect(page.getByTestId('window-terminal')).toBeHidden();
+    await page.getByTestId('dock-minimized-terminal').click();
     await expect(page.getByTestId('window-terminal')).toBeVisible();
     await expect(page.getByTestId('app-terminal')).toContainText('echo KEEP_OVERVIEW');
     await page.getByTestId('dock-overview').click();
@@ -136,7 +172,7 @@ test('Overview layout fits varied window proportions and counts', () => {
   }
 });
 
-test('Overview closes hovered, minimized and last windows without selecting them', async ({ page }) => {
+test('Overview closes desktop windows and shows an empty state when only minimized windows remain', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
   await page.goto('/');
   await page.getByTestId('login-username').fill('demo');
@@ -144,8 +180,10 @@ test('Overview closes hovered, minimized and last windows without selecting them
   await page.getByTestId('login-submit').click();
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('dock-app-terminal').click();
-  await page.getByTestId('window-minimize-terminal').click();
+  await page.getByTestId('dock-app-library').click();
+  await page.getByTestId('window-minimize-library').click();
   await page.getByTestId('dock-overview').click();
+  await expect(page.getByTestId('overview-window-library')).toHaveCount(0);
   await page.getByTestId('overview-window-terminal').hover();
   await expect(page.getByTestId('overview-close-terminal')).toHaveCSS('opacity', '1');
   await page.screenshot({ animations: 'disabled', path: '/tmp/lumo-overview-close.png' });
@@ -158,9 +196,11 @@ test('Overview closes hovered, minimized and last windows without selecting them
   await expect(page.getByTestId('overview-close-files')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('window-files')).toHaveCount(0);
+  await expect(page.getByTestId('window-overview')).toContainText('Your desktop windows will appear here.');
   await expect(page.getByRole('button', { name: 'Close overview' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('window-overview')).toHaveCount(0);
+  await expect(page.getByTestId('dock-minimized-library')).toBeVisible();
 });
 
 test('closing a dirty Preview from Overview returns to the unsaved changes prompt', async ({ page }) => {

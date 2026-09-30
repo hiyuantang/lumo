@@ -24,7 +24,7 @@ export function DesktopItems() {
   const [refresh, setRefresh] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const rows = Math.max(1, Math.floor((state.viewport.h - MENUBAR_H - dockSpace(state.viewport) - 24) / 104));
+  const rows = Math.max(1, Math.floor((state.viewport.h - MENUBAR_H - dockSpace(state.viewport) - 56) / 128));
 
   useEffect(() => {
     let alive = true, loading = false;
@@ -106,7 +106,7 @@ export function DesktopItems() {
         { label: 'Copy Path', run: () => { if (desktop) void copyText(source.absolutePath([...desktop, entry.name])).catch(() => actions.notify('Clipboard unavailable', 'Could not copy the file path.')); } },
         { label: 'Move to Trash', separator: true, disabled: deleting, run: () => { void trash(names); } },
       ]);
-    }}><span className="desktop-item-icon">{entry.kind === 'dir' ? <IconFolder size={48}/> : <IconFile size={44}/>}</span><span className="desktop-item-name">{entry.name}</span></button>)}
+    }}><span className="desktop-item-icon">{entry.kind === 'dir' ? <IconFolder/> : <IconFile/>}</span><span className="desktop-item-name">{entry.name}</span></button>)}
     {selection.box && <div className="files-selection-box" data-testid="desktop-selection-box" style={selection.box} aria-hidden="true"/>}
     {error && <button type="button" className="desktop-error" title={error} onClick={() => setRefresh((value) => value + 1)}>Desktop unavailable · Retry</button>}
   </div>;

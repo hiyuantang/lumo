@@ -37,11 +37,14 @@ function windowLayout({ x, y, w, h, maximized, snapped, restore }: WindowLayout)
   return { x, y, w, h, maximized, snapped, restore };
 }
 
+export type PiOutcome = 'done' | 'stopped' | 'error';
+
 export interface ShellNotification {
   id: number;
   title: string;
   body: string;
   ts: number;
+  piOutcome?: PiOutcome;
 }
 
 export type ThemePref = 'light' | 'dark' | null;
@@ -51,6 +54,7 @@ type NavigationIntent = (
   | { target: 'logs' | 'services'; unit: string }
   | { target: 'files'; path: string[] }
   | { target: 'settings'; section: SettingsSection }
+  | { target: 'pi'; windowId: WindowId; section: 'pet' }
   | { target: 'library'; appId: ServerAppID; checkUpdates?: boolean }
   | { target: 'trash'; empty: true }
   | { target: 'preview'; windowId: WindowId; edit: boolean }
@@ -73,6 +77,7 @@ interface ShellState {
   navigation: NavigationIntent | null;
   viewport: Viewport;
   fileRevision: number;
+  piActivity: Record<string, true>;
 }
 
 type Action =
@@ -84,6 +89,7 @@ type Action =
   | { type: 'pi-project'; id: WindowId; path: string | null }
   | { type: 'new-preview' }
   | { type: 'open-pi'; path: string }
+  | { type: 'open-pi-settings'; section: 'pet' }
   | { type: 'new-pi' }
   | { type: 'preview-mode'; id: WindowId; mode: 'rendered' | 'raw' }
   | { type: 'open-preview'; path: string[]; edit: boolean; windowId?: WindowId }
@@ -101,7 +107,8 @@ type Action =
   | { type: 'cancel-window-gesture'; appId: WindowId; previous: WindowState }
   | { type: 'update-rect'; appId: WindowId; rect: Rect }
   | { type: 'cycle-window'; dir: 1 | -1 }
-  | { type: 'notify'; title: string; body: string }
+  | { type: 'notify'; title: string; body: string; piOutcome?: PiOutcome }
+  | { type: 'pi-activity'; key: string; running: boolean }
   | { type: 'clear-notifications' }
   | { type: 'toggle-theme' }
   | { type: 'toggle-motion' }
@@ -171,12 +178,13 @@ function reducer(state: ShellState, action: Action): ShellState {
     case 'login': {
       if (state.user === action.user) return state;
       const saved = initState(action.user);
-      return { ...state, user: action.user, windows: saved.windows, remembered: saved.remembered, zTop: saved.zTop, focused: saved.focused, navigation: saved.navigation };
+      return { ...state, user: action.user, windows: saved.windows, remembered: saved.remembered, zTop: saved.zTop, focused: saved.focused, navigation: saved.navigation, piActivity: {} };
     }
     case 'logout':
       return {
         ...state,
         user: null,
+        piActivity: {},
         windows: {},
         remembered: {},
         focused: null,
@@ -224,6 +232,10 @@ function reducer(state: ShellState, action: Action): ShellState {
       const existing = Object.values(state.windows).filter((win): win is WindowState => win?.appId === action.appId).sort((a, b) => b.z - a.z)[0];
       return existing ? reducer(state, { type: 'focus-app', appId: existing.id }) : createWindow(state, action.appId, action.appId);
     }
+    case 'open-pi-settings': {
+      const opened = reducer(state, { type: 'open-app', appId: 'pi' });
+      return { ...opened, navigation: { target: 'pi', windowId: opened.focused!, section: action.section, nonce: (state.navigation?.nonce ?? 0) + 1 } };
+    }
     case 'open-related': {
       const opened = reducer(state, { type: 'open-app', appId: 'home' });
       return {
@@ -262,7 +274,7 @@ function reducer(state: ShellState, action: Action): ShellState {
           .sort((a, b) => b.z - a.z);
         focused = remaining[0]?.id ?? null;
       }
-      return { ...state, windows, focused, navigation: (state.navigation?.target === 'preview' ? state.navigation.windowId === action.appId : state.navigation?.target === closed.appId || (closed.appId === 'home' && (state.navigation?.target === 'logs' || state.navigation?.target === 'services'))) ? null : state.navigation, remembered: { ...state.remembered, [closed.appId]: windowLayout(closed) } };
+      return { ...state, windows, focused, navigation: (state.navigation?.target === 'preview' || state.navigation?.target === 'pi' ? state.navigation.windowId === action.appId : state.navigation?.target === closed.appId || (closed.appId === 'home' && (state.navigation?.target === 'logs' || state.navigation?.target === 'services'))) ? null : state.navigation, remembered: { ...state.remembered, [closed.appId]: windowLayout(closed) } };
     }
     case 'focus-desktop': return { ...state, focused: null };
     case 'focus-app': {
@@ -345,12 +357,18 @@ function reducer(state: ShellState, action: Action): ShellState {
       const nextId = visible[(idx + action.dir + visible.length) % visible.length] ?? visible[0];
       return reducer(state, { type: 'focus-app', appId: nextId });
     }
+    case 'pi-activity': {
+      if (Boolean(state.piActivity[action.key]) === action.running) return state;
+      const piActivity = { ...state.piActivity };
+      if (action.running) piActivity[action.key] = true; else delete piActivity[action.key];
+      return { ...state, piActivity };
+    }
     case 'notify':
       return {
         ...state,
         unread: state.unread + 1,
         notifications: [
-          { id: notificationId++, title: action.title, body: action.body, ts: Date.now() },
+          { id: notificationId++, title: action.title, body: action.body, ts: Date.now(), piOutcome: action.piOutcome },
           ...state.notifications,
         ].slice(0, 50),
       };
@@ -445,6 +463,7 @@ function initState(account?: string): ShellState {
     navigation: stored?.focused === 'services' ? { target: 'services', unit: '', nonce: 1 } : stored?.focused === 'updates' ? { target: 'settings', section: 'updates', nonce: 1 } : stored?.focused === 'logs' ? { target: 'logs', unit: 'all', nonce: 1 } : migratedNetwork ? { target: 'settings', section: 'network', nonce: 1 } : null,
     viewport,
     fileRevision: 0,
+    piActivity: {},
   };
 }
 
@@ -455,6 +474,7 @@ export interface ShellActions {
   emptyTrash(): void;
   setPiProject(id: WindowId, path: string | null): void;
   openPi(path: string): void;
+  openPiSettings(section: 'pet'): void;
   openPreview(path: string[], edit?: boolean, windowId?: WindowId): void;
   newPreviewWindow(): void;
   newPiWindow(): void;
@@ -475,7 +495,8 @@ export interface ShellActions {
   snapWindow(appId: WindowId, target: SnapTarget, restore?: Rect): void;
   cancelWindowGesture(appId: WindowId, previous: WindowState): void;
   updateRect(appId: WindowId, rect: Rect): void;
-  notify(title: string, body: string): void;
+  notify(title: string, body: string, piOutcome?: PiOutcome): void;
+  setPiActivity(key: string, running: boolean): void;
   clearNotifications(): void;
   toggleTheme(): void;
   toggleMotion(): void;
@@ -634,6 +655,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       emptyTrash: () => dispatch({ type: 'empty-trash' }),
       setPiProject: (id, path) => dispatch({ type: 'pi-project', id, path }),
       openPi: (path) => dispatch({ type: 'open-pi', path }),
+      openPiSettings: (section) => dispatch({ type: 'open-pi-settings', section }),
       openPreview: (path, edit = false, windowId) => {
         const open = () => dispatch({ type: 'open-preview', path, edit, windowId });
         if (windowId) requestWindowAction(windowId, open); else open();
@@ -662,7 +684,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       snapWindow: (appId, target, restore) => dispatch({ type: 'snap-window', appId, target, restore }),
       cancelWindowGesture: (appId, previous) => dispatch({ type: 'cancel-window-gesture', appId, previous }),
       updateRect: (appId, rect) => dispatch({ type: 'update-rect', appId, rect }),
-      notify: (title, body) => dispatch({ type: 'notify', title, body }),
+      notify: (title, body, piOutcome) => dispatch({ type: 'notify', title, body, piOutcome }),
+      setPiActivity: (key, running) => dispatch({ type: 'pi-activity', key, running }),
       clearNotifications: () => dispatch({ type: 'clear-notifications' }),
       toggleTheme: () => dispatch({ type: 'toggle-theme' }),
       toggleMotion: () => dispatch({ type: 'toggle-motion' }),

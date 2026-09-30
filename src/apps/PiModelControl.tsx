@@ -36,7 +36,8 @@ export function PiModelControl({ model, models, levels, level, disabled, onModel
   function close(restore = false) { setAnchor(null); setPreview(null); if (restore) trigger.current?.focus(); }
   function open() { setChoosing(false); setPreview(null); setAnchor(trigger.current!.getBoundingClientRect()); }
   async function changeLevel(value: string) {
-    if (unavailable || lock.current || value === current) { setPreview(null); return; }
+    if (unavailable || lock.current) return;
+    if (value === current) { setPreview(null); return; }
     restoreSlider.current = document.activeElement === slider.current;
     lock.current = true; setSaving(true);
     try { await onLevel(value); } finally { lock.current = false; setSaving(false); setPreview(null); }
@@ -48,7 +49,7 @@ export function PiModelControl({ model, models, levels, level, disabled, onModel
     finally { lock.current = false; setSaving(false); }
   }
   return <>
-    <button ref={trigger} type="button" className="pi-model-trigger" data-testid="pi-model" disabled={unavailable || !models.length} aria-haspopup="dialog" aria-expanded={Boolean(anchor)} aria-controls={anchor ? id : undefined} onClick={() => anchor ? close() : open()}>
+    <button ref={trigger} type="button" className="pi-model-trigger" data-saving={saving || undefined} data-testid="pi-model" disabled={unavailable || !models.length} aria-haspopup="dialog" aria-expanded={Boolean(anchor)} aria-controls={anchor ? id : undefined} onClick={() => anchor ? close() : open()}>
       <span className="pi-model-name">{model?.name || model?.id || (disabled ? 'Loading models…' : 'No models')}</span><span className="pi-model-effort">{model ? label(current) : ''}</span><IconChevronDown size={14}/>
     </button>
     {anchor && <Popup keyboard={keyboard} key={String(choosing)} x={anchor.left + anchor.width / 2} y={anchor.top - 10} width={248} placement="above" anchorElement={trigger.current} onClose={() => close()}>
@@ -69,7 +70,7 @@ export function PiModelControl({ model, models, levels, level, disabled, onModel
             const next = event.key === 'ArrowDown' ? Math.min(active + 1, options.length - 1) : event.key === 'ArrowUp' ? Math.max(active - 1, 0) : event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : -1;
             if (next >= 0) { event.preventDefault(); options[next]?.focus(); }
           }}>
-            {models.map((item) => <button className="popup-item" key={modelKey(item)} type="button" role="option" aria-label={`${item.name || item.id} · ${item.provider}`} aria-selected={Boolean(model && modelKey(item) === modelKey(model))} data-autofocus={Boolean(model && modelKey(item) === modelKey(model)) || undefined} disabled={unavailable} onClick={() => void changeModel(item)}><span className="pi-model-check" aria-hidden="true">{model && modelKey(item) === modelKey(model) ? '✓' : ''}</span><strong>{item.name || item.id}</strong><small>{item.provider}</small></button>)}
+            {models.map((item) => <button className="popup-item" key={modelKey(item)} type="button" role="option" aria-label={`${item.name || item.id} · ${item.provider}`} aria-selected={Boolean(model && modelKey(item) === modelKey(model))} data-autofocus={Boolean(model && modelKey(item) === modelKey(model)) || undefined} disabled={unavailable} onClick={() => void changeModel(item)}><strong>{item.name || item.id}</strong><small>{item.provider}</small><span className="pi-model-check" aria-hidden="true">{model && modelKey(item) === modelKey(model) ? '✓' : ''}</span></button>)}
           </div>
         </> : <>
           <header className="pi-model-card-heading"><span className="pi-effort-value" aria-live="polite">{label(selected)}</span></header>

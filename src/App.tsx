@@ -4,6 +4,8 @@ import { ServerClockProvider } from './shell/ServerClockContext';
 import { WindowOverview } from './shell/WindowOverview';
 import { CommandCenter } from './shell/CommandCenter';
 import { ContextMenuProvider } from './shell/ContextMenu';
+import { DesktopPet } from './shell/DesktopPet';
+import { LumoUseCursor } from './shell/LumoUseCursor';
 import { Dock } from './shell/Dock';
 import { DesktopItems } from './shell/DesktopItems';
 import { AppCatalogProvider } from './shell/AppCatalogContext';
@@ -31,6 +33,8 @@ function Desktop() {
       <CommandCenter />
       <NotificationCenter />
       <ShortcutsDialog />
+      <DesktopPet />
+      <LumoUseCursor />
     </div>
   );
 }

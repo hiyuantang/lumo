@@ -2,7 +2,7 @@
 .preview { min-height: 0; background: var(--surface-raised); }
 .preview-toolbar { gap: 12px; flex-wrap: wrap; }
 .preview-toolbar > strong { flex: 1; min-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.preview-modes { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface); }
+.preview-modes { --button-height: 26px; display: flex; gap: 3px; padding: 2px; border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface); }
 .preview-modes .btn { border: 0; background: none; }
 .preview-modes [aria-pressed='true'] { background: var(--accent-soft); color: var(--accent); }
 .preview-content { flex: 1; min-height: 0; overflow: auto; }
@@ -45,14 +45,16 @@
 @media (max-width: 700px) {
   .preview-toolbar { padding: 10px; }
   .preview-toolbar .app-toolbar-actions { gap: 6px; }
-  .preview-toolbar .btn { padding: 6px 8px; font-size: 12px; }
+  .preview-toolbar .btn:not(.btn-icon) { padding-inline: 8px; font-size: 12px; }
   .preview-toolbar .preview-modes { padding: 2px; gap: 2px; }
 }
 
-.preview-image-content { position: relative; flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 20px; background: var(--surface-sunken); }
-.preview-image-content > img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; min-height: 0; min-width: 0; }
-.preview-image-content.preview-image-actual { display: flex; align-items: safe center; justify-content: safe center; }
-.preview-image-actual > img { flex: none; max-width: none; max-height: none; }
+.preview-image-content { position: relative; flex: 1; min-height: 0; overflow: auto; display: flex; align-items: safe center; justify-content: safe center; background: var(--surface-sunken); }
+.preview-image-content > img { display: block; flex: none; max-width: none; max-height: none; object-fit: contain; cursor: zoom-in; }
+.preview-image-content > .preview-image-zoomed { cursor: zoom-out; }
+.preview-image-pannable { touch-action: none; user-select: none; }
+.preview-image-pannable, .preview-image-content.preview-image-pannable > img { cursor: grab; }
+.preview-image-content.is-panning, .preview-image-content.is-panning > img { cursor: grabbing; }
 .preview-image-status { margin: auto; color: var(--text-muted); font-size: 13px; text-align: center; }
 .preview-image-status.preview-error { color: var(--danger); }
 .preview-html-content { display: flex; flex-direction: column; }

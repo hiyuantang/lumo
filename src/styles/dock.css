@@ -3,7 +3,7 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 8px;
+  bottom: calc(8px * var(--dock-scale));
   z-index: 3000;
   display: flex;
   justify-content: center;
@@ -14,11 +14,12 @@
   position: relative;
   display: flex;
   align-items: flex-end;
-  gap: 14px;
+  gap: calc(14px * var(--dock-scale));
   max-width: calc(100vw - 24px);
-  padding: 9px 16px 5px;
+  height: calc(86px * var(--dock-scale) + 2px);
+  padding: calc(9px * var(--dock-scale)) calc(16px * var(--dock-scale)) calc(5px * var(--dock-scale));
   border: 1px solid transparent;
-  border-radius: 26px;
+  border-radius: calc(26px * var(--dock-scale));
   pointer-events: auto;
 }
 
@@ -32,9 +33,8 @@
 .dock-apps { flex-shrink: 0; }
 .dock-windows {
   min-width: 0;
-  max-width: 286px;
-  padding-top: 8px;
-  margin-top: -8px;
+  padding-top: calc(8px * var(--dock-scale));
+  margin-top: calc(-8px * var(--dock-scale));
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -44,7 +44,7 @@
   position: relative;
   align-self: stretch;
   flex: 0 0 1px;
-  margin: 11px 0 16px;
+  margin: calc(11px * var(--dock-scale)) 0 calc(16px * var(--dock-scale));
   background: var(--border-strong);
 }
 
@@ -65,9 +65,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 4px;
-  border-radius: 14px;
+  flex-shrink: 0;
+  gap: calc(5px * var(--dock-scale));
+  padding: calc(4px * var(--dock-scale));
+  border-radius: calc(14px * var(--dock-scale));
 }
 
 .dock-app, .dock-divider { transform-origin: top left; }
@@ -75,9 +76,9 @@
 .dock-icon {
   display: grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 14px;
+  width: calc(54px * var(--dock-scale));
+  height: calc(54px * var(--dock-scale));
+  border-radius: calc(14px * var(--dock-scale));
   border: 0;
   background: transparent;
   color: #fff;
@@ -96,8 +97,8 @@
 }
 
 .dock-dot {
-  width: 5px;
-  height: 5px;
+  width: calc(5px * var(--dock-scale));
+  height: calc(5px * var(--dock-scale));
   border-radius: 50%;
   border: 1px solid transparent;
 }
@@ -108,15 +109,15 @@
 }
 
 .dock-app.active .dock-dot {
-  width: 9px;
-  border-radius: 4px;
+  width: calc(9px * var(--dock-scale));
+  border-radius: calc(4px * var(--dock-scale));
   background: var(--accent);
   border-color: var(--accent);
 }
 
 .dock-icon.dock-window-preview {
   position: relative;
-  width: 78px;
+  width: calc(78px * var(--dock-scale));
   background: none;
   border: 0;
   border-radius: 0;
@@ -124,7 +125,7 @@
 }
 .dock-window-canvas {
   position: absolute;
-  inset: 0 5px 5px 0;
+  inset: 0 calc(5px * var(--dock-scale)) calc(5px * var(--dock-scale)) 0;
   display: grid;
   place-items: center;
   pointer-events: none;
@@ -144,10 +145,10 @@
   bottom: 0;
   display: grid;
   place-items: center;
-  width: 23px;
-  height: 23px;
+  width: calc(23px * var(--dock-scale));
+  height: calc(23px * var(--dock-scale));
   border: 0;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--dock-scale));
   background: transparent;
   color: white;
   box-shadow: 0 1px 3px #0004;
@@ -181,33 +182,32 @@
   transform: none;
 }
 
-@media (max-width: 850px) {
+@media (max-width: 900px) {
   .dock {
-    bottom: 8px;
+    bottom: calc(8px * var(--dock-scale));
   }
 
   .dock-tray {
     max-width: calc(100vw - 16px);
-    min-height: calc(clamp(20px, calc((100vw - 32px) / var(--dock-app-count) - 7px), 38px) + 27px);
-    gap: 1px;
-    padding: 6px 5px 3px;
-    border-radius: 20px;
+    height: calc((clamp(20px, calc((100vw - 32px) / var(--dock-app-count) - 7px), 38px) + 25px) * var(--dock-scale) + 2px);
+    gap: calc(1px * var(--dock-scale));
+    padding: calc(6px * var(--dock-scale)) calc(5px * var(--dock-scale)) calc(3px * var(--dock-scale));
+    border-radius: calc(20px * var(--dock-scale));
   }
 
   .dock-app {
-    padding: 3px;
+    padding: calc(3px * var(--dock-scale));
   }
 
   .dock-icon {
-    width: clamp(20px, calc((100vw - 40px) / var(--dock-count) - 7px), 38px);
-    height: clamp(20px, calc((100vw - 40px) / var(--dock-count) - 7px), 38px);
-    border-radius: 11px;
+    width: calc(clamp(20px, calc((100vw - 40px) / var(--dock-count) - 7px), 38px) * var(--dock-scale));
+    height: calc(clamp(20px, calc((100vw - 40px) / var(--dock-count) - 7px), 38px) * var(--dock-scale));
+    border-radius: calc(11px * var(--dock-scale));
   }
 
-  .dock-divider { margin: 9px 3px 14px; }
-  .dock-windows { max-width: 132px; }
-  .dock-icon.dock-window-preview { width: clamp(30px, calc((100vw - 40px) / var(--dock-count) - 7px), 54px); }
-  .dock-window-badge { width: 16px; height: 16px; border-radius: 5px; }
+  .dock-divider { margin: calc(9px * var(--dock-scale)) calc(3px * var(--dock-scale)) calc(14px * var(--dock-scale)); }
+  .dock-icon.dock-window-preview { width: calc(clamp(30px, calc((100vw - 40px) / var(--dock-count) - 7px), 54px) * var(--dock-scale)); }
+  .dock-window-badge { width: calc(16px * var(--dock-scale)); height: calc(16px * var(--dock-scale)); border-radius: calc(5px * var(--dock-scale)); }
   .dock-icon > .app-icon {
     width: 100%;
     height: 100%;

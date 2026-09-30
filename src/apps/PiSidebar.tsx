@@ -3,7 +3,7 @@ import { memo, useEffect, useState } from 'react';
 import type { PiSession } from '../api/pi';
 import { getDataSource } from '../api/source';
 import { usePiProjectNames } from './usePiProjectNames';
-import { IconChevronRight, IconFolder, IconPlus, IconSidebar, IconArchive, IconMore } from '../shell/icons';
+import { IconChevronRight, IconFolder, IconPlus, IconNewChat, IconArchive, IconMore } from '../shell/icons';
 import { useContextMenu } from '../shell/ContextMenu';
 import { useShell } from '../shell/ShellContext';
 import { AppConfirmation } from './ServerAppUI';
@@ -18,7 +18,6 @@ interface Props {
   disabled: boolean;
   navigationDisabled?: boolean;
   running: string[];
-  onReference: (project: string, session: PiSession) => void;
   onNew: () => void;
   onNewProject: (project: string) => void;
   onArchiveProject: (project: string, name: string, sessions: PiSession[]) => void;
@@ -26,9 +25,8 @@ interface Props {
   onOpen: (project: string, session: string) => void;
   onArchive: (project: string, session: PiSession) => void;
   revision: number | string;
-  onCollapse: () => void;
 }
-export const PiSidebar = memo(function PiSidebar({ collapsed, project: projectPath, session, sessions, disabled, navigationDisabled = disabled, running, onReference, onNew, onNewProject, onArchiveProject, onRemoveProject, onOpen, onArchive, revision, onCollapse }: Props) {
+export const PiSidebar = memo(function PiSidebar({ collapsed, project: projectPath, session, sessions, disabled, navigationDisabled = disabled, running, onNew, onNewProject, onArchiveProject, onRemoveProject, onOpen, onArchive, revision }: Props) {
   const source = getDataSource();
   const menu = useContextMenu();
   const { actions } = useShell();
@@ -71,19 +69,18 @@ export const PiSidebar = memo(function PiSidebar({ collapsed, project: projectPa
 
   function chat(item: PiSession, path: string, inProject: boolean) {
     const working = running.includes(`${path}/${item.id}`);
-    return <div key={`${path}/${item.id}`} className="pi-chat-item" {...conversationDrag(path, item)} onContextMenu={(event) => menu(event, [{ label: 'Reference in message', run: () => onReference(path, item) }])}>
+    return <div key={`${path}/${item.id}`} className="pi-chat-item" {...conversationDrag(path, item)}>
       <button className={`pi-sidebar-row${inProject ? ' pi-chat-row' : ''}${active(path, item.id) ? ' is-active' : ''}`} disabled={navigationDisabled} onClick={() => onOpen(path, item.id)} aria-current={active(path, item.id) ? 'page' : undefined} title={`${item.name}\n${path}`}><span>{item.name}</span></button>
       {working && <span className="pi-chat-working" role="status" aria-label={`Working on ${item.name}`} data-testid="pi-chat-working"><span/></span>}
       <button className="pi-chat-archive" disabled={disabled || working} aria-label={`Archive ${item.name}`} title="Archive conversation" onClick={() => onArchive(path, item)}><IconArchive size={14}/></button>
     </div>;
   }
 
-  return <aside className={`pi-sidebar${collapsed ? ' is-collapsed' : ''}`} data-testid="pi-sidebar">
+  return <aside className={`pi-sidebar${collapsed ? ' is-collapsed' : ''}`} data-testid="pi-sidebar" id="pi-chat-sidebar" aria-hidden={collapsed} ref={(node) => node?.toggleAttribute('inert', collapsed)}>
     <header className="pi-sidebar-top">
-      <button className="pi-sidebar-row pi-new-chat" aria-label="New chat" title="New chat" disabled={navigationDisabled} onClick={onNew} data-testid="pi-new"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10 4H6a3 3 0 0 0-3 3v11a3 3 0 0 0 3 3h11a3 3 0 0 0 3-3v-4M15 4l5 5M10 14l-1 4 4-1 8-8a2 2 0 0 0-5-5z"/></svg><span>New chat</span></button>
-      <button className="pi-sidebar-toggle" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={onCollapse}><IconSidebar size={17}/></button>
+      <button className="pi-sidebar-row pi-new-chat" aria-label="New chat" title="New chat" disabled={navigationDisabled} onClick={onNew} data-testid={collapsed ? undefined : "pi-new"}><IconNewChat size={19}/><span>New chat</span></button>
     </header>
-    <div className="pi-sidebar-scroll" ref={(node) => node?.toggleAttribute('inert', collapsed)}>
+    <div className="pi-sidebar-scroll">
       <nav aria-label="Pi projects" className="pi-projects">
         <h2>Projects</h2>
         {projects.map((path) => {

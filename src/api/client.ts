@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { desktopClientId, type DesktopRequest, type PiExtensionSettings } from './lumo-use';
 import type { GitSnapshot, GitDiff, GitAction } from './git';
-import type { PiConversationReference, PiCompaction, PiCompactionChange, PiProvider, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiArchivedSession, PiSession, PiCommand, PiReply, PiEvents } from './pi';
+import type { PiImageSettings, PiTemplate, PiConversationReference, PiCompaction, PiCompactionChange, PiProvider, PiConnection, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiArchivedSession, PiSession, PiCommand, PiReply, PiEvents, PiAnswer, PiPermissionMode, PiStart } from './pi';
 import type { SkillCatalog, SkillDetail } from './skills';
 import type { ProcessInfo } from './source';
 import type { TrashItem, TrashSelection } from './trash';
@@ -162,6 +163,7 @@ export class LiveDataSource implements DataSource {
   gitDiff(path: string, file: string, commit: string, staged: boolean): Promise<GitDiff> { return apiGet('/git/diff', { path, file, commit, staged: String(staged) }); }
   async gitAction(request: GitAction): Promise<void> { await apiPost('/git/action', { requestId: crypto.randomUUID(), ...request }); }
   piProviders(): Promise<{ providers: PiProvider[] }> { return apiGet('/pi/providers'); }
+  piConnections(): Promise<{ providers: PiConnection[] }> { return apiGet('/pi/connections'); }
   piAuthStart(provider: string, method: PiAuthMethod, operation: 'login' | 'logout'): Promise<PiAuthState> { return apiPost('/pi/auth/start', { requestId: crypto.randomUUID(), provider, method, operation }); }
   piAuthState(id: string): Promise<PiAuthState> { return apiGet('/pi/auth', { id }); }
   piAuthReply(id: string, promptId: string, value: string): Promise<void> { return apiPost('/pi/auth/reply', { requestId: crypto.randomUUID(), id, promptId, value }); }
@@ -169,6 +171,8 @@ export class LiveDataSource implements DataSource {
   piReference(project: string, session: string): Promise<Omit<PiConversationReference, 'name'>> { return apiGet('/pi/reference', { project, session }); }
   piCompaction(model: string): Promise<PiCompaction> { return apiGet('/pi/compaction', { model }); }
   piSaveCompaction(change: PiCompactionChange): Promise<PiCompaction> { return apiPost('/pi/compaction', { requestId: crypto.randomUUID(), ...change }); }
+  piImageSettings(): Promise<PiImageSettings> { return apiGet('/pi/image-settings'); }
+  piSaveImageSettings(change: PiImageSettings): Promise<PiImageSettings> { return apiPost('/pi/image-settings', { requestId: crypto.randomUUID(), ...change }); }
   piSettings(kind: PiInstructionKind): Promise<PiInstruction> { return apiGet('/pi/settings', { kind }); }
   piSaveSettings(kind: PiInstructionKind, content: string, revision: string): Promise<PiInstruction> { return apiPost('/pi/settings', { requestId: crypto.randomUUID(), kind, content, revision }); }
   async piSessions(project: string): Promise<PiSession[]> { return (await apiGet<{ sessions: PiSession[] }>('/pi/sessions', { project })).sessions; }
@@ -176,9 +180,17 @@ export class LiveDataSource implements DataSource {
   async piArchivedSessions(): Promise<PiArchivedSession[]> { return (await apiGet<{ sessions: PiArchivedSession[] }>('/pi/sessions/archived')).sessions; }
   async piArchiveSession(project: string, session: string): Promise<void> { await apiPost('/pi/sessions/archive', { requestId: crypto.randomUUID(), project, session }); }
   async piRestoreSession(project: string, session: string): Promise<void> { await apiPost('/pi/sessions/restore', { requestId: crypto.randomUUID(), project, session }); }
-  piStart(project: string, session = '', resume?: string): Promise<{ id: string; project: string }> { return apiPost('/pi/start', { requestId: crypto.randomUUID(), project, session, resume }); }
+  async piTemplates(): Promise<PiTemplate[]> { return (await apiGet<{ templates: PiTemplate[] }>('/pi/templates')).templates; }
+  async piSaveTemplate(template: Pick<PiTemplate, 'name' | 'content' | 'revision'>, remove = false): Promise<void> { await apiPost('/pi/templates', { ...template, delete: remove, requestId: crypto.randomUUID() }); }
+  piUploadImage(content: string): Promise<{ path: string }> { return apiPost('/pi/images', { content, requestId: crypto.randomUUID() }); }
+  async piStart(project: string, session = '', resume?: string, permissionMode?: PiPermissionMode, rememberPermissionMode = false): Promise<PiStart> { return apiPost('/pi/start', { requestId: crypto.randomUUID(), project, session, resume, permissionMode, rememberPermissionMode, clientId: await desktopClientId() }); }
   piCommand(id: string, command: PiCommand): Promise<PiReply> { return apiPost('/pi/command', { requestId: crypto.randomUUID(), id, command }); }
-  piEvents(id: string, after: number): Promise<PiEvents> { return apiGet('/pi/events', { id, after }); }
+  piExtensions(): Promise<PiExtensionSettings> { return apiGet('/pi/extensions'); }
+  piSaveExtensions(value: PiExtensionSettings): Promise<PiExtensionSettings> { return apiPost('/pi/extensions', { requestId: crypto.randomUUID(), revision: value.revision, lumoUse: value.lumoUse, questions: value.questions, extensions: value.extensions?.map(({ id, enabled }) => ({ id, enabled })) }); }
+  async piDesktopClaim(id: string, desktopId: string): Promise<DesktopRequest> { return apiPost('/pi/desktop/claim', { requestId: crypto.randomUUID(), id, desktopId, clientId: await desktopClientId() }); }
+  async piDesktopResult(id: string, desktopId: string, text: string, error: boolean): Promise<void> { await apiPost('/pi/desktop/result', { requestId: crypto.randomUUID(), id, desktopId, text, error, clientId: await desktopClientId() }); }
+  async piAnswer(id: string, answer: PiAnswer, requestId: string): Promise<void> { await apiPost('/pi/answer', { requestId, id, ...answer }); }
+  async piEvents(id: string, after: number): Promise<PiEvents> { return apiGet('/pi/events', { id, after, clientId: await desktopClientId() }); }
   async piStop(id: string): Promise<void> { await apiPost('/pi/stop', { id }); }
 
   getAppCatalog() { return apiGet<AppCatalog>('/apps'); }

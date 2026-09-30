@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { PiImage } from './PiImages';
+import { imageType } from './ImagePreview';
 import type { ReactNode } from 'react';
 import { attachmentKeys, conversationAttachmentKey, fileAttachmentKey } from './piAttachments';
 import type { PiConversationReference } from '../api/pi';
@@ -21,7 +23,7 @@ export function AttachmentCards({ paths, references = [], order, disabled, onRem
     const folder = path.endsWith('/');
     const Icon = folder ? IconFolder : IconFile;
     cards.set(fileAttachmentKey(path), <div className={`pi-attachment pi-attachment-${folder ? 'folder' : 'file'}`} key={fileAttachmentKey(path)} title={path} data-testid="pi-attachment" data-kind={folder ? 'folder' : 'file'}>
-      <Icon size={44}/><span>{attachmentName(name)}</span>
+      <>{!folder && imageType(name) ? <PiImage path={path} alt={name} thumbnail/> : <Icon size={44}/>}</><span>{attachmentName(name)}</span>
       {onRemove && <button type="button" aria-label={`Remove ${name}`} title="Remove attachment" disabled={disabled} onClick={() => onRemove(path)}><IconX size={12}/></button>}
     </div>);
   });

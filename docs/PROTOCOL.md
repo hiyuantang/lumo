@@ -699,8 +699,15 @@ and retains the authenticated user's filesystem permissions. The response
 uses `encoding: "binary"` and an empty revision; it is not an editing token.
 Images are limited to 32 MiB before base64 encoding. Larger files return
 `truncated: true` with null content, never a partial image. Preview displays
-these bytes in an image element with fit-to-window and actual-size views;
-decoding failures show an error. Ordinary text reads retain their 1 MiB limit.
+these bytes in an image element with fit-to-window and actual-size views.
+Fit uses the full available image area, scaling up or down without cropping
+or changing the aspect ratio. The account's browser preference remembers Fit
+or 100% across Preview windows and reopening. Double-clicking the image zooms
+in; another double-click returns to the previous view without changing that
+preference. Dragging an image larger than the viewing area pans it horizontally
+and vertically; releasing or cancelling the pointer ends panning. Decoding
+failures show an error. Ordinary text reads retain their
+1 MiB limit.
 HTML files use the text-reading contract and can switch between an isolated
 rendered preview and raw editing. Inline styling and embedded data images are
 supported. Scripts, forms, external navigation and external resources are
@@ -1326,6 +1333,14 @@ apply. Pi has the Linux account's ordinary filesystem and command permissions.
   [{type: "oauth"|"api_key", label}], credential?}]}` from the installed Pi SDK.
   Enumeration uses `ModelRuntime` with network catalog refresh and initial
   availability resolution disabled; credential metadata never resolves keys.
+- `GET /api/v1/pi/connections` returns `{providers: [{id, name, credential:
+  "oauth"|"api_key", keyPreview?}]}` by reading the account's `auth.json` in
+  its configured Pi agent directory. The Settings overview uses this endpoint
+  without launching Pi, Node or the SDK. Literal API keys longer than eight
+  characters expose only their final four characters after a fixed mask;
+  shorter keys are fully masked. OAuth tokens and credential references are
+  never returned or resolved. Missing storage returns an empty list; malformed
+  storage returns a generic error. Responses use `Cache-Control: no-store`.
 - `POST /api/v1/pi/auth/start` accepts `{requestId, provider, method, operation}`,
   with operation `login` or `logout`. It returns an account-bound flow
   `{id, status, events, prompt?, error?}`. There is one active flow per user.
@@ -1392,15 +1407,18 @@ apply. Pi has the Linux account's ordinary filesystem and command permissions.
   `{project, session, path, reader}` without loading the transcript into the
   browser. Invalid session filenames are rejected; archived files remain
   readable through the original reference. The reader is the installed `lumod`.
-  Dragging a sidebar chat into the composer (or choosing Reference in message)
-  adds one removable chip, deduplicated by path, up to eight references.
-  Prompt serialization adds reference metadata and concise lookup guidance;
-  rendered messages, queued drafts and Edit & resend retain the chips.
-  Files, folders and conversation references retain their addition order.
-  Each serialized conversation reference may include a zero-based
-  `attachmentIndex` among all attached items; file paths fill the remaining
-  positions in their existing order. Legacy prompts without positions retain
-  their original display order. Duplicate additions do not move an item.
+  Dragging a sidebar chat into the composer adds one removable chip,
+  deduplicated by path, up to eight references.
+  Prompt serialization uses one `[Lumo attachments]` block containing an ordered
+  `items` array of files, folders and conversations. Each item appears once;
+  conversation metadata shares the `reader` executable at the block level.
+  Lookup guidance appears once for all chats and explicitly forbids reading or
+  pasting an entire chat history file at once. File-only attachments omit chat
+  guidance. Rendered messages, queued drafts and Edit & resend retain the chips.
+  Duplicate additions do not move an item. Legacy conversation blocks (including
+  `attachmentIndex` positions) and `read:` file lists remain readable and editable.
+  History indexes and searches omit attachment guidance and skill metadata;
+  expanding an individual entry preserves its original text.
 
   `lumod pi-history --file /absolute/session.jsonl --limit 8` provides a bounded
   JSON index of user messages and compaction/branch summaries. `--query TEXT`
@@ -1446,14 +1464,58 @@ apply. Pi has the Linux account's ordinary filesystem and command permissions.
   arrivals are not included. Project files, credentials and active chats stay.
   Exports, external backups and independently launched terminal Pi processes
   are outside this endpoint's scope.
-- `POST /api/v1/pi/start` accepts `{requestId, project, session?, resume?}` and returns
-  `{id, project}`. Projects must be existing absolute directories (`~` means the
+- `POST /api/v1/pi/start` accepts `{requestId, project, session?, resume?, permissionMode?, rememberPermissionMode?}` and returns
+  `{id, project, permissionMode}`. Permission modes are `read-only`, `ask`, and `auto`; unknown values are rejected.
+  An omitted mode uses the saved conversation choice, then the account default
+  (`ask` initially). A matching live resume keeps its current mode.
+  `rememberPermissionMode: true` saves an explicitly supplied, confirmed choice
+  as the default for new chats. Opening an older chat does not change that default.
+  The account default and saved-chat modes use `lumoPermissionMode` and
+  `lumoSessionPermissionModes` in Pi agent settings, alongside model and effort. Projects must be existing absolute directories (`~` means the
   account home). Session IDs are basenames from the project list; traversal and
   symlinked session files are rejected. A matching live `resume` process ID
-  reconnects the same account and project without starting another process.
+  reconnects the same account, project and permission mode without starting
+  another process. A different mode is rejected.
   The browser keeps each chat's process ID in tab storage for refresh recovery.
   Different saved chats may run concurrently in the same project; opening the
   same saved chat in a second process is rejected.
+  Startup waits for the bundled extension to acknowledge the selected mode;
+  missing or mismatched acknowledgements stop the process. The browser also
+  checks the returned mode before enabling the composer. Each open chat remembers
+  its mode in tab storage. Its selector appears immediately right of Add file.
+  Changing modes while idle restarts Pi in the background with the same saved
+  conversation. The conversation stays mounted, preserving scroll position,
+  expanded details and the editable draft. Sending waits for permission
+  acknowledgement; the selector is disabled during work, pending questions
+  and queued-message editing or delivery.
+  Read only exposes `read`, `grep`, `find`, `ls`, and `ask_user`, and blocks other
+  tools through a pre-execution hook. Ask for approval adds `bash`, `edit`, and
+  `write`, requiring explicit confirmation of the full input before each action.
+  Rejection, cancellation and interruption block the action. Inputs too large to
+  review are blocked and must be split into smaller actions. Approve for me runs
+  those tools without confirmation, within the authenticated account's permissions.
+  These are agent tool controls, not an operating-system sandbox; Pi still stores
+  its own session records in all modes.
+- `POST /api/v1/pi/answer` accepts `{requestId, id, questionId, value}`,
+  `{requestId, id, questionId, confirmed}`, or `{requestId, id, questionId, cancelled: true}`.
+  It returns `{accepted: true}` after writing a native `extension_ui_response`
+  with the original question ID. Only a pending question in that account's
+  running chat may be answered. Text must be nonblank and at most 10,000 bytes.
+  Reusing the request ID safely retries a submission. Expired, answered and
+  stopped questions reject new submissions. Answers are tool input, separate
+  from ordinary messages and the message queue.
+  Event batches and `get_messages` replies include a `questions` snapshot, so
+  reconnecting with a newer event cursor still restores pending questions.
+  Stop cancels pending dialogs; process exit or final settlement clears them.
+  Lumo explicitly loads its bundled question, image and enabled desktop extensions
+  with discovered and configured extensions disabled. The tool accepts one `question` and up to six
+  optional `options`, awaits the answer, and returns the answer or cancellation
+  to the agent. The card supports choices, a custom answer, Submit and Cancel
+  without altering the message draft. Each concurrent question has its own ID.
+  The same extension enforces permission modes. Approval dialogs show the proposed
+  action with explicit Reject and Approve buttons and submit `confirmed: false`
+  or `confirmed: true` respectively.
+  Reference: [Pi extension UI protocol](https://pi.dev/docs/latest/rpc-extension-ui).
 - `POST /api/v1/pi/command` accepts `{requestId, id, command}`. The allowlist covers
   prompt, steer, follow-up, abort, queue clearing, model/thinking selection,
   state/messages/models/thinking-level/statistics queries, rename, compaction,
@@ -1463,11 +1525,110 @@ apply. Pi has the Linux account's ordinary filesystem and command permissions.
   browser to skip old output before rendering the new chat. History replies
   (`get_messages`) include the cursor captured when the reply arrives, so
   reconnecting loads saved messages without replaying their previous events.
+  The browser-facing `get_state` omits `sessionFile` until the native session
+  file exists as a regular file. Pi may allocate its filename before saving the
+  first conversation entry; such a filename must not be persisted as a resumable
+  chat or reused when restarting to change permissions or context settings.
   Unknown command fields and arbitrary shell/RPC commands are rejected.
 - `GET /api/v1/pi/events?id=...&after=0` long-polls ordered events and returns
   `{events, cursor, closed}`. The buffer holds at most 512 events or approximately
   8 MiB; a cursor gap returns conflict so the client can reopen saved history.
 - `POST /api/v1/pi/stop` accepts `{id}` and stops that subprocess group.
+
+Pi also provides personal prompt templates and image attachments:
+
+- `GET /api/v1/pi/templates` returns `{templates: [{name, content, revision, path}]}`
+  from direct Markdown children of the account's Pi agent `prompts` directory.
+  It accepts at most 100 templates totaling 2 MiB; each must be UTF-8 text up to
+  128 KiB. Symlink files are omitted and a symlink prompts directory is rejected.
+- `POST /api/v1/pi/templates` accepts `{requestId, name, content, revision, delete?}`.
+  Names contain 1–64 letters, numbers, underscores or hyphens and start with a
+  letter or number. Chat actions `undo`, `rename` and `compact` are reserved.
+  Saves are atomic, private to the account and reject stale revisions. Deletion
+  moves the file to recoverable Trash. The editor preserves other frontmatter.
+  The browser includes an editable default `/init` prompt unless overridden by
+  a personal template. Templates insert editable composer text and never send
+  automatically. Typed slash invocations expand arguments before sending or
+  queueing; positional arguments, quoted arguments, defaults and slices follow
+  [Pi prompt templates](https://pi.dev/docs/latest/prompt-templates).
+  This UI manages personal templates; project and package template discovery is
+  not enabled. Changes apply to the next catalog load without restarting Pi.
+- `POST /api/v1/pi/images` accepts `{requestId, content}` with base64 image bytes.
+  PNG, JPEG, GIF and WebP uploads are limited to 8 MiB decoded (12 MiB JSON body).
+  Content sniffing rejects other formats. The response is `{path}` for a private
+  file under `~/.local/state/lumo/pi-attachments`. Request replay returns the same
+  result. Files persist for saved conversation references; removing an attachment
+  from a draft does not delete its server file. Pasted and dropped images use
+  the same ordered, deduplicated attachment references as server files.
+  The agent reads the attached image through its normal read tool.
+
+Chat renders native base64 image blocks and local Markdown images. Local previews
+use the existing account-scoped `/files/read?preview=image` API (32 MiB limit).
+Relative paths resolve against the chat project. Attachment thumbnails open
+Preview; transcript images expand in place. External image URLs remain links and
+are never fetched automatically. Invalid images display an unavailable placeholder.
+
+`GET /api/v1/pi/image-settings` returns `{mode: "original" | "quality90", revision}`.
+`POST /api/v1/pi/image-settings` accepts `{requestId, mode, revision}`. The account
+preference is `lumoImageQuality` in Pi's agent-directory `settings.json`; an absent
+preference uses Original. Writes preserve unrelated settings, compare revisions,
+and share the Pi operation lock. Selecting Quality 90 prepares Sharp 0.35.4 in
+the account's existing managed Pi prefix, using npm with install scripts disabled.
+Preparation failure retains the previous preference. Routine reads never install
+dependencies or contact external services.
+
+Each managed Pi process loads Lumo's image extension through the documented
+[Pi context hook and custom session entries](https://pi.dev/docs/latest/extensions).
+It replaces native user, tool-result and other image blocks only in model context.
+Quality 90 encodes static PNG, JPEG, GIF and WebP as WebP at quality 90, keeps
+resolution, honors orientation and preserves alpha at quality 100. Images under
+4 KiB, over 32 MiB or 16 megapixels, animated images, invalid images, encoder
+failures and conversions that increase size retain their original bytes. Pi's
+own image sizing and provider validation continue to apply.
+
+The extension stores each image occurrence's chosen mode and exact compressed
+bytes in native custom session entries, which are excluded from model context.
+Changing the preference affects newly encountered images in all chats. Existing
+images retain their bytes across requests, reopening and branches; histories
+created before this feature retain Original. Reading the same file in a new
+message uses the current preference. Source files, native message images and
+browser previews stay intact. This preserves existing image prefixes for provider
+prompt caching; it does not guarantee a provider cache hit or avoid resending
+request bytes. Encoding is performed once per image occurrence and its stored
+output is reused even if the encoder changes later.
+
+The command allowlist includes `set_auto_retry` with a required boolean `enabled`
+and `abort_retry` without arguments. The browser retains the retry preference per
+chat and reapplies it when reconnecting. Event batches and history replies include
+`retry: null | {attempt, maxAttempts, retryAt, errorMessage, source}`. `retryAt` is
+Unix milliseconds; `source` is `response` or `summary`. Snapshots restore the
+active attempt without replaying old events. The browser shows temporary,
+collapsible attempt rows beside Thinking and tool steps. Native retry completion,
+final settlement and process exit remove these rows; no additional retry history
+is stored. The existing composer Stop button aborts the current operation. Final
+retry failures remain inline in the transcript. Reference:
+[Pi retry commands](https://pi.dev/docs/latest/rpc-commands).
+
+`get_session_stats` also includes optional `metrics` with `inputTokens`,
+`cachedTokens`, `outputTokens`, `responseMs`, and `timedResponses`. The bundled
+extension calculates these for assistant messages on the current conversation
+branch. Cache hit rate is `cachedTokens / inputTokens`; the input total includes
+uncached input, cache reads and cache writes. Missing usage is omitted from the
+calculation. A reported zero cache count means no cache hits were reported, not
+proof that a provider supports cache reporting.
+
+Response speed is the sum of output tokens divided by the sum of timed response
+seconds, including initial model latency and excluding tool execution and user
+approval waits. Only completed `stop`, `toolUse` and `length` responses with
+positive reported output and measured duration contribute. Reasoning tokens are
+already part of output and are not counted twice. Compaction and nested tool
+model calls are excluded. Each duration is saved as a native custom
+`lumo-response-timing` entry linked to its assistant message; custom entries are
+excluded from model context. Reopening, permission changes and branching restore
+measurements from the current branch without a separate conversation database.
+Historical responses without recorded duration contribute cache usage but not
+speed. The browser shows both figures in a small line beside the mode and model selectors in the input
+box, uses an em dash for unavailable values, and updates after responses complete.
 
 Commands are correlated by ID. Streaming deltas build message blocks; final
 messages replace partial text. Edit & resend uses Pi's native fork before the
@@ -1475,13 +1636,26 @@ selected user message, preserving the original session. The browser pauses old
 event delivery, loads the new history, then sends the revision and resumes from
 the fork event boundary. Failed sends preserve the edited draft. Stop and Take
 back use `clear_queue`'s returned text, never a stale browser queue copy. Stop
-then awaits `abort`. These operations do not roll back filesystem changes. Branch chat uses native
+then awaits `abort`. Editing a queued message takes only that entry out of the
+native queue and loads its text and attachments into the main composer. Remaining
+messages continue normally. Sending the edit reconciles with the native queue
+and restores its original relative position among entries still waiting; already
+consumed messages are never recreated. A prompt with `streamingBehavior` queues
+while busy and starts normally when idle. Cancel restores the original message
+through the same path. The previous unsent draft is restored after submission;
+failed submissions preserve the revision and recover other unsent entries.
+These operations do not roll back filesystem changes. Branch chat uses native
 `clone` to duplicate the active branch at its current position without sending
 a prompt. It is offered on the latest completed assistant reply. Earlier-message
 branching remains available through Edit & resend.
 Tool events expose arguments, progress, result,
 and failures. `agent_settled` signals completion, including queued work and
 retries. Selecting a saved session starts it with Pi's `--session` option.
+The browser sends one notification through the shared system notification center
+when an observed run finishes, fails or is stopped. Notifications identify the
+chat and workspace, including background and minimized chats. Retry attempts
+stay quiet until settlement. Unexpected process exits or lost event connections
+also notify; idle startup, settings changes and historical replies do not.
 Successful model and effort selections also save the confirmed model, provider,
 and supported thinking level in Pi's agent-directory `settings.json` as defaults
 for new conversations. Other settings and other models' effort preferences are
@@ -1500,9 +1674,10 @@ disconnected browser lease expires after two minutes. Running
 chats and active provider setup count toward agent activity. Credentials
 remain managed by Pi through its public SDK; provider setup never opens a
 terminal. Native RPC
-starts with extensions, prompt templates, and trust-gated project resources
-disabled for this initial core interface. Extension UI and custom commands are
-not part of this version.
+starts with discovered/configured extensions, prompt templates, and trust-gated
+project resources disabled. Lumo explicitly loads only its bundled question
+and permission extension and supports its native dialog requests. Custom slash commands remain
+unavailable.
 
 Reference specifications: [Pi RPC](https://pi.dev/docs/latest/rpc),
 [commands](https://pi.dev/docs/latest/rpc-commands),
@@ -1903,3 +2078,113 @@ the account and project compaction settings captured when the process started,
 resolved for its current model and reported context capacity. Reconnecting to
 an existing process retains its original settings. The field is omitted if the
 context window or effective settings cannot be resolved.
+
+## Lumo Use
+
+Lumo Use is Lumo's optional, bundled Pi extension for text-based control of the
+connected desktop. It requires no screenshots, browser extension or browser
+process on Ubuntu. `lumo_observe` returns visible windows, text and controls;
+`lumo_act` operates an observed control and returns the updated snapshot. The
+browser remains the owner of its live UI state. Observations are produced on
+request, bounded to 24,000 characters and never continuously streamed or stored
+in a duplicate desktop-state database.
+
+Controls are complete JSON records with explicit `target`, `label`, `role` and
+`disabled` fields, plus selection, expansion and value information where present.
+Actions must copy the exact `target` and `label` string values from the same record
+in the latest observation. Brackets, extra whitespace and inferred labels are
+rejected rather than normalized. Observations expire after 60 seconds. Validation
+errors distinguish invalid format, unknown or stale IDs, expired observations,
+label mismatches, disabled or unavailable controls, and changes to label, value
+or state. They explain the correction to make before retrying and confirm when
+no action was performed. Browser errors are delivered to the model through the
+native tool result.
+
+`GET /api/v1/pi/extensions` returns `{lumoUse, questions, extensions, revision}`. Lumo Use
+is enabled by default. Each optional local extension has `{id, name, enabled}`;
+paths stay on the server. The inventory reads the account extensions directory
+and local paths in Pi settings without running the CLI or downloading packages.
+`POST /api/v1/pi/extensions` accepts `{requestId, lumoUse, questions, extensions, revision}`,
+where each extension choice is `{id, enabled}`. It validates the current inventory
+and stores disabled IDs as `lumoDisabledExtensions` in Pi settings. It preserves
+other Pi settings through the existing atomic settings writer. The revision
+checks only extension settings, so changes to model, effort or other settings
+do not cause false conflicts. Image and compaction settings use the same scoped
+revision rule; a concurrent edit to the same settings still requires a reload.
+The Lumo Use preference is account-wide and stored as `lumoUse` in the account's Pi agent
+`settings.json`. Disabling immediately revokes pending desktop requests for that
+account. Enabling loads the extension when a chat starts or restarts while idle.
+Extension toggles remain editable during a run; the last saved choice applies
+when each chat becomes idle. Active idle chats restart, while background idle
+chats release their process and load current choices when reopened. Conversations
+and drafts are retained. Enabled local extensions load through explicit
+`--extension` arguments; disabled extensions are omitted. Their tools retain
+Lumo permission enforcement. Reattachment reports `extensionsChanged` if the resumed process needs
+an idle restart. The account-wide `questions` preference defaults to enabled and
+is stored as `lumoQuestions`. Disabling it removes the `ask_user` tool on the next
+idle restart while retaining approval enforcement, response metrics and dialogs
+requested by other extensions. Approval handling follows the chat permission mode.
+The Extensions pane also contains an Image compression toggle: enabled selects
+`quality90`, disabled selects `original` through the existing image-settings API.
+It retains the recorded representation of earlier images and applies the choice
+to new images. Images has no separate settings tab.
+
+The extension's source is embedded in `lumod` and regenerated privately in the
+managed session directory at startup. Pi installation updates do not own either
+this source or its saved preference. Startup requires the extension's native
+`lumo-use=ready` status acknowledgement when enabled. This checks loading, not
+future API compatibility; supported Pi updates must pass the offline extension,
+RPC and browser integration checks.
+
+`POST /api/v1/pi/start` additionally accepts a tab-scoped `clientId`. Only a
+process started by that client exposes desktop requests to it; resuming from a
+different client does not transfer desktop control. The response includes
+`lumoUse`, the effective availability for that client. `GET /api/v1/pi/events`
+accepts the same `clientId` and includes an authoritative `desktop` array of
+unclaimed requests belonging to that client. A browser Web Lock prevents copied
+session storage in a duplicated tab from reusing the original tab identity.
+
+The trusted extension uses the documented RPC input-dialog transport with the
+reserved title `Lumo Use: ` followed by a JSON action. The server projects these
+requests separately from user questions. They expire after 30 seconds and clear
+on abort, final settlement or process exit. Allowed actions are `observe`,
+`click`, `double_click`, `fill`, `press`, `scroll` and `drag`. An action includes an
+opaque `target` from the latest snapshot and its exact `label`, making the
+existing approval card reviewable. Optional fields are `text` (up to 4,000
+characters), `key`, `deltaX` and `deltaY` (integer pixel deltas within ±2,000).
+There is no script, CSS selector, URL navigation or privileged-command parameter.
+
+`POST /api/v1/pi/desktop/claim` accepts
+`{requestId, id, clientId, desktopId}` and atomically claims a pending request.
+A new claim for an already claimed request fails; retrying the original request
+ID replays its response. The browser executes only after a successful claim.
+`POST /api/v1/pi/desktop/result` accepts the same identity fields plus `{text,
+error}` and delivers one native input-dialog response. Results are bounded to
+96,000 UTF-8 bytes, supporting the 24,000-character observation limit. Missing,
+expired, unclaimed, foreign-client and stopped requests reject results. Both
+endpoints use normal account authentication, CSRF protection and idempotency.
+Actions with an uncertain outcome are never automatically replayed.
+
+The browser serializes desktop requests. Controls are live DOM element references
+with a snapshot-specific ID; changed labels, values, states, disabled controls,
+removed elements and expired snapshots require another observation. Covered
+controls reject pointer-like actions. Fill replaces text through normal input
+events. Press supports Enter, Escape, Space, arrows, Home, End, Tab, Backspace and
+Delete; browser-native defaults that cannot be reproduced must be performed by
+the user. Drag supports floating window titles and zoomed image preview panes.
+OS file choosers, browser permissions, external pages and embedded iframe content
+are outside this controller's scope.
+
+Only an active chat in a visible, connected tab operates its desktop. Stop
+cancels local work before sending Pi's abort command. Pi windows and their popup
+controls, terminal windows, login, reauthentication, password and file inputs
+are excluded. The agent cannot press its own Approve button. Read only exposes
+`lumo_observe`; other modes expose `lumo_act` through the same pre-execution
+approval hook used for other Pi actions. Observed page text remains untrusted
+content rather than authorization or instructions.
+
+Reference specifications: [Pi extensions](https://pi.dev/docs/latest/extensions),
+[Pi RPC extension UI](https://pi.dev/docs/latest/rpc-extension-ui), and standard
+DOM events. The original design uses the existing authenticated Pi event stream
+and live Lumo browser, keeping traffic text-only and operating the user's actual
+windows without maintaining another desktop session.

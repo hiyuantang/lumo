@@ -94,7 +94,7 @@ test('Files drops project folders into the workspace and file paths into the com
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.screenshot({ animations: 'disabled', path: '/tmp/lumo-pi-drop-dark.png' });
   await page.locator('.pi-compose form').screenshot({ animations: 'disabled', path: '/tmp/lumo-attachment-tiles.png' });
-  await page.getByTestId('pi-sidebar').getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+  await page.getByTestId('pi-app-rail').getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
   await page.setViewportSize({ width: 600, height: 800 });
   await expect(reference).toBeVisible();
   expect(await page.locator('.pi-main').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
