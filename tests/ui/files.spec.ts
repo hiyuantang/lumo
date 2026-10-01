@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { clickPreviewTool } from '../preview-tools';
 import { expect, test } from '../offline';
 
 test('files interface: navigation, editor and delete confirmation', async ({ page }) => {
@@ -35,7 +36,7 @@ test('files interface: navigation, editor and delete confirmation', async ({ pag
   const input = page.getByTestId('editor-input');
   await expect(input).toHaveValue(/Remember to rotate/);
   await input.fill('Updated notes from the mock test\n');
-  await page.getByTestId('editor-save').click();
+  await clickPreviewTool(page, 'editor-save');
   await expect(page.getByTestId('editor-save')).toBeDisabled();
 
   await page.getByTestId('dock-app-files').click();

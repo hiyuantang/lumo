@@ -30,6 +30,16 @@ test('Lumo Use forwards corrective browser errors unchanged and lets the model r
   assert.deepEqual(corrected.content, [{ type: 'text', text: 'Updated snapshot' }]);
 });
 
+test('Lumo Use sends explicit resize dimensions through the native tool transport', async () => {
+  const registered = tools(); let sent;
+  const params = { action: 'resize', target: 'fada9312-658d-4661-85a7-58d5d94af906:10', label: 'Files', width: 640, height: 420 };
+  const result = await registered.lumo_act.execute('resize', params, undefined, undefined, { hasUI: true, ui: { input: async (title) => { sent = JSON.parse(title.slice('Lumo Use: '.length)); return JSON.stringify({ text: 'Updated geometry', error: false }); } } });
+  assert.deepEqual(sent, params);
+  assert.deepEqual(result.content, [{ type: 'text', text: 'Updated geometry' }]);
+  assert.ok(registered.lumo_act.parameters.properties.action.enum.includes('resize'));
+  assert.equal(registered.lumo_act.parameters.properties.width.maximum, 8192);
+});
+
 test('Lumo Use cancellation, unavailable UI and malformed results fail instead of inventing success', async () => {
   await assert.rejects(desktopRequest({}, undefined, { hasUI: false }), /connected/);
   await assert.rejects(desktopRequest({}, AbortSignal.abort(), { hasUI: true }), /interrupted/);

@@ -6,6 +6,8 @@ import { LumoUseDesktop, serializeDesktop } from '../shell/lumoUse';
 import { useShell } from '../shell/ShellContext';
 import { useCurrentWindow } from '../shell/WindowContext';
 import type { WindowId } from '../shell/ShellContext';
+import { APPS } from './registry';
+import { COMPACT_WIDTH, workArea, type Rect } from '../shell/windowGeometry';
 
 export function useLumoUse(connection: string | null, active: boolean, enabled: boolean) {
   const source = getDataSource(); const shell = useShell(); const win = useCurrentWindow();
@@ -17,10 +19,16 @@ export function useLumoUse(connection: string | null, active: boolean, enabled: 
     const focusedId = info.current.shell.state.focused;
     const focused = focusedId ? info.current.shell.state.windows[focusedId] : undefined;
     return !(focused?.appId === 'pi' && node.closest('.menubar'));
-  }, (id, dx, dy) => {
+  }, (id, rect: Rect) => {
     const { shell } = info.current; const window = shell.state.windows[id as WindowId];
-    if (!window || window.maximized || window.snapped) throw new Error('Restore this window before dragging it.');
-    shell.actions.updateRect(id as WindowId, { x: window.x + dx, y: Math.max(28, window.y + dy), w: window.w, h: window.h });
+    if (!window || window.maximized || window.snapped || shell.state.viewport.w <= COMPACT_WIDTH) throw new Error('This gesture requires a floating window on a desktop-sized screen.');
+    shell.actions.updateRect(id as WindowId, rect);
+  }, () => {
+    const { state } = info.current.shell;
+    return { viewport: state.viewport, workArea: workArea(state.viewport), windows: Object.fromEntries(Object.values(state.windows).flatMap((window) => window ? [[window.id, {
+      minSize: APPS[window.appId].minSize, focused: state.focused === window.id,
+      mode: state.viewport.w <= COMPACT_WIDTH ? 'compact' : window.maximized ? 'maximized' : window.snapped ? 'tiled' : 'floating',
+    }]] : [])) };
   });
   useEffect(() => {
     abort.current.abort(); abort.current = new AbortController(); seen.current.clear();

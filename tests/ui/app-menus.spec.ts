@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { clickPreviewTool } from '../preview-tools';
 import { test, expect, type Page } from '../offline';
 
 async function login(page: Page) {
@@ -100,7 +101,7 @@ test('Quit Preview checks every draft and cancellation leaves all windows open',
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-Documents').dblclick();
   await page.getByTestId('file-row-server-notes.md').dblclick();
-  await page.locator('.window[data-app-id=preview]').last().getByTestId('preview-mode-raw').click();
+  await clickPreviewTool(page.locator('.window[data-app-id=preview]').last(), 'preview-mode-raw');
   await page.locator('.window[data-app-id=preview]').last().getByTestId('editor-input').fill('# Draft two');
   await menu(page, 'app');
   await page.getByTestId('menu-quit').click();

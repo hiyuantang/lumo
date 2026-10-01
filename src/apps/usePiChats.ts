@@ -38,5 +38,6 @@ export function usePiChats() {
     return { active: key, chats: existing ? previous.chats : [...previous.chats, { key, project, session, running: false, dirty: false }] };
   });
   const forget = (project: string, sessions: string[], except: string) => setGroup((previous) => ({ ...previous, chats: previous.chats.filter((chat) => chat.key === except || normalize(chat.project) !== normalize(project) || !chat.session || !sessions.includes(chat.session)) }));
-  return { ...group, update, navigate, forget, normalize, start, sessionLists, setSessionLists };
+  const activate = useCallback((key: string) => setGroup((previous) => previous.chats.some((chat) => chat.key === key) ? { ...previous, active: key } : previous), []);
+  return { ...group, update, navigate, activate, forget, normalize, start, sessionLists, setSessionLists };
 }

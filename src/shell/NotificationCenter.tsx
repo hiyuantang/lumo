@@ -1,52 +1,65 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { IconX } from './icons';
-import { useShell } from './ShellContext';
+import { useShell, type ShellNotification } from './ShellContext';
 import '../styles/notification-center.css';
+
+function NotificationCard({ notification, banner = false, leaving = false, onDismiss, onPause }: { notification: ShellNotification; banner?: boolean; leaving?: boolean; onDismiss: () => void; onPause?: (paused: boolean) => void }) {
+  return <article className={`notification${banner ? ' notification-banner' : ''}${leaving ? ' is-leaving' : ''}`} data-testid={banner ? 'notification-banner' : 'notification-item'} onPointerEnter={() => onPause?.(true)} onPointerLeave={(event) => onPause?.(event.currentTarget.contains(document.activeElement))} onFocusCapture={() => onPause?.(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onPause?.(event.currentTarget.matches(':hover')); }}>
+    <button type="button" className="notification-close" data-testid="notification-close" aria-label={`Dismiss ${notification.title}`} onClick={onDismiss}><IconX size={14} strokeWidth={2}/></button>
+    <header><strong>{notification.title}</strong><time dateTime={new Date(notification.ts).toISOString()}>{new Date(notification.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></header>
+    {notification.body && <p>{notification.body}</p>}
+  </article>;
+}
+
+function NotificationBanner({ notification, onExit }: { notification: ShellNotification; onExit: (id: number) => void }) {
+  const { actions, reducedMotion } = useShell();
+  const [paused, setPaused] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    if (paused || leaving) return;
+    const timer = window.setTimeout(() => setLeaving(true), 6000);
+    return () => window.clearTimeout(timer);
+  }, [paused, leaving]);
+  useEffect(() => {
+    if (!leaving) return;
+    const timer = window.setTimeout(() => onExit(notification.id), reducedMotion ? 0 : 220);
+    return () => window.clearTimeout(timer);
+  }, [leaving, notification.id, onExit, reducedMotion]);
+  return <NotificationCard notification={notification} banner leaving={leaving} onPause={setPaused} onDismiss={() => actions.dismissNotification(notification.id)}/>;
+}
 
 export function NotificationCenter() {
   const { state, actions } = useShell();
-
+  const center = useRef<HTMLElement>(null);
+  const lastSeen = useRef(state.notifications[0]?.id ?? 0);
+  const [banners, setBanners] = useState<ShellNotification[]>([]);
+  const exitBanner = useCallback((id: number) => setBanners((items) => items.filter((item) => item.id !== id)), []);
+  useEffect(() => {
+    const incoming = state.notifications.filter((item) => item.id > lastSeen.current);
+    lastSeen.current = Math.max(lastSeen.current, state.notifications[0]?.id ?? 0);
+    setBanners((items) => state.notifOpen ? [] : [...incoming, ...items].filter((item) => state.notifications.some((saved) => saved.id === item.id)).slice(0, 3));
+  }, [state.notifications, state.notifOpen]);
   useEffect(() => {
     if (!state.notifOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') actions.setNotifOpen(false);
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') actions.setNotifOpen(false); };
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as Element;
+      if (!center.current?.contains(target) && !target.closest('[data-testid="notifications-button"]')) actions.setNotifOpen(false);
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onPointer, true);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('pointerdown', onPointer, true); };
   }, [state.notifOpen, actions]);
-
-  if (!state.notifOpen) return null;
-
-  return (
-    <>
-      <div className="notifications-backdrop" onClick={() => actions.setNotifOpen(false)} />
-      <aside className="notifications" data-testid="notification-center" aria-label="Notification center">
-        <header className="notifications-header">
-          <h2>Notifications</h2>
-          <button type="button" className="notifications-clear" onClick={actions.clearNotifications}>
-            Clear all
-          </button>
-        </header>
-        <div className="notifications-list" tabIndex={0} role="region" aria-label="Notifications">
-          {state.notifications.length === 0 && (
-            <p className="notifications-empty">No notifications.</p>
-          )}
-          {state.notifications.map((n) => (
-            <article key={n.id} className="notification" data-testid="notification-item">
-              <header>
-                <strong>{n.title}</strong>
-                <time dateTime={new Date(n.ts).toISOString()}>
-                  {new Date(n.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                </time>
-              </header>
-              {n.body && <p>{n.body}</p>}
-            </article>
-          ))}
-        </div>
-      </aside>
-    </>
-  );
+  return <>
+    {state.notifOpen && <aside ref={center} className="notifications" data-testid="notification-center" aria-label="Notification center">
+      <div className="notifications-list" tabIndex={0} role="region" aria-label="Notifications">
+        {state.notifications.length === 0 && <p className="notification notifications-empty">No notifications.</p>}
+        {state.notifications.map((notification) => <NotificationCard key={notification.id} notification={notification} onDismiss={() => actions.dismissNotification(notification.id)}/>)}
+      </div>
+    </aside>}
+    {!state.notifOpen && <aside className="notification-banners" aria-label="New notifications" role="status" aria-live="polite">{banners.map((notification) => <NotificationBanner key={notification.id} notification={notification} onExit={exitBanner}/>)}</aside>}
+  </>;
 }
 
 export function ShortcutsDialog() {

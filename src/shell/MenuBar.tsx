@@ -9,12 +9,14 @@ import { timezoneLabel } from '../utils/timezone';
 import { useShell } from './ShellContext';
 import { canSnap, COMPACT_WIDTH, MENUBAR_H } from './windowGeometry';
 import '../styles/menubar.css';
+import { IconPi } from './icons';
+import { DropdownMenu } from './DropdownMenu';
 import { useMenuInput } from './useMenuInput';
 
 type MenuId = 'app' | 'file' | 'edit' | 'view' | 'window';
 const order: MenuId[] = ['app', 'file', 'edit', 'view', 'window'];
 
-export function MenuBar() {
+export function MenuBar({ piOpen, onTogglePi, onNewPi, onPiWorkspace }: { piOpen: boolean; onTogglePi: () => void; onNewPi: () => void; onPiWorkspace: () => void }) {
   const input = useMenuInput();
   const { state, actions } = useShell();
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
@@ -227,6 +229,11 @@ export function MenuBar() {
         </nav>
       </div>
       <div className="menubar-right">
+        <DropdownMenu label="Pi assistant" ariaLabel="Pi assistant" testId="pi-tray-button" className="menubar-button menubar-pi" protected icon={<><IconPi size={18}/>{Object.keys(state.piActivity).some((key) => key.startsWith('pi:assistant:')) && <span className="pi-tray-activity" aria-label="Working"/>}</>} items={[
+          { label: piOpen ? 'Hide assistant' : 'Show assistant', testId: 'pi-tray-toggle', run: onTogglePi },
+          { label: 'New conversation', testId: 'pi-tray-new', run: onNewPi },
+          { label: 'Workspace folder…', testId: 'pi-tray-workspace', separator: true, run: onPiWorkspace },
+        ]}/>
         <button
           type="button"
           className="menubar-button menubar-clock"

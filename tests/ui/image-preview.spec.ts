@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { clickPreviewTool } from '../preview-tools';
 import { expect, test } from '../offline';
 
 test('Image Preview zooms on double-click, fits proportionally and remembers Fit or 100%', async ({ page }) => {
@@ -9,6 +10,7 @@ test('Image Preview zooms on double-click, fits proportionally and remembers Fit
   await page.route('**/api/v1/**', (route) => {
     const url = new URL(route.request().url());
     let data: unknown = {};
+    if (url.pathname.endsWith('/apps')) data = { apps: [], capabilities: {} };
     if (url.pathname.endsWith('/auth/session')) data = { user: { name: 'user', uid: 1000, gid: 1000, home: '/home/user' } };
     if (url.pathname.endsWith('/files/list')) data = { path: '/home/user', entries: ['landscape.png', 'small.png', 'portrait.png', 'photo.JPG', 'picture.webp', 'damaged.png', 'huge.png'].map((name) => ({ name, type: 'file', sizeBytes: 1234, mode: '0644', modifiedAt: '2026-09-29T12:00:00Z' })) };
     if (url.pathname.endsWith('/files/read')) {
@@ -73,7 +75,7 @@ test('Image Preview zooms on double-click, fits proportionally and remembers Fit
       await page.screenshot({ path: `/tmp/lumo-image-preview-${width}-${theme}.png`, animations: 'disabled' });
     }
   }
-  await page.getByTestId('preview-image-size').click();
+  await clickPreviewTool(page, 'preview-image-size');
   await expect.poll(async () => (await image.boundingBox())!.width).toBe(1600);
   await image.dblclick();
   await expect.poll(async () => (await image.boundingBox())!.width).toBe(3200);
@@ -87,7 +89,7 @@ test('Image Preview zooms on double-click, fits proportionally and remembers Fit
   await page.reload();
   await expect(image).toBeVisible();
   await expect.poll(async () => (await image.boundingBox())!.width).toBe(1600);
-  await page.getByTestId('preview-image-size').click();
+  await clickPreviewTool(page, 'preview-image-size');
   await page.getByRole('button', { name: 'Close Preview', exact: true }).click();
   await page.getByTestId('file-row-landscape.png').dblclick();
   await expect(image).toBeVisible();
@@ -96,11 +98,11 @@ test('Image Preview zooms on double-click, fits proportionally and remembers Fit
   await expect(image).toBeVisible();
   await expect(page.getByTestId('preview-image-size')).toHaveText('100%');
   const readsBeforeRefresh = requests.length;
-  await page.getByTestId('preview-refresh').click(); await expect(image).toBeVisible();
+  await clickPreviewTool(page, 'preview-refresh'); await expect(image).toBeVisible();
   expect(requests).toHaveLength(readsBeforeRefresh + 1);
   await page.setViewportSize({ width: 1440, height: 900 });
   for (const [name, ratio] of [['small.png', 160 / 90], ['portrait.png', 600 / 1200]] as const) {
-    await page.getByTestId('preview-open').click();
+    await clickPreviewTool(page, 'preview-open');
     await page.getByTestId(`file-picker-entry-${name}`).dblclick();
     await expect(image).toBeVisible();
     const bounds = await image.boundingBox(); const pane = await page.getByTestId('preview-image-content').boundingBox();
@@ -120,7 +122,7 @@ test('Image Preview zooms on double-click, fits proportionally and remembers Fit
     await page.getByRole('button', { name: 'Restore Preview', exact: true }).click();
   }
   for (const name of ['photo.JPG', 'picture.webp', 'damaged.png', 'huge.png']) {
-    await page.getByTestId('preview-open').click();
+    await clickPreviewTool(page, 'preview-open');
     await page.getByTestId(`file-picker-entry-${name}`).dblclick();
     if (name === 'damaged.png') await expect(page.getByRole('alert')).toContainText('could not be displayed');
     else if (name === 'huge.png') await expect(page.getByRole('alert')).toContainText('32 MiB');

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { clickPreviewTool } from '../preview-tools';
 import { execFileSync } from 'node:child_process';
 import { expect, test, type Page } from '../offline';
 
@@ -67,13 +68,13 @@ test('browser saves a real file and preserves an external edit on conflict', asy
   await expect(page.getByTestId('editor-input')).toHaveValue('Saved through the browser\n');
   ubuntu('runuser', '-u', 'alice', '--', 'sh', '-c', 'printf "Changed outside Lumo\n" > "$1"', 'fixture', path);
   await page.getByTestId('editor-input').fill('Conflicting draft');
-  await page.getByTestId('editor-save').click();
+  await clickPreviewTool(page, 'editor-save');
   await expect(page.getByTestId('editor-conflict')).toBeVisible();
   expect(ubuntu('cat', path)).toBe('Changed outside Lumo');
   await page.getByTestId('editor-reload').click();
   await page.getByTestId('preview-unsaved-dialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
   await expect(page.getByTestId('editor-input')).toHaveValue('Changed outside Lumo\n');
-  await page.getByTestId('preview-refresh').click();
+  await clickPreviewTool(page, 'preview-refresh');
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-browser-notes.txt').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Move to Trash', exact: true }).click();
@@ -166,9 +167,9 @@ test('Files creates real folders and Markdown files and opens Preview independen
   const row = page.getByTestId('file-row-notes.md');
   await row.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Open in Preview', exact: true }).click();
-  await page.getByTestId('preview-mode-raw').click();
+  await clickPreviewTool(page, 'preview-mode-raw');
   await page.getByTestId('editor-input').fill('# Ubuntu Preview\n\nA **real** file.\n');
-  await page.getByTestId('editor-save').click();
+  await clickPreviewTool(page, 'editor-save');
   expect(ubuntu('cat', '/home/alice/Preview test/notes.md')).toContain('# Ubuntu Preview');
   expect(ubuntu('stat', '-c', '%U', '/home/alice/Preview test/notes.md')).toBe('alice');
   await page.getByTestId('dock-app-files').click();
@@ -177,9 +178,9 @@ test('Files creates real folders and Markdown files and opens Preview independen
   await expect(page.getByTestId('files-details')).toContainText('/home/alice/Preview test/notes.md');
   await expect(page.getByTestId('files-details')).not.toContainText('Ubuntu Preview');
   await row.dblclick();
-  await page.getByTestId('preview-mode-rendered').click();
+  await clickPreviewTool(page, 'preview-mode-rendered');
   await expect(page.getByTestId('preview-rendered').getByRole('heading', { name: 'Ubuntu Preview' })).toBeVisible();
-  await page.getByTestId('preview-mode-raw').click();
+  await clickPreviewTool(page, 'preview-mode-raw');
   await expect(page.getByTestId('editor-input')).toHaveValue(/\*\*real\*\*/);
   await page.getByTestId('window-close-preview').click();
   await page.getByTestId('files-new').click();
@@ -386,7 +387,7 @@ test('idle worker exit recovers files in the same signed-in browser session', as
   const stopped = ubuntu('python3', '-c', 'import os, pathlib, pwd, signal\nuid = pwd.getpwnam("alice").pw_uid\nfor entry in pathlib.Path("/proc").iterdir():\n if not entry.name.isdigit(): continue\n try:\n  cmd = (entry / "cmdline").read_bytes().split(b"\\0")\n  if entry.stat().st_uid == uid and len(cmd) > 1 and cmd[1] == b"agent":\n   os.kill(int(entry.name), signal.SIGTERM)\n   print(entry.name)\n except (FileNotFoundError, ProcessLookupError): pass');
   expect(stopped).toMatch(/^\d+$/);
   ubuntu('runuser', '-u', 'alice', '--', 'sh', '-c', 'printf "Recovered after worker exit" > "$1"', 'fixture', path);
-  await page.getByTestId('preview-refresh').click();
+  await clickPreviewTool(page, 'preview-refresh');
   await expect(page.getByTestId('editor-input')).toHaveValue('Recovered after worker exit');
   await expect(page.getByTestId('login-screen')).toHaveCount(0);
   expect((await context.cookies()).find((cookie) => cookie.name === 'lumo_session')?.value).toBe(before);

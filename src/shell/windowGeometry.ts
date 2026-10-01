@@ -20,6 +20,7 @@ export const MENUBAR_H = 32;
 export const COMPACT_WIDTH = 700;
 export const DOCK_SCALE = 0.9;
 const SNAP_DISTANCE = 20;
+const MAXIMIZE_PULL_DISTANCE = 24;
 const TILE_GAP = 8;
 
 export function dockSpace(viewport: Viewport): number {
@@ -73,7 +74,7 @@ export function canSnap(target: SnapTarget, viewport: Viewport, minSize: { w: nu
 export function snapTargetAt(x: number, y: number, viewport: Viewport, minSize: { w: number; h: number }): SnapTarget | null {
   const target = x <= SNAP_DISTANCE ? 'left'
     : x >= viewport.w - SNAP_DISTANCE ? 'right'
-      : y <= MENUBAR_H + SNAP_DISTANCE ? 'maximize'
+      : y <= MENUBAR_H - MAXIMIZE_PULL_DISTANCE ? 'maximize'
         : null;
   return target && canSnap(target, viewport, minSize) ? target : null;
 }

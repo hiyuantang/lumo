@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { clickPreviewTool } from '../preview-tools';
 import { expect, test, type Page } from '../offline';
 
 async function login(page: Page, user = 'demo') {
@@ -21,7 +22,7 @@ test('closing Preview clears its document and mode while retaining window placem
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-Documents').dblclick();
   await page.getByTestId('file-row-server-notes.md').dblclick();
-  await page.getByTestId('preview-mode-raw').click();
+  await clickPreviewTool(page, 'preview-mode-raw');
   await bounds(page, 'preview');
   const title = (await page.getByTestId('window-titlebar-preview').boundingBox())!;
   await page.mouse.move(title.x + 300, title.y + 25);

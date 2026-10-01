@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { clickPreviewTool } from '../preview-tools';
 import { expect, test, type Page, type Route } from '../offline';
 
 const LIVE = 'http://localhost:5200';
@@ -423,7 +424,7 @@ test('interface response: stale revision shows conflict banner and reload resolv
   await files.getByTestId('file-row-notes.txt').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Open in Preview', exact: true }).click();
   await page.getByTestId('editor-input').fill('conflicting edit\n');
-  await page.getByTestId('editor-save').click();
+  await clickPreviewTool(page, 'editor-save');
 
   await expect(page.getByTestId('editor-conflict')).toBeVisible();
   await expect(page.getByTestId('editor-conflict')).toContainText('changed on the server');
@@ -434,7 +435,7 @@ test('interface response: stale revision shows conflict banner and reload resolv
   await expect(page.getByTestId('editor-input')).toHaveValue('hello from the live server\n');
   await expect(page.getByTestId('editor-conflict')).toHaveCount(0);
   await page.getByTestId('editor-input').fill('New content after reload');
-  await page.getByTestId('editor-save').click();
+  await clickPreviewTool(page, 'editor-save');
   await expect(page.getByTestId('editor-save')).toBeDisabled();
   expect(writeAttempts).toBe(2);
 });
@@ -732,7 +733,7 @@ test('Preview never enables saving for binary or incomplete content', async ({ p
   await expect(page.getByTestId('preview-autosave')).toBeDisabled();
   await page.keyboard.press('Escape');
   binary = true;
-  await page.getByTestId('preview-refresh').click();
+  await clickPreviewTool(page, 'preview-refresh');
   await expect(page.getByTestId('app-preview')).toContainText('cannot be previewed');
   await expect(page.getByTestId('editor-save')).toBeDisabled();
   await page.locator('[data-menu-button=app]').click();

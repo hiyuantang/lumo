@@ -13,6 +13,58 @@ import (
 	"time"
 )
 
+func TestPiDesktopResizeValidation(t *testing.T) {
+	width, height := 640, 420
+	valid := piDesktopRequest{Action: "resize", Target: "window-title", Label: "Files", Width: &width, Height: &height}
+	if !validDesktopRequest(valid) {
+		t.Fatal("valid resize rejected")
+	}
+	for _, dimension := range []int{-1, 0, 8193} {
+		req := valid
+		req.Width = &dimension
+		if validDesktopRequest(req) {
+			t.Fatalf("invalid width %d accepted", dimension)
+		}
+		req = valid
+		req.Height = &dimension
+		if validDesktopRequest(req) {
+			t.Fatalf("invalid height %d accepted", dimension)
+		}
+	}
+	for _, action := range []string{"observe", "drag", "click"} {
+		req := valid
+		req.Action = action
+		if validDesktopRequest(req) {
+			t.Fatalf("dimensions accepted for %s", action)
+		}
+	}
+	for _, missingWidth := range []bool{true, false} {
+		req := valid
+		if missingWidth {
+			req.Width = nil
+		} else {
+			req.Height = nil
+		}
+		if validDesktopRequest(req) {
+			t.Fatal("incomplete resize accepted")
+		}
+	}
+	req := valid
+	req.DeltaX = 10
+	if validDesktopRequest(req) {
+		t.Fatal("mixed resize and drag accepted")
+	}
+	for _, mode := range []string{"read-only", "auto"} {
+		p := &piProcess{desktopEnabled: true, desktopClient: "tab", permissionMode: mode}
+		payload, _ := json.Marshal(valid)
+		event, _ := json.Marshal(map[string]any{"id": "resize-1", "method": "input", "title": desktopPrefix + string(payload)})
+		p.trackDesktop("extension_ui_request", event)
+		if mode == "read-only" && len(p.desktop) != 0 || mode == "auto" && (len(p.desktop) != 1 || *p.desktop[0].Width != width || *p.desktop[0].Height != height) {
+			t.Fatalf("resize projection or mode enforcement failed for %s", mode)
+		}
+	}
+}
+
 func TestPiDesktopRoundTripOwnershipAndClaims(t *testing.T) {
 	t.Setenv("LUMO_PI_RPC_FIXTURE", "1")
 	home := t.TempDir()

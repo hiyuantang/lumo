@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { clickPreviewTool } from '../preview-tools';
 import { expect, test } from '../offline';
 
 test.beforeEach(async ({ page }) => {
@@ -7,7 +8,7 @@ test.beforeEach(async ({ page }) => {
   await page.getByTestId('login-password').fill('demo');
   await page.getByTestId('login-submit').click();
   await page.getByTestId('dock-app-preview').click();
-  await page.getByTestId('preview-open').click();
+  await clickPreviewTool(page, 'preview-open');
 });
 
 test('Preview picks files in its own dialog, with navigation, filtering and keyboard access', async ({ page }) => {
@@ -38,7 +39,7 @@ test('Preview picks files in its own dialog, with navigation, filtering and keyb
   await expect(page.getByTestId('preview-rendered')).toContainText('Atlas server notes');
   await expect(page.locator('.window[data-app-id="preview"]')).toHaveCount(1);
   await expect(page.getByTestId('window-files')).toHaveCount(0);
-  await page.getByTestId('preview-open').click();
+  await clickPreviewTool(page, 'preview-open');
   await expect(picker.getByRole('navigation')).toContainText('Documents');
   await picker.getByRole('button', { name: 'Parent folder' }).click();
   await page.getByTestId('file-picker-entry-notes.txt').click();
@@ -55,13 +56,13 @@ test('picker cancels without opening apps, traps focus and fits a compact viewpo
   await page.keyboard.press('Escape');
   await expect(picker).toHaveCount(0);
   await expect(page.getByTestId('preview-open')).toBeFocused();
-  await page.getByTestId('preview-open').click();
+  await clickPreviewTool(page, 'preview-open');
   await page.mouse.click(5, 5);
   await expect(picker).toBeVisible();
   await page.getByTestId('app-modal-overlay').click({ position: { x: 4, y: 4 } });
   await expect(picker).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 650 });
-  await page.getByTestId('preview-open').click();
+  await clickPreviewTool(page, 'preview-open');
   const box = (await picker.boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(390);
@@ -77,7 +78,7 @@ test('opening another file protects the current draft until discard is confirmed
   await page.getByTestId('file-picker-entry-notes.txt').dblclick();
   await page.getByTestId('editor-input').fill('Unsaved draft');
   const choose = async () => {
-    await page.getByTestId('preview-open').click();
+    await clickPreviewTool(page, 'preview-open');
     await page.getByTestId('file-picker-entry-Documents').dblclick();
     await page.getByTestId('file-picker-entry-server-notes.md').dblclick();
   };

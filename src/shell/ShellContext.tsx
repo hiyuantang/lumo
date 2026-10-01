@@ -44,6 +44,7 @@ export interface ShellNotification {
   title: string;
   body: string;
   ts: number;
+  read: boolean;
   piOutcome?: PiOutcome;
 }
 
@@ -68,6 +69,7 @@ interface ShellState {
   zTop: number;
   focused: WindowId | null;
   notifications: ShellNotification[];
+  piOutcomeNotice: ShellNotification | null;
   unread: number;
   theme: ThemePref;
   motion: MotionPref;
@@ -107,7 +109,8 @@ type Action =
   | { type: 'cancel-window-gesture'; appId: WindowId; previous: WindowState }
   | { type: 'update-rect'; appId: WindowId; rect: Rect }
   | { type: 'cycle-window'; dir: 1 | -1 }
-  | { type: 'notify'; title: string; body: string; piOutcome?: PiOutcome }
+  | { type: 'notify'; title: string; body: string; piOutcome?: PiOutcome; silent?: boolean }
+  | { type: 'dismiss-notification'; id: number }
   | { type: 'pi-activity'; key: string; running: boolean }
   | { type: 'clear-notifications' }
   | { type: 'toggle-theme' }
@@ -185,6 +188,7 @@ function reducer(state: ShellState, action: Action): ShellState {
         ...state,
         user: null,
         piActivity: {},
+        piOutcomeNotice: null,
         windows: {},
         remembered: {},
         focused: null,
@@ -363,15 +367,20 @@ function reducer(state: ShellState, action: Action): ShellState {
       if (action.running) piActivity[action.key] = true; else delete piActivity[action.key];
       return { ...state, piActivity };
     }
-    case 'notify':
+    case 'notify': {
+      const notification = { id: notificationId++, title: action.title, body: action.body, ts: Date.now(), read: state.notifOpen, piOutcome: action.piOutcome };
+      const notifications = action.silent ? state.notifications : [notification, ...state.notifications].slice(0, 50);
       return {
         ...state,
-        unread: state.unread + 1,
-        notifications: [
-          { id: notificationId++, title: action.title, body: action.body, ts: Date.now(), piOutcome: action.piOutcome },
-          ...state.notifications,
-        ].slice(0, 50),
+        piOutcomeNotice: action.piOutcome ? notification : state.piOutcomeNotice,
+        unread: notifications.filter((item) => !item.read).length,
+        notifications,
       };
+    }
+    case 'dismiss-notification': {
+      const notifications = state.notifications.filter((item) => item.id !== action.id);
+      return { ...state, notifications, unread: notifications.filter((item) => !item.read).length };
+    }
     case 'clear-notifications':
       return { ...state, notifications: [], unread: 0 };
     case 'toggle-theme': {
@@ -398,6 +407,7 @@ function reducer(state: ShellState, action: Action): ShellState {
         notifOpen: action.open,
         paletteOpen: action.open ? false : state.paletteOpen,
         unread: action.open ? 0 : state.unread,
+        notifications: action.open ? state.notifications.map((item) => ({ ...item, read: true })) : state.notifications,
       };
     case 'set-shortcuts-open':
       return { ...state, shortcutsOpen: action.open };
@@ -454,6 +464,7 @@ function initState(account?: string): ShellState {
     zTop: stored?.zTop ?? 0,
     focused: focused && windows[focused] ? focused : null,
     notifications: [],
+    piOutcomeNotice: null,
     unread: 0,
     theme: prefs?.theme ?? null,
     motion: prefs?.motion ?? 'system',
@@ -495,7 +506,8 @@ export interface ShellActions {
   snapWindow(appId: WindowId, target: SnapTarget, restore?: Rect): void;
   cancelWindowGesture(appId: WindowId, previous: WindowState): void;
   updateRect(appId: WindowId, rect: Rect): void;
-  notify(title: string, body: string, piOutcome?: PiOutcome): void;
+  notify(title: string, body: string, piOutcome?: PiOutcome, silent?: boolean): void;
+  dismissNotification(id: number): void;
   setPiActivity(key: string, running: boolean): void;
   clearNotifications(): void;
   toggleTheme(): void;
@@ -684,7 +696,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       snapWindow: (appId, target, restore) => dispatch({ type: 'snap-window', appId, target, restore }),
       cancelWindowGesture: (appId, previous) => dispatch({ type: 'cancel-window-gesture', appId, previous }),
       updateRect: (appId, rect) => dispatch({ type: 'update-rect', appId, rect }),
-      notify: (title, body, piOutcome) => dispatch({ type: 'notify', title, body, piOutcome }),
+      notify: (title, body, piOutcome, silent) => dispatch({ type: 'notify', title, body, piOutcome, silent }),
+      dismissNotification: (id) => dispatch({ type: 'dismiss-notification', id }),
       setPiActivity: (key, running) => dispatch({ type: 'pi-activity', key, running }),
       clearNotifications: () => dispatch({ type: 'clear-notifications' }),
       toggleTheme: () => dispatch({ type: 'toggle-theme' }),

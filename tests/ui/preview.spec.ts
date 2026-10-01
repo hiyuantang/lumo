@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { clickPreviewTool } from '../preview-tools';
 import { expect, test, type Page } from '../offline';
 
 async function login(page: Page) {
@@ -33,9 +34,9 @@ test('Files separates metadata, Preview and management actions', async ({ page }
   await page.getByTestId('file-row-Documents').dblclick();
   await page.getByTestId('file-row-server-notes.md').dblclick();
   await expect(page.getByTestId('preview-rendered').getByRole('heading', { name: 'Atlas server notes' })).toBeVisible();
-  await page.getByTestId('preview-mode-raw').click();
+  await clickPreviewTool(page, 'preview-mode-raw');
   await expect(page.getByTestId('editor-input')).toHaveValue(/\#\ Atlas\ server\ notes/);
-  await page.getByTestId('preview-mode-rendered').click();
+  await clickPreviewTool(page, 'preview-mode-rendered');
   await expect(page.getByTestId('preview-rendered').getByRole('listitem')).toHaveCount(4);
   await page.reload();
   await expect(page.getByTestId('preview-rendered')).toContainText('Atlas server notes');
@@ -70,7 +71,7 @@ test('TypeScript source and test files open as editable text and retain saved ed
   }
   const content = `${await page.getByTestId('editor-input').inputValue()}\nexport const sample = true;\n`;
   await page.getByTestId('editor-input').fill(content);
-  await page.getByTestId('editor-save').click();
+  await clickPreviewTool(page, 'editor-save');
   await expect(page.getByTestId('preview-save-status')).toHaveText('Saved');
   await page.getByTestId('window-close-preview').click();
   await page.getByTestId('file-row-agent.test.ts').dblclick();
@@ -103,13 +104,13 @@ test('Markdown renders formatting without executing HTML or loading remote image
   await page.getByTestId('file-row-Documents').dblclick();
   await page.getByTestId('file-row-server-notes.md').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Open in Preview', exact: true }).click();
-  await page.getByTestId('preview-mode-raw').click();
+  await clickPreviewTool(page, 'preview-mode-raw');
   const text = '# Safe document\n\n**Bold** and *italic* and `code`.\n\n> A quotation\n\n| Name | Value |\n| --- | --- |\n| One | Two |\n\n```html\n<script>alert(1)</script>\n```\n\n<script>alert(2)</script>\n\n[Unsafe](javascript:alert(3))\n\n![Image](https://example.invalid/image.png)';
   await page.getByTestId('editor-input').fill(text);
-  await page.getByTestId('editor-save').click();
+  await clickPreviewTool(page, 'editor-save');
   await page.getByTestId('dock-app-files').click();
   await page.getByTestId('file-row-server-notes.md').dblclick();
-  await page.getByTestId('preview-mode-rendered').click();
+  await clickPreviewTool(page, 'preview-mode-rendered');
   const preview = page.getByTestId('preview-rendered');
   await expect(preview.locator('strong')).toHaveText('Bold');
   await expect(preview.locator('table')).toContainText('One');
@@ -168,7 +169,7 @@ test('Preview protects unsaved edits while another file opens in its own window'
   await page.getByTestId('file-row-notes.txt').dblclick();
   await expect(page.getByTestId('editor-input')).toHaveValue('Keep my draft');
   await page.getByTestId('editor-input').fill('Discard this draft');
-  await page.getByTestId('preview-refresh').click();
+  await clickPreviewTool(page, 'preview-refresh');
   await prompt.getByRole('button', { name: 'Discard changes' }).click();
   await expect(page.getByTestId('editor-input')).toHaveValue('Keep my draft');
 });
@@ -211,19 +212,19 @@ test('Markdown switches between rendered draft and editable raw text without los
   await login(page);
   await page.getByTestId('file-row-Documents').dblclick();
   await page.getByTestId('file-row-server-notes.md').dblclick();
-  await page.getByTestId('preview-mode-raw').click();
+  await clickPreviewTool(page, 'preview-mode-raw');
   await page.getByTestId('editor-input').fill('# Unsaved heading\n\nMy draft');
-  await page.getByTestId('preview-mode-rendered').click();
+  await clickPreviewTool(page, 'preview-mode-rendered');
   await expect(page.getByTestId('preview-rendered').getByRole('heading', { name: 'Unsaved heading' })).toBeVisible();
   await expect(page.getByTestId('preview-save-status')).toHaveText('Unsaved changes');
-  await page.getByTestId('preview-refresh').click();
+  await clickPreviewTool(page, 'preview-refresh');
   await expect(page.getByTestId('preview-unsaved-dialog')).toBeVisible();
   await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
-  await page.getByTestId('preview-mode-raw').click();
+  await clickPreviewTool(page, 'preview-mode-raw');
   await expect(page.getByTestId('editor-input')).toHaveValue('# Unsaved heading\n\nMy draft');
-  await page.getByTestId('preview-mode-rendered').click();
-  await page.getByTestId('editor-save').click();
+  await clickPreviewTool(page, 'preview-mode-rendered');
+  await clickPreviewTool(page, 'editor-save');
   await expect(page.getByTestId('preview-save-status')).toHaveText('Saved');
-  await page.getByTestId('preview-refresh').click();
+  await clickPreviewTool(page, 'preview-refresh');
   await expect(page.getByTestId('preview-rendered').getByRole('heading', { name: 'Unsaved heading' })).toBeVisible();
 });

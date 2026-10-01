@@ -29,12 +29,20 @@ type piDesktopRequest struct {
 	Key       string `json:"key,omitempty"`
 	DeltaX    int    `json:"deltaX,omitempty"`
 	DeltaY    int    `json:"deltaY,omitempty"`
+	Width     *int   `json:"width,omitempty"`
+	Height    *int   `json:"height,omitempty"`
 	ExpiresAt int64  `json:"expiresAt"`
 	claimed   bool
 }
 
 func validDesktopRequest(req piDesktopRequest) bool {
 	if len(req.Label) > 600 || len(req.Target) > 80 || len(req.Text) > 16000 || len(req.Key) > 20 || req.DeltaX < -2000 || req.DeltaX > 2000 || req.DeltaY < -2000 || req.DeltaY > 2000 {
+		return false
+	}
+	if req.Action == "resize" {
+		return req.Target != "" && req.Label != "" && req.Width != nil && req.Height != nil && *req.Width >= 1 && *req.Width <= 8192 && *req.Height >= 1 && *req.Height <= 8192 && req.DeltaX == 0 && req.DeltaY == 0 && req.Text == "" && req.Key == ""
+	}
+	if req.Width != nil || req.Height != nil {
 		return false
 	}
 	switch req.Action {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { clickPreviewTool } from '../preview-tools';
 import { expect, test } from '../offline';
 
 test('Skills presents compact descriptions and rendered instructions with a single Edit action', async ({ page }) => {
@@ -70,7 +71,7 @@ test('Skills edits open in Preview and saved changes refresh the skill', async (
   await expect(page.getByTestId('preview-unsaved-dialog')).toBeVisible();
   await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
   await expect(editor).toHaveValue(updated);
-  await page.getByTestId('editor-save').click();
+  await clickPreviewTool(page, 'editor-save');
   await expect(page.getByTestId('preview-save-status')).toHaveText('Saved');
   await page.getByTestId('dock-app-skills').click();
   await expect(page.getByTestId('app-skills').getByRole('heading', { name: 'Updated server health', exact: true })).toBeVisible();

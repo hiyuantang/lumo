@@ -88,11 +88,9 @@ test('Pi keeps two chats running independently with drafts, queues and backgroun
   await expect(page.getByTestId('pi-messages')).toContainText('First completed in the background');
   await expect(page.getByLabel('Queued messages')).toHaveCount(0);
   await page.getByTestId('notifications-button').click();
-  await expect(page.getByTestId('notification-item')).toHaveCount(2);
+  await expect(page.getByTestId('notification-item')).toHaveCount(1);
   await expect(page.getByTestId('notification-item').first()).toContainText('Pi finished');
   await expect(page.getByTestId('notification-item').first()).toContainText('first');
-  await expect(page.getByTestId('notification-item').last()).toContainText('Pi stopped');
-  await expect(page.getByTestId('notification-item').last()).toContainText('second');
   await page.keyboard.press('Escape');
   await page.screenshot({ path: '/tmp/lumo-pi-independent-chats.png', animations: 'disabled' });
 });

@@ -4,7 +4,7 @@ import { Popup } from './Popup';
 import { IconChevronDown } from './icons';
 import type { ContextAction } from './ContextMenu';
 
-export function DropdownMenu({ label, testId, items, className = '', ariaLabel, disabled, icon }: { icon?: ReactNode; label: string; testId: string; items: (ContextAction & { checked?: boolean; testId?: string })[]; className?: string; ariaLabel?: string; disabled?: boolean }) {
+export function DropdownMenu({ label, testId, items, className = '', ariaLabel, disabled, icon, protected: protectedSurface }: { icon?: ReactNode; label: string; testId: string; items: (ContextAction & { checked?: boolean; testId?: string })[]; className?: string; ariaLabel?: string; disabled?: boolean; protected?: boolean }) {
   const menuId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -23,11 +23,11 @@ export function DropdownMenu({ label, testId, items, className = '', ariaLabel, 
   const enabled = items.filter((item) => !item.disabled);
   const initial = last ? enabled.at(-1) : enabled[0];
   return <>
-    <button ref={trigger} type="button" className={`btn ${className}`} disabled={disabled} aria-label={ariaLabel} data-testid={testId} aria-haspopup="menu" aria-expanded={Boolean(anchor)} aria-controls={anchor ? menuId : undefined} onClick={(event) => anchor ? close() : open(false, event.detail === 0)} onKeyDown={(event) => {
+    <button ref={trigger} type="button" className={`btn ${className}`} disabled={disabled} aria-label={ariaLabel} data-testid={testId} data-lumo-use-protected={protectedSurface || undefined} aria-haspopup="menu" aria-expanded={Boolean(anchor)} aria-controls={anchor ? menuId : undefined} onClick={(event) => anchor ? close() : open(false, event.detail === 0)} onKeyDown={(event) => {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); open(event.key === 'ArrowUp', true); }
     }}>{icon ?? <><span>{label}</span><IconChevronDown size={14} strokeWidth={2} /></>}</button>
     {anchor && <Popup keyboard={keyboard} x={anchor.left} y={anchor.bottom + 4} above={anchor.top - 4} width={220} anchorElement={trigger.current} keepAnchorVisible onClose={() => close()}>
-      <div id={menuId} role="menu" aria-label={ariaLabel ?? label} data-testid={`${testId}-menu`} onKeyDown={(event) => {
+      <div id={menuId} role="menu" aria-label={ariaLabel ?? label} data-testid={`${testId}-menu`} data-lumo-use-protected={protectedSurface || undefined} onKeyDown={(event) => {
         if (event.key === 'Escape' || event.key === 'Tab') { event.stopPropagation(); if (event.key === 'Escape') event.preventDefault(); close(true); return; }
         if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
         event.preventDefault();

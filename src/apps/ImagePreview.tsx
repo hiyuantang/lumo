@@ -4,11 +4,12 @@ import { describeError, getDataSource } from '../api/source';
 import { useAppMenus } from '../shell/appMenus';
 import { IconRefresh } from '../shell/icons';
 import { useAppPreference } from '../shell/useAppState';
+import { PreviewTools } from './PreviewTools';
 
 const formats: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp', ico: 'image/x-icon' };
 export const imageType = (name: string) => formats[name.split('.').at(-1)?.toLowerCase() ?? ''];
 
-export function ImagePreview({ path, onOpen }: { path: string[]; onOpen: () => void }) {
+export function ImagePreview({ path, onOpen, toolsHeld }: { path: string[]; onOpen: () => void; toolsHeld: boolean }) {
   const source = getDataSource();
   const name = path.at(-1) ?? 'Image';
   const [revision, setRevision] = useState(0);
@@ -54,11 +55,11 @@ export function ImagePreview({ path, onOpen }: { path: string[]; onOpen: () => v
     { id: 'image-actual', label: 'Actual Size', checked: actual, run: () => selectSize(true) },
   ] });
   return <div className="app preview" data-testid="app-preview">
-    <div className="app-toolbar preview-toolbar"><strong title={name}>{name}</strong><div className="app-toolbar-actions">
+    <PreviewTools title={<span title={name}>{name}</span>} holdOpen={toolsHeld}>
       <button type="button" className="btn" disabled={!size} title={enlarged ? 'Fit to window' : 'Show actual size'} data-testid="preview-image-size" onClick={() => selectSize(!enlarged)}>{enlarged ? 'Fit' : '100%'}</button>
       <button type="button" className="btn" data-testid="preview-open" onClick={onOpen}>Open…</button>
       <button type="button" className="btn btn-icon" aria-label="Refresh" title="Refresh" disabled={loading} data-testid="preview-refresh" onClick={refresh}><IconRefresh size={16}/></button>
-    </div></div>
+    </PreviewTools>
     <div ref={pane} className={`preview-image-content${enlarged ? ' preview-image-actual' : ''}${pannable ? ' preview-image-pannable' : ''}${panning ? ' is-panning' : ''}`} data-testid="preview-image-content" tabIndex={0} aria-label="Image preview" aria-busy={loading}
       onPointerDown={(event) => {
         dragged.current = false;

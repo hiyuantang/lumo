@@ -9,7 +9,7 @@
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-window);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  overflow: hidden;
+  overflow: clip;
   animation: window-in var(--dur-med) var(--ease-out);
   transition: box-shadow var(--dur-med) var(--ease-out), border-color var(--dur-med) var(--ease-out);
 }
@@ -256,7 +256,7 @@
   cursor: nwse-resize;
 }
 
-.narrow .window {
+.narrow .window:not(.pi-assistant) {
   left: 0 !important;
   top: var(--menubar-h) !important;
   width: 100% !important;
@@ -265,7 +265,7 @@
   border: 1px solid var(--border);
 }
 
-.narrow .window:not(.focused):not(.minimizing) {
+.narrow .window:not(.pi-assistant):not(.focused):not(.minimizing) {
   display: none;
 }
 

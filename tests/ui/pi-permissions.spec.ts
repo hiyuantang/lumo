@@ -79,6 +79,7 @@ test('Approval cards show the exact action and require an explicit approve or re
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
       await expect(card.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+      await card.evaluate(async (node) => { await document.fonts.ready; await Promise.all(node.closest('.window')!.getAnimations().map((animation) => animation.finished.catch(() => {}))); });
       const title = (await card.getByRole('heading').boundingBox())!;
       const approve = (await card.getByRole('button', { name: 'Approve', exact: true }).boundingBox())!;
       expect(approve.x).toBeGreaterThan(title.x + title.width);

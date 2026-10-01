@@ -83,6 +83,86 @@ test('Lumo Use validates labels, rejects disabled controls and serializes window
   const after = await page.getByTestId('window-files').boundingBox(); expect(after!.x - before!.x).toBe(70); expect(after!.y - before!.y).toBe(40);
 });
 
+test('Spatial observations let an assistant resize and place Settings clear of its protected floating panel', async ({ page }) => {
+  const fixture = await piPage(page);
+  await page.route('**/api/v1/system/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const data = path.endsWith('/settings') ? { runtimeHostname: 'lumo-test', timezone: 'Etc/UTC', serverTime: '2026-09-29T12:00:00Z', revision: 'initial', available: true, canEdit: true }
+      : path.endsWith('/identity') ? { hostname: 'lumo-test', os: { prettyName: 'Ubuntu test', kernel: 'test' }, architecture: 'aarch64' }
+      : { cpu: { usagePercent: 5, cores: 4 }, network: [], disks: [] };
+    return route.fulfill({ json: { ok: true, data } });
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('http://localhost:5200');
+  await page.getByTestId('pi-tray-button').click(); await page.getByTestId('pi-tray-toggle').click();
+  await expect(page.getByTestId('pi-compact-prompt')).toBeEnabled();
+  await page.getByTestId('pi-compact-prompt').fill('Secret assistant draft');
+  const geometry = (text: string) => JSON.parse(text.split('\n').find((line) => line.startsWith('Desktop geometry: '))!.slice('Desktop geometry: '.length));
+  const windows = (text: string) => text.split('\n').filter((line) => line.startsWith('Window: ')).map((line) => JSON.parse(line.slice('Window: '.length)));
+  let result = await request(fixture, { action: 'observe' });
+  const desktop = geometry(result.text);
+  expect(desktop.viewport).toEqual({ w: 1440, h: 1000 });
+  expect(desktop.workArea.y).toBe(32);
+  expect(desktop.workArea.y + desktop.workArea.h).toBeLessThan(1000);
+  const assistant = windows(result.text).find((window) => window.label === 'Pi assistant');
+  expect(assistant).toMatchObject({ protected: true, canDrag: false, canResize: false });
+  const assistantBox = (await page.getByTestId('pi-assistant').boundingBox())!;
+  expect(assistant.bounds.x).toBeCloseTo(assistantBox.x, 0);
+  expect(assistant.bounds.h).toBeCloseTo(assistantBox.height, 0);
+  expect(result.text).not.toContain('Secret assistant draft');
+  expect(result.text).not.toContain('"label":"Approval mode"');
+  result = await request(fixture, { action: 'click', ...control(result.text, 'Settings', 'button') });
+  expect(result.error, result.text).toBe(false);
+  let settings = windows(result.text).find((window) => window.id === 'settings');
+  expect(settings, result.text).toMatchObject({ label: 'Settings', mode: 'floating', minSize: { w: 440, h: 340 }, canDrag: true, canResize: true });
+  const titleRecord = result.text.split('\n').filter((line) => line.startsWith('{')).map((line) => JSON.parse(line)).find((item) => item.label === 'Settings' && item.role === 'window title');
+  expect(titleRecord.window).toBe('settings'); expect(titleRecord.bounds.w).toBe(settings.bounds.w - 2);
+  const layer = settings.z;
+  result = await request(fixture, { action: 'resize', ...control(result.text, 'Settings', 'window title'), width: 560, height: 420 });
+  expect(result.error, result.text).toBe(false);
+  settings = windows(result.text).find((window) => window.id === 'settings');
+  expect(settings.bounds).toMatchObject({ w: 560, h: 420 }); expect(settings.z).toBe(layer);
+  result = await request(fixture, { action: 'drag', ...control(result.text, 'Settings', 'window title'), deltaX: 32 - settings.bounds.x, deltaY: 64 - settings.bounds.y });
+  expect(result.error, result.text).toBe(false);
+  settings = windows(result.text).find((window) => window.id === 'settings');
+  expect(settings.bounds).toEqual({ x: 32, y: 64, w: 560, h: 420 });
+  expect(settings.bounds.x + settings.bounds.w).toBeLessThan(assistant.bounds.x);
+  result = await request(fixture, { action: 'resize', ...control(result.text, 'Settings', 'window title'), width: 1, height: 1 });
+  expect(result.error, result.text).toBe(false);
+  settings = windows(result.text).find((window) => window.id === 'settings');
+  expect(settings.bounds).toMatchObject({ w: 440, h: 340 });
+  result = await request(fixture, { action: 'resize', ...control(result.text, 'Settings', 'window title'), width: 8192, height: 8192 });
+  expect(result.error, result.text).toBe(false);
+  settings = windows(result.text).find((window) => window.id === 'settings');
+  expect(settings.bounds.x).toBe(0); expect(settings.bounds.y).toBe(32);
+  expect(settings.bounds.w).toBe(1440); expect(settings.bounds.h).toBeCloseTo(desktop.workArea.h, 0);
+  const stale = control(result.text, 'Settings', 'window title');
+  await page.getByTestId('pi-tray-button').click();
+  const blocked = await request(fixture, { action: 'resize', ...stale, width: 560, height: 420 });
+  expect(blocked.error).toBe(true); expect(blocked.text).toContain('geometry changed');
+  await page.keyboard.press('Escape');
+  result = await request(fixture, { action: 'observe' });
+  const invalid = await request(fixture, { action: 'resize', ...control(result.text, 'Settings', 'window title'), width: -1, height: 420 });
+  expect(invalid.error).toBe(true); expect(invalid.text).toContain('integer width and height');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const changedViewport = await request(fixture, { action: 'resize', ...control(result.text, 'Settings', 'window title'), width: 560, height: 420 });
+  expect(changedViewport.error).toBe(true); expect(changedViewport.text).toContain('geometry changed');
+  result = await request(fixture, { action: 'observe' });
+  settings = windows(result.text).find((window) => window.id === 'settings');
+  expect(settings).toMatchObject({ mode: 'compact', canDrag: false, canResize: false });
+  const compact = await request(fixture, { action: 'resize', ...control(result.text, 'Settings', 'window title'), width: 560, height: 420 });
+  expect(compact.error).toBe(true); expect(compact.text).toContain('desktop-sized');
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  result = await request(fixture, { action: 'observe' });
+  result = await request(fixture, { action: 'click', ...control(result.text, 'Maximize Settings') });
+  expect(result.error, result.text).toBe(false);
+  settings = windows(result.text).find((window) => window.id === 'settings');
+  expect(settings).toMatchObject({ mode: 'maximized', canDrag: false, canResize: false });
+  const maximized = await request(fixture, { action: 'resize', ...control(result.text, 'Settings', 'window title'), width: 560, height: 420 });
+  expect(maximized.error).toBe(true); expect(maximized.text).toContain('floating window');
+});
+
 test('Lumo Use rejects malformed targets with correction instructions and accepts only exact JSON fields', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message));
   const fixture = await open(page);
@@ -270,10 +350,11 @@ test('Stop cancels cursor movement before clicking and hides it immediately', as
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.getByTestId('pi-prompt').fill('Use the desktop'); await page.getByTestId('pi-send').click();
   const snapshot = await request(fixture, { action: 'observe' });
+  await page.getByRole('button', { name: 'Stop', exact: true }).focus();
   const id = fixture.requestDesktop({ action: 'click', ...control(snapshot.text, 'Files') });
   const cursor = page.getByTestId('lumo-use-cursor');
   await expect(cursor).toHaveAttribute('data-phase', 'move');
-  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await page.keyboard.press('Enter');
   await expect(cursor).toBeHidden();
   await expect.poll(() => fixture.desktopResults.some((result) => result.desktopId === id)).toBe(true);
   expect(fixture.desktopResults.find((result) => result.desktopId === id)?.error).toBe(true);
@@ -308,4 +389,68 @@ test('Cursor click feedback renders with motion enabled in a narrow desktop', as
   await expect(cursor.locator('.lumo-use-cursor-ripple')).toHaveCSS('animation-duration', '0.24s');
   await expect(cursor.locator('.lumo-use-cursor-shape')).toHaveCSS('animation-iteration-count', '1');
   await page.screenshot({ path: '/tmp/lumo-cursor-narrow.png' });
+});
+
+test('Window drag and resize share the cursor timeline and keep its held tip anchored to the moving handle', async ({ page }) => {
+  const fixture = await open(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.setViewportSize({ width: 1800, height: 1100 });
+  let result = await request(fixture, { action: 'observe' });
+  result = await request(fixture, { action: 'click', ...control(result.text, 'Files') });
+  const window = page.getByTestId('window-files');
+  const cursor = page.getByTestId('lumo-use-cursor');
+  const before = (await window.boundingBox())!;
+  const title = (await window.locator('.window-titlebar').boundingBox())!;
+  for (const action of ['drag', 'resize'] as const) {
+    const start = (await window.boundingBox())!;
+    const anchor = action === 'drag' ? { x: title.width / 2 + 1, y: title.height / 2 + 1 } : undefined;
+    await page.evaluate(({ action, anchor }) => {
+      const records: { x: number; y: number; w: number; h: number; tipX: number; tipY: number; error: number }[] = [];
+      (window as unknown as { gestureFrames: typeof records }).gestureFrames = records;
+      const node = document.querySelector('[data-testid="window-files"]')!;
+      const cursor = document.querySelector('[data-testid="lumo-use-cursor"]')!;
+      let started = false;
+      const sample = () => {
+        if (cursor.classList.contains('is-pressed')) {
+          started = true;
+          const box = node.getBoundingClientRect(); const tip = cursor.getBoundingClientRect();
+          const expectedX = action === 'drag' ? box.x + anchor!.x : box.right - 4;
+          const expectedY = action === 'drag' ? box.y + anchor!.y : box.bottom - 4;
+          records.push({ x: box.x, y: box.y, w: box.width, h: box.height, tipX: tip.x + 1.5, tipY: tip.y + 1.5, error: Math.hypot(tip.x + 1.5 - expectedX, tip.y + 1.5 - expectedY) });
+        } else if (started) return;
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    }, { action, anchor });
+    result = await request(fixture, { action, ...control(result.text, 'Files', 'window title'), ...(action === 'drag' ? { deltaX: 180, deltaY: 80 } : { width: start.width + 100, height: start.height + 60 }) });
+    expect(result.error, result.text).toBe(false);
+    const frames = await page.evaluate(() => (window as unknown as { gestureFrames: { x: number; w: number; error: number }[] }).gestureFrames);
+    expect(frames.length).toBeGreaterThan(3);
+    expect(Math.max(...frames.map((frame) => frame.error))).toBeLessThan(2);
+    expect(frames.some((frame) => action === 'drag' ? frame.x > start.x + 10 && frame.x < start.x + 170 : frame.w > start.width + 5 && frame.w < start.width + 95)).toBe(true);
+    await expect(cursor).not.toHaveClass(/is-pressed/);
+  }
+  const after = (await window.boundingBox())!;
+  expect(after.x).toBe(before.x + 180); expect(after.y).toBe(before.y + 80);
+  expect(after.width).toBe(before.width + 100); expect(after.height).toBe(before.height + 60);
+  await page.screenshot({ path: '/tmp/lumo-coordinated-resize.png' });
+});
+
+test('Stopping a held window gesture releases the cursor and prevents further movement', async ({ page }) => {
+  const fixture = await open(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.getByTestId('pi-prompt').fill('Use my desktop'); await page.getByTestId('pi-send').click();
+  let result = await request(fixture, { action: 'observe' });
+  result = await request(fixture, { action: 'click', ...control(result.text, 'Files') });
+  const id = fixture.requestDesktop({ action: 'drag', ...control(result.text, 'Files', 'window title'), deltaX: -500, deltaY: 500 });
+  const cursor = page.getByTestId('lumo-use-cursor');
+  await expect(cursor).toHaveClass(/is-pressed/);
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(cursor).toBeHidden();
+  await expect.poll(() => fixture.desktopResults.some((item) => item.desktopId === id)).toBe(true);
+  expect(fixture.desktopResults.find((item) => item.desktopId === id)?.error).toBe(true);
+  const stopped = await page.getByTestId('window-files').boundingBox();
+  await page.waitForTimeout(250);
+  expect(await page.getByTestId('window-files').boundingBox()).toEqual(stopped);
+  await expect(cursor).not.toHaveClass(/is-pressed/);
 });

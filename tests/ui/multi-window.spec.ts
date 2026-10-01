@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { clickPreviewTool } from '../preview-tools';
 import { expect, test, type Page } from '../offline';
 
 const previews = (page: Page) => page.locator('.window[data-app-id="preview"]');
@@ -66,7 +67,7 @@ test('each Preview placement and Markdown mode survives reload', async ({ page }
   await page.getByTestId('file-row-Documents').dblclick();
   await page.getByTestId('file-row-server-notes.md').dblclick();
   const first = page.getByTestId('window-preview');
-  await first.getByTestId('preview-mode-raw').click();
+  await clickPreviewTool(first, 'preview-mode-raw');
   await first.getByRole('button', { name: 'Maximize Preview', exact: true }).click();
   await first.getByRole('button', { name: 'Minimize Preview', exact: true }).click();
   await newPreview(page);

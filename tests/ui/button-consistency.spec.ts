@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { clickPreviewTool } from '../preview-tools';
 import { expect, test, type Locator } from '../offline';
 import { piPage } from './pi-fixture';
 
@@ -43,7 +44,7 @@ for (const width of [1440, 390]) for (const colorScheme of ['light', 'dark'] as 
         await page.getByTestId('file-row-notes.txt').dblclick();
         await expect(page.getByTestId('editor-input')).toBeVisible();
         await checkControls(page.getByTestId('app-preview'));
-        await page.getByTestId('preview-open').click();
+        await clickPreviewTool(page, 'preview-open');
         const picker = page.getByTestId('file-picker');
         await expect(picker).toBeVisible();
         await checkControls(picker);
@@ -84,5 +85,47 @@ test('Pi shares control heights in the composer and settings at both sizes', asy
       await checkControls(page.getByTestId('pi-settings'));
     }
     await page.getByTestId('pi-home-button').click();
+  }
+});
+
+test('Pi title bar stays aligned when content scrolls into view', async ({ page }) => {
+  await piPage(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('http://localhost:5200');
+  for (const colorScheme of ['light', 'dark'] as const) for (const width of [1440, 390]) {
+    await page.emulateMedia({ colorScheme });
+    await page.setViewportSize({ width, height: 900 });
+    await page.getByTestId('dock-app-pi').click();
+    const frame = page.locator('.window[data-app-id="pi"]');
+    await expect(frame).toBeVisible();
+    await expect(page.getByTestId('pi-prompt')).toBeEnabled();
+    await page.getByTestId('pi-settings-button').click();
+    await page.getByRole('tab', { name: 'Pet', exact: true }).click();
+    await page.getByTestId('settings-pet-reset').focus();
+    await frame.locator('.window-body').evaluate((node) => node.scrollIntoView({ block: 'end' }));
+    const chrome = await frame.evaluate((node) => {
+      const frame = node.getBoundingClientRect();
+      const bar = node.querySelector('.window-titlebar')!.getBoundingClientRect();
+      return {
+        scroll: node.scrollTop,
+        inset: bar.top - frame.top,
+        height: bar.height,
+        controls: [...node.querySelectorAll('.wc')].map((button) => {
+          const box = button.getBoundingClientRect();
+          return { width: box.width, height: box.height, center: box.top + box.height / 2 - bar.top };
+        }),
+      };
+    });
+    expect(chrome.scroll, `${width} ${colorScheme}`).toBe(0);
+    expect(chrome.inset).toBeCloseTo(1, 1);
+    expect(chrome.height).toBe(28);
+    expect(chrome.controls).toHaveLength(3);
+    for (const control of chrome.controls) {
+      expect(control.width).toBe(14);
+      expect(control.height).toBe(14);
+      expect(control.center).toBeCloseTo(13.5, 1);
+    }
+    await page.getByTestId('pi-home-button').click();
+    await page.screenshot({ path: `/tmp/lumo-titlebar-${width}-${colorScheme}.png` });
   }
 });

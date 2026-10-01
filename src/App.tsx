@@ -10,6 +10,9 @@ import { Dock } from './shell/Dock';
 import { DesktopItems } from './shell/DesktopItems';
 import { AppCatalogProvider } from './shell/AppCatalogContext';
 import { LoginScreen } from './shell/LoginScreen';
+import { PiAssistant } from './shell/PiAssistant';
+import { PiConversationWindowsProvider } from './apps/PiConversationLocation';
+import type { PiAssistantRequest } from './apps/Pi';
 import { MenuBar } from './shell/MenuBar';
 import { NotificationCenter, ShortcutsDialog } from './shell/NotificationCenter';
 import { ReauthProvider } from './shell/ReauthSheet';
@@ -20,10 +23,14 @@ import { dockSpace } from './shell/windowGeometry';
 function Desktop() {
   const narrow = useIsNarrow();
   const [overview, setOverview] = useState(false);
+  const [piOpen, setPiOpen] = useState(false);
+  const [piVisited, setPiVisited] = useState(false);
+  const [piRequest, setPiRequest] = useState<PiAssistantRequest>();
   const { state, actions } = useShell();
   return (
     <div className={`desktop-root${narrow ? ' narrow' : ''}${overview ? ' overview-active' : ''}`} style={{ '--dock-space': `${dockSpace(state.viewport)}px` } as CSSProperties}>
-      <MenuBar />
+      <MenuBar piOpen={piOpen} onTogglePi={() => { setPiVisited(true); setPiOpen((value) => !value); }} onNewPi={() => { setPiVisited(true); setPiOpen(true); setPiRequest({ action: 'new', id: crypto.randomUUID() }); }} onPiWorkspace={() => { setPiVisited(true); setPiOpen(true); setPiRequest({ action: 'workspace', id: crypto.randomUUID() }); }} />
+      {piVisited && <PiAssistant open={piOpen} request={piRequest} onOpen={() => setPiOpen(true)} onHide={() => setPiOpen(false)}/>}
       <main className="desktop wallpaper" aria-label="Desktop" onPointerDown={(event) => { if (event.target === event.currentTarget) { (document.activeElement as HTMLElement | null)?.blur(); actions.focusDesktop(); } }}>
         <DesktopItems />
         <WindowManager />
@@ -48,7 +55,7 @@ function Shell() {
       </div>
     );
   }
-  return state.user ? <AppCatalogProvider><ServerClockProvider><Desktop /></ServerClockProvider></AppCatalogProvider> : <LoginScreen />;
+  return state.user ? <AppCatalogProvider><ServerClockProvider><PiConversationWindowsProvider><Desktop /></PiConversationWindowsProvider></ServerClockProvider></AppCatalogProvider> : <LoginScreen />;
 }
 
 export default function App() {

@@ -462,3 +462,10 @@
 
 .pi-extensions .pi-context-heading {align-items:center;}
 .pi-extensions .pi-context-heading h2 {margin:0;}
+
+.pi-conversation-location {flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;color:var(--text);}
+.pi-conversation-location h2 {margin:0;font-size:20px;font-weight:500;letter-spacing:-.3px;}
+.pi-conversation-location p {margin:0;max-width:340px;color:var(--text-muted);font-size:13px;line-height:1.6;}
+.pi-conversation-location .btn {margin-top:4px;}
+.pi-compact-composer .pi-conversation-location {padding:12px 8px 20px;}
+.pi-compact-composer .pi-conversation-location h2 {font-size:16px;}

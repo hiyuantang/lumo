@@ -40,7 +40,8 @@ system and generated-wallpaper provenance.
    server round trips**: moving a window, opening a menu or switching
    applications never touches the network.
 2. Small transitions use 140–220 ms ease-out. Window minimize and dock
-   layout transitions use their coordinated longer timings. Nothing bounces.
+   layout transitions use their coordinated longer timings. Window and control
+   transitions do not bounce; pet gravity uses damped physical rebounds.
 3. Every destructive action confirms before it executes.
 4. Markdown editing and preview render locally. Typing, scrolling and
    preview updates require no server round trip; explicit file operations

@@ -58,7 +58,7 @@ test('notifications fit short lists and scroll long lists above the dock', async
   expect(first!.height).toBeLessThan(200);
   await page.keyboard.press('Escape');
   for (let index = 0; index < 12; index++) {
-    await refresh.click();
+    await refresh.press('Enter');
     await expect(refresh).toBeEnabled();
   }
   await page.getByTestId('notifications-button').click();
@@ -71,7 +71,7 @@ test('notifications fit short lists and scroll long lists above the dock', async
   const bounds = await panel.boundingBox();
   const dock = await page.getByTestId('dock').boundingBox();
   expect(bounds!.y + bounds!.height).toBeLessThan(dock!.y);
-  await panel.getByRole('button', { name: 'Clear all' }).click();
+  while (await panel.getByTestId('notification-close').count()) { await panel.getByTestId('notification-item').first().hover(); await panel.getByTestId('notification-close').first().click(); }
   await expect(panel).toContainText('No notifications.');
   expect((await panel.boundingBox())!.height).toBeLessThan(200);
 });
@@ -214,6 +214,7 @@ test('desktop folder menu and item menus dismiss on outside clicks', async ({ pa
   await select.click();
   await expect(page.locator('.shell-popup [role="listbox"]')).toHaveCount(0);
   await page.getByTestId('notifications-button').click();
-  await page.locator('.notifications-backdrop').click({ position: { x: 20, y: 200 } });
+  await page.getByTestId('settings-section-network').click();
+  await expect(page.getByTestId('settings-section-network')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByTestId('notification-center')).toHaveCount(0);
 });

@@ -2090,7 +2090,17 @@ request, bounded to 24,000 characters and never continuously streamed or stored
 in a duplicate desktop-state database.
 
 Controls are complete JSON records with explicit `target`, `label`, `role` and
-`disabled` fields, plus selection, expansion and value information where present.
+`disabled` fields, plus `bounds` (`{x,y,w,h}`), the owning `window` ID when present,
+and `covered` (whether the control's center is blocked). Selection, expansion and
+value information are included where present. Geometry uses CSS pixels from the
+viewport's top-left, with x rightward and y downward. A `Desktop geometry:` JSON
+record gives `viewport` and `workArea`, excluding the menu bar and dock. `Window:`
+JSON records give live bounds, z order, protection, focus, placement mode, app
+minimum sizes and drag/resize capabilities. `Overlay:` records describe occupied
+popups, dialogs and desktop overlays without their private content. Protected Pi
+and terminal windows are obstacles, never action targets. Placement must account
+for other windows and overlays; the returned geometry establishes the actual
+result after each action. Geometry actions preserve window layer order.
 Actions must copy the exact `target` and `label` string values from the same record
 in the latest observation. Brackets, extra whitespace and inferred labels are
 rejected rather than normalized. Observations expire after 60 seconds. Validation
@@ -2148,10 +2158,17 @@ The trusted extension uses the documented RPC input-dialog transport with the
 reserved title `Lumo Use: ` followed by a JSON action. The server projects these
 requests separately from user questions. They expire after 30 seconds and clear
 on abort, final settlement or process exit. Allowed actions are `observe`,
-`click`, `double_click`, `fill`, `press`, `scroll` and `drag`. An action includes an
+`click`, `double_click`, `fill`, `press`, `scroll`, `drag` and `resize`. An action includes an
 opaque `target` from the latest snapshot and its exact `label`, making the
 existing approval card reviewable. Optional fields are `text` (up to 4,000
 characters), `key`, `deltaX` and `deltaY` (integer pixel deltas within ±2,000).
+Resize instead requires both `width` and `height` (integer CSS pixels from 1 to
+8,192), uses a floating window-title target, and cannot mix dimensions with other
+actions or drag deltas. Sizes clamp to app minimums and the usable desktop area;
+placement may shift to keep the resized window within that area. Compact screens,
+maximized and tiled windows cannot drag or resize until a floating desktop layout
+is available. Changes to the viewport, windows or occupied overlays invalidate
+geometry actions until a fresh observation.
 There is no script, CSS selector, URL navigation or privileged-command parameter.
 
 `POST /api/v1/pi/desktop/claim` accepts

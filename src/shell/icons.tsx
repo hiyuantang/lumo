@@ -279,3 +279,7 @@ export function IconPet(p: IconProps) {
 export function IconNewChat(p: IconProps) {
   return base(p, <path d="M10 4H6a3 3 0 0 0-3 3v11a3 3 0 0 0 3 3h11a3 3 0 0 0 3-3v-4M15 4l5 5M10 14l-1 4 4-1 8-8a2 2 0 0 0-5-5z"/>);
 }
+
+export function IconPi(p: IconProps) {
+  return base(p, <><path d="M4 7h16M8 7v9c0 2-1 3-2 3M16 7v10c0 2 2 2 3 1" strokeWidth={2}/></>);
+}

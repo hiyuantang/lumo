@@ -37,13 +37,16 @@ test('Pet choices, dragging, keyboard movement, hiding and reset persist', async
   const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message));
   await open(page); await settings(page);
   const pet = page.getByTestId('desktop-pet'); const handle = page.getByTestId('pet-handle');
-  for (const [value, name] of [['fox', 'Fox'], ['robot', 'Robot'], ['cat', 'Cat']]) {
+  for (const [value, name] of [['pebble', 'Pebble'], ['square', 'Square'], ['diamond', 'Diamond'], ['triangle', 'Triangle']]) {
     await page.getByTestId('settings-pet-character').click();
     await page.getByRole('option', { name, exact: true }).click();
     await expect(pet).toHaveAttribute('data-kind', value);
   }
   await page.getByText('Drag to move. Use arrow keys when focused.', { exact: true }).click();
   await expect(page.getByTestId('settings-pet-enabled')).toBeChecked();
+  await page.getByTestId('settings-pet-coat').click();
+  await page.getByRole('option', { name: 'Rose', exact: true }).click();
+  await expect(pet).toHaveAttribute('data-coat', 'rose');
   const before = await handle.boundingBox();
   await page.mouse.move(before!.x + 42, before!.y + 42); await page.mouse.down();
   await page.mouse.move(before!.x - 210 + 42, before!.y - 130 + 42, { steps: 6 }); await page.mouse.up();
@@ -55,6 +58,8 @@ test('Pet choices, dragging, keyboard movement, hiding and reset persist', async
   await expect.poll(async () => Math.round((await handle.boundingBox())!.x)).toBe(Math.round(moved!.x - 10));
   const saved = await handle.boundingBox();
   await page.reload(); await expect(handle).toBeVisible();
+  await expect(pet).toHaveAttribute('data-coat', 'rose');
+  await expect(pet).toHaveAttribute('data-kind', 'triangle');
   const restored = await handle.boundingBox();
   expect(restored!.x).toBeCloseTo(saved!.x, 1); expect(restored!.y).toBeCloseTo(saved!.y, 1);
   await settings(page);
@@ -77,6 +82,7 @@ test('Pet works while minimized, celebrates once on completion and returns to id
   await expect(page.getByTestId('pet-bubble')).toHaveCount(0);
   fixture.finish();
   await expect(page.getByTestId('pet-bubble')).toContainText('Work done');
+  expect((await page.getByTestId('pet-bubble').boundingBox())!.width).toBeLessThan(140);
   await expect(page.getByTestId('desktop-pet')).toHaveAttribute('data-mood', 'done');
   fixture.emit({ type: 'agent_settled' });
   await expect(page.getByTestId('pet-bubble')).toHaveCount(1);
@@ -117,18 +123,19 @@ test('Pet and settings stay reachable in both themes and narrow layouts with red
     await expect.poll(async () => { const box = await page.getByTestId('desktop-pet').boundingBox(); return box!.x + box!.width; }).toBeLessThanOrEqual(width);
     const bounds = await page.getByTestId('desktop-pet').boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0); expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    expect(bounds!.y + 78).toBeLessThan((await page.getByTestId('dock-surface').boundingBox())!.y);
     expect(bounds!.y).toBeGreaterThanOrEqual(32); expect(bounds!.y + bounds!.height).toBeLessThan(900);
     await expect(page.getByTestId('pet-handle').locator('.pet-sprite')).toHaveCSS('animation-name', 'none');
     const group = page.getByTestId('settings-pet'); await group.scrollIntoViewIfNeeded();
     expect(await group.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
     const preview = group.locator('.pi-pet-character .pet-sprite');
     await expect(preview).toHaveCSS('width','54px'); await expect(preview).toHaveCSS('height','54px');
-    const label = group.getByText('Character', {exact:true});
+    const label = group.getByText('Shape', {exact:true});
     const labelBounds = (await label.boundingBox())!;
     expect(labelBounds.height).toBeLessThan(20);
     expect(labelBounds.x).toBe((await group.getByText('Desktop pet', {exact:true}).boundingBox())!.x);
     expect(labelBounds.x + labelBounds.width).toBeLessThan((await preview.boundingBox())!.x);
-    expect((await group.locator('.pi-extension-list').boundingBox())!.height).toBeLessThan(350);
+    expect((await group.locator('.pi-extension-list').boundingBox())!.height).toBeLessThan(450);
     await page.screenshot({ path: `/tmp/lumo-pet-settings-${width}-${colorScheme}.png`, animations: 'disabled' });
   }
 });
@@ -151,38 +158,38 @@ test('Pet settings shortcut opens Pi and replaces system Appearance controls', a
 });
 
 
-test('SVG pets animate separate parts smoothly, pause while dragged and honor reduced motion', async ({ page }) => {
+test('Geometric pets animate together, pause while dragged and honor reduced motion', async ({ page }) => {
   const fixture = await open(page); await page.emulateMedia({ reducedMotion: 'no-preference' });
-  const pet = page.getByTestId('desktop-pet'); const svg = pet.locator('svg.pet-sprite');
-  await expect(svg).toBeVisible(); await expect(pet.locator('img')).toHaveCount(0);
-  const tail = svg.locator('.pet-tail'); const initial = await tail.evaluate((node) => getComputedStyle(node).transform);
-  await expect.poll(() => tail.evaluate((node) => getComputedStyle(node).transform)).not.toBe(initial);
-  const animations = await svg.evaluate((node) => node.getAnimations({subtree:true}).map((animation) => ({state:animation.playState,easing:animation.effect?.getTiming().easing})));
+  const pet = page.getByTestId('desktop-pet'); const sprite = pet.locator('.pet-sprite');
+  await expect(sprite).toBeVisible(); await expect(pet.locator('img')).toHaveCount(0);
+  const limb = sprite.locator('.pet-arm-left'); const initial = await limb.evaluate((node) => getComputedStyle(node).transform);
+  await expect.poll(() => limb.evaluate((node) => getComputedStyle(node).transform)).not.toBe(initial);
+  const animations = await sprite.evaluate((node) => node.getAnimations({subtree:true}).map((animation) => ({state:animation.playState,easing:animation.effect?.getTiming().easing})));
   expect(animations.length).toBeGreaterThan(4); expect(animations.every((animation) => animation.state === 'running')).toBe(true);
   expect(animations.every((animation) => !animation.easing?.includes('steps'))).toBe(true);
   const handle = page.getByTestId('pet-handle'); const bounds = (await handle.boundingBox())!;
   await page.mouse.move(bounds.x+42,bounds.y+42); await page.mouse.down();
   await page.mouse.move(bounds.x+12,bounds.y+12);
-  await expect.poll(() => svg.evaluate((node) => node.getAnimations({subtree:true}).every((animation) => animation.playState === 'paused'))).toBe(true);
+  await expect.poll(() => sprite.evaluate((node) => node.getAnimations({subtree:true}).filter((animation) => animation.effect?.getTiming().iterations === Infinity).every((animation) => animation.playState === 'paused'))).toBe(true);
   await page.mouse.up();
-  await expect.poll(() => svg.evaluate((node) => node.getAnimations({subtree:true}).every((animation) => animation.playState === 'running'))).toBe(true);
+  await expect.poll(() => sprite.evaluate((node) => node.getAnimations({subtree:true}).filter((animation) => animation.effect?.getTiming().iterations === Infinity).every((animation) => animation.playState === 'running'))).toBe(true);
   await start(page);
   await expect(pet).toHaveAttribute('data-mood','working');
-  await expect(svg.locator('.pet-work-prop')).toHaveCSS('opacity','1');
-  const writing = await svg.locator('.pet-arm-right').evaluate((node) => getComputedStyle(node).transform);
-  await expect.poll(() => svg.locator('.pet-arm-right').evaluate((node) => getComputedStyle(node).transform)).not.toBe(writing);
+  await expect(sprite.locator('.pet-work-prop')).toHaveCSS('opacity','1');
+  const writing = await sprite.locator('.pet-arm-right').evaluate((node) => getComputedStyle(node).transform);
+  await expect.poll(() => sprite.locator('.pet-arm-right').evaluate((node) => getComputedStyle(node).transform)).not.toBe(writing);
   await page.emulateMedia({ reducedMotion:'reduce' });
-  await expect.poll(() => svg.evaluate((node) => node.getAnimations({subtree:true}).length)).toBe(0);
+  await expect.poll(() => sprite.evaluate((node) => node.getAnimations({subtree:true}).length)).toBe(0);
   fixture.finish(); await expect(pet).toHaveAttribute('data-mood','done');
-  await expect(svg.locator('.pet-mouth-happy')).toHaveCSS('opacity','1');
-  await expect(svg.locator('.pet-arm-right')).not.toHaveCSS('transform','none');
+  await expect(sprite.locator('.pet-mouth-happy')).toHaveCSS('opacity','1');
+  await expect(sprite.locator('.pet-arm-right')).not.toHaveCSS('transform','none');
   await settings(page);
-  for (const [value,name] of [['cat','Cat'],['fox','Fox'],['robot','Robot']]) {
+  for (const [value,name] of [['triangle','Triangle'],['pebble','Pebble'],['square','Square'],['diamond','Diamond']]) {
     await page.getByTestId('settings-pet-character').click(); await page.getByRole('option',{name,exact:true}).click();
     await expect(pet).toHaveAttribute('data-kind',value);
-    await expect(svg).toBeVisible();
+    await expect(sprite).toBeVisible();
     if (await page.getByTestId('pet-bubble').count()) await page.getByRole('button',{name:'Dismiss pet bubble'}).click();
-    await handle.screenshot({path:`/tmp/lumo-svg-pet-${value}.png`});
+    await handle.screenshot({path:`/tmp/lumo-geometric-pet-${value}.png`});
   }
 });
 
@@ -222,4 +229,90 @@ test('The pet lets a native conversation drag pass through and restores interact
   const pet=(await page.getByTestId('pet-handle').boundingBox())!;
   await page.mouse.move(pet.x+42,pet.y+42,{steps:6}); await page.mouse.up();
   await expect(page.getByTestId('pet-handle')).toHaveCSS('pointer-events','auto');
+});
+
+
+test('Fur renders distinct shapes and coats, responds to hover, settles and respects reduced motion', async ({ page }) => {
+  await open(page); await settings(page);
+  const pet = page.getByTestId('desktop-pet'); const fur = pet.locator('canvas.pet-fur');
+  await expect(fur).toHaveAttribute('data-ready', 'true');
+  const rendered = () => fur.evaluate((node) => (node as HTMLCanvasElement).toDataURL());
+  const original = await rendered();
+  expect(await fur.evaluate((node) => (node as HTMLCanvasElement).width)).toBe(252);
+  await page.getByTestId('settings-pet-character').click(); await page.getByRole('option', { name: 'Pebble', exact: true }).click();
+  await expect.poll(rendered).not.toBe(original);
+  const pebble = await rendered();
+  await page.getByTestId('settings-pet-coat').click(); await page.getByRole('option', { name: 'Lagoon', exact: true }).click();
+  await expect.poll(rendered).not.toBe(pebble);
+  const colors = ['Butter', 'Citrus', 'Rose', 'Lagoon', 'Tangerine', 'Lilac', 'Cream'];
+  for (const name of colors) {
+    await page.getByTestId('settings-pet-coat').click(); await page.getByRole('option', { name, exact: true }).click();
+    await expect(fur).toHaveAttribute('data-coat', name.toLowerCase());
+  }
+  await page.getByRole('button', { name: 'Minimize Pi', exact: true }).click();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const box = (await page.getByTestId('pet-handle').boundingBox())!;
+  await page.mouse.move(box.x + 30, box.y + 42); await page.mouse.move(box.x + 52, box.y + 42, { steps: 6 });
+  await expect(fur).toHaveAttribute('data-ruffled', 'true');
+  await page.mouse.move(box.x - 30, box.y - 30);
+  await expect(fur).toHaveAttribute('data-ruffled', 'false');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const settled = await rendered();
+  await page.mouse.move(box.x + 30, box.y + 42); await page.mouse.move(box.x + 52, box.y + 42, { steps: 6 });
+  await expect(fur).toHaveAttribute('data-ruffled', 'false');
+  expect(await rendered()).toBe(settled);
+});
+
+
+test('Saved animal preferences migrate to Triangle without moving or hiding the pet', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('lumo.view.v1:demo:desktop:pet-kind', JSON.stringify('fox'));
+    localStorage.setItem('lumo.view.v1:demo:desktop:pet-position', JSON.stringify('{"x":0.4,"y":0.6}'));
+  });
+  await open(page);
+  await expect(page.getByTestId('desktop-pet')).toHaveAttribute('data-kind', 'triangle');
+  await expect(page.getByTestId('pet-handle')).toHaveAccessibleName(/Triangle pet/);
+  const box = (await page.getByTestId('desktop-pet').boundingBox())!;
+  expect(box.x).toBeLessThan(700); expect(box.y).toBeLessThan(700);
+  await settings(page);
+  await page.getByTestId('settings-pet-character').click();
+  await expect(page.getByRole('option', { name: 'Cat', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Fox', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Robot', exact: true })).toHaveCount(0);
+});
+
+test.describe('High-resolution coats', () => {
+  test.use({ deviceScaleFactor: 2 });
+  test('Every shape keeps a full fur coat after switching at double pixel density', async ({ page }) => {
+    await open(page); await settings(page);
+    await page.getByTestId('settings-pet-coat').click(); await page.getByRole('option', { name: 'Butter', exact: true }).click();
+    const fur = page.getByTestId('desktop-pet').locator('canvas.pet-fur');
+    for (const name of ['Pebble', 'Square', 'Diamond', 'Triangle']) {
+      await page.getByTestId('settings-pet-character').click(); await page.getByRole('option', { name, exact: true }).click();
+      await expect(fur).toHaveAttribute('data-ready', 'true');
+      const coverage = await fur.evaluate((node) => {
+        const canvas = node as HTMLCanvasElement; const context = canvas.getContext('2d')!;
+        const samples = [[35, 48], [61, 48], [48, 30], [48, 67]];
+        return { width: canvas.width, samples: samples.map(([x, y]) => [...context.getImageData(x / 96 * canvas.width, y / 96 * canvas.height, 1, 1).data]) };
+      });
+      expect(coverage.width).toBe(336);
+      expect(coverage.samples.every((sample) => sample[3] > 200)).toBe(true);
+      expect(new Set(coverage.samples.map((sample) => sample.join(','))).size).toBeGreaterThan(2);
+      await page.getByTestId('pet-handle').screenshot({ path: `/tmp/lumo-fur-${name.toLowerCase()}-2x.png` });
+    }
+  });
+});
+
+test('The fur redraws across browser zoom densities without a page reload', async ({ page, context }) => {
+  await open(page); await settings(page);
+  const session = await context.newCDPSession(page);
+  const fur = page.getByTestId('desktop-pet').locator('canvas.pet-fur');
+  const preview = page.getByTestId('settings-pet').locator('canvas.pet-fur');
+  for (const density of [2, 3, 1]) {
+    await session.send('Emulation.setDeviceMetricsOverride', { width: Math.round(1440 / density), height: Math.round(1000 / density), deviceScaleFactor: density, mobile: false });
+    await expect.poll(() => fur.evaluate((node) => (node as HTMLCanvasElement).width)).toBe(84 * Math.max(3, density * 2));
+    await expect.poll(() => preview.evaluate((node) => (node as HTMLCanvasElement).width)).toBe(54 * Math.max(3, density * 2));
+    await expect(fur).toHaveAttribute('data-ready', 'true');
+  }
+  await session.detach();
 });

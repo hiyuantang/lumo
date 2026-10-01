@@ -72,6 +72,20 @@ until the dialog closes; other apps and the desktop remain usable. Nested
 folder pickers restore focus to the calling dialog. Desktop Overview remains
 a desktop-wide dialog.
 
+## Notifications
+
+- Notification history is a stack of separate matte cards over the desktop,
+  without a surrounding panel or visible heading. Each card reveals its circular
+  close control on hover or keyboard focus. Clicking outside closes history and
+  performs the clicked action.
+- New cards slide in from the right, remain for six seconds, then slide back out.
+  Hover or keyboard focus pauses dismissal. Reduced motion skips the slide.
+  Automatically dismissed banners remain in history; closing a card removes it.
+- Pi completion, failure and attention notifications appear when the conversation
+  is in the background, minimized or closed. A visible floating Pi assistant
+  suppresses these notifications even while another app is focused. Hidden
+  conversations still notify. Retry progress stays inside Pi.
+
 ## Window behavior
 
 - All app title bars are 28px high, with vertically centered titles and controls.
@@ -93,8 +107,10 @@ a desktop-wide dialog.
 - Drag a titlebar to move a window. Dragging a maximized or tiled window
   restores its previous floating size under the pointer. A small movement
   threshold keeps clicks and double-clicks from starting a drag.
-- Drag to the left or right edge to preview half-width tiling; drag to
-  the top edge to preview maximization. Release to apply, or press Escape
+- Drag to the left or right edge to preview half-width tiling. Maximization
+  requires pulling the pointer 24px above the work area's top edge, into the
+  top 8px of the menu bar. Reaching the top of the work area keeps the window
+  floating. Release to apply the preview, or press Escape
   to cancel and restore the starting layout. Pointer cancellation and
   leaving the browser during a drag also cancel the gesture.
 - The Window menu provides the same tiling, maximize and restore actions.
@@ -175,26 +191,62 @@ illustrative icons, figures and recent-activity labels.
 
 ## Desktop pet
 
-When Pi is installed, Pi Settings → Pet offers Cat, Fox and Robot, using original articulated SVG characters in
+When Pi is installed, Pi Settings → Pet offers Triangle, Pebble, Square and Diamond
+with seven independent coat colors: vivid yellow, lime, pink, cyan, orange and
+purple, plus a warm cream. These use original geometric characters in
 `src/shell/PetSprite.tsx`. The pet sits above desktop windows and stays below menus. Its
 transparent surroundings allow clicks through; only its handle and speech bubble
 receive input. During file or other native drag operations the pet becomes
 passive so underlying destinations can receive the drop. Lumo Use excludes these controls from observations and actions.
 
 Drag or use arrow keys to move the pet. Shift moves farther; Home resets position.
-Character, visibility, completion bubbles and relative position are remembered per
+Shape, coat, gravity, visibility, completion bubbles and relative position are remembered per
 account in the current browser. Relative coordinates keep the pet reachable after
-resizing, clear of the menu bar and dock. Right-click offers settings, reset and hide.
+resizing and clear of the menu bar. Right-click offers settings, Take notes,
+Play soccer, Juggle stars, reset and hide. Each trick conjures its props with a
+wand and sparkles, performs for a few seconds, then makes the props disappear.
+Free mode allows these stationary tricks; Gravity also chooses them between
+walks and rests, avoiding consecutive tricks and repeated activities.
 
-The pet breathes, looks around, blinks and sways its tail while idle. While any Pi
-chat is working it studies a notepad and writes; completion brings a small hop,
-a wave and sparkles. Separate SVG body parts move continuously in browser CSS;
-there are no raster frames or sprite-sheet swaps. Completion bubbles use the same typed outcome
-as system notifications: Work done, Stopped or Needs attention. They dismiss after
+The pet breathes, looks around, blinks and gently dangles its sketch-like limbs
+while idle. While any Pi chat is working it studies a notepad and writes; completion brings a small hop,
+a wave and sparkles. SVG limbs and the canvas body move together in browser CSS.
+Fine fur strands follow the silhouette; hovering ruffles them and a short spring
+animation settles them, then stops requesting frames. Settings previews stay
+still. There are no raster frames or sprite-sheet swaps. Completion bubbles use
+the same typed outcome as system notifications: Work done, Stopped or Needs attention. They dismiss after
 eight seconds or through their close control. Enabling Completion bubbles shows
 a temporary Hello greeting beside the pet as a preview. Background and minimized chats update
 the pet; one finishing chat does not cancel another chat's working state. Reduced
-motion keeps the pose changes and disables repeating animation.
+motion keeps the pose changes and disables repeating animation and fur interaction.
+
+Gravity is off by default: the pet stays where placed. With Gravity on, a local
+motion controller reads the live dock bounds and treats the dock top and the
+exposed desktop floor as supports. It chooses walking or running speeds,
+directions and rest intervals randomly. Short docks permit crouching, jumping
+off either exposed edge, and two ways to return. Edge climbing keeps the body
+beside the dock, alternates grips, then pulls over the lip. The magic route
+grows a striped pole from the floor, climbs vertically, hops onto the dock and
+dismisses the pole. The pole remains planted throughout the climb and hop.
+A dock filling the available width has no edge exits. Stride follows distance
+traveled, with acceleration, braking and a projected ground shadow.
+
+Pickup suspends roaming and tilts the pet with pointer velocity. Recent pointer
+samples determine the throw speed and direction; holding still before release
+lets that momentum decay. Gravity follows a ballistic arc, with soft desktop
+and dock-edge collisions. Landings squash the body and show dust, rebound with
+less energy each time, then skid to a stop with ground friction. Fast throws
+show short sketch trails, air stretch and a gentle tumble. Physics uses small
+time steps so collisions remain stable across frame rates.
+Free mode shows the pickup and landing poses without changing the released
+position. Bubbles fit their text and close control, stay inside the viewport and
+pause roaming. Hover, keyboard focus, the pet menu, native drag operations and Pi
+work also pause roaming. Rest uses a timer; active movement updates local DOM
+styles per frame without React renders. Hidden pages stop scheduling movement.
+Reduced motion settles on a support immediately and disables roaming and effects.
+Requested tricks show a still prop pose for their duration. Pickup, a new Pi
+task, and completion bubbles clear activity props; terrain changes cancel a
+climb and return the pet to a valid support.
 
 ## Pi navigation rail
 

@@ -29,18 +29,31 @@ import { PiContextMeter } from './PiContextMeter';
 import { PiSessionMetrics } from './PiSessionMetrics';
 import { isConversationDrag, takeConversationDrag } from './piConversationReferences';
 import { PiModelControl } from './PiModelControl';
+import { PiCompactChat } from './PiCompactChat';
+import { PiConversationLocation, usePiConversationWindows } from './PiConversationLocation';
+import { ApiError } from '../api/transport';
 import { attachmentPrompt, splitAttachmentPrompt, expandSkillCommands, attachmentKeys, fileAttachmentKey, conversationAttachmentKey } from './piAttachments';
 import { AppConfirmation } from './ServerAppUI';
 import '../styles/pi.css';
 import { useLumoUse } from './useLumoUse';
 import { usePiChats, type PiChatEntry } from './usePiChats';
 
-export function Pi() {
+export interface PiAssistantRequest { action: 'new' | 'workspace'; id: string }
+
+export function Pi({ compact = false, onAttention, assistantRequest }: { compact?: boolean; onAttention?: () => void; assistantRequest?: PiAssistantRequest }) {
   const chats = usePiChats();
-  return <>{chats.chats.map((entry) => <PiChat key={entry.key} entry={entry} active={chats.active === entry.key} chats={chats}/>)}</>;
+  const handled = useRef<string>();
+  const workspaceTarget = useRef<{ id: string; key: string }>();
+  if (assistantRequest?.action === 'workspace' && workspaceTarget.current?.id !== assistantRequest.id) workspaceTarget.current = { id: assistantRequest.id, key: chats.active };
+  useEffect(() => {
+    if (!compact || assistantRequest?.action !== 'new' || handled.current === assistantRequest.id) return;
+    handled.current = assistantRequest.id;
+    chats.navigate(chats.chats.find((entry) => entry.key === chats.active)?.project ?? '~');
+  }, [compact, assistantRequest, chats]);
+  return <>{chats.chats.map((entry) => <PiChat key={entry.key} entry={entry} active={chats.active === entry.key} chats={chats} compact={compact} onAttention={onAttention} assistantRequest={workspaceTarget.current?.key === entry.key ? assistantRequest : undefined}/>)}</>;
 }
 
-function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean; chats: ReturnType<typeof usePiChats> }) {
+function PiChat({ entry, active, chats, compact, onAttention, assistantRequest }: { entry: PiChatEntry; active: boolean; chats: ReturnType<typeof usePiChats>; compact: boolean; onAttention?: () => void; assistantRequest?: PiAssistantRequest }) {
   const source = getDataSource();
   const { actions, state: shellState } = useShell();
   const win = useCurrentWindow();
@@ -58,6 +71,7 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
   const [templatesRevision, setTemplatesRevision] = useState(0);
   const [autoRetry, setAutoRetry] = useState(entry.autoRetry ?? true);
   const [questions, setQuestions] = useState<PiQuestion[]>([]);
+  useEffect(() => { if (active && questions.length) onAttention?.(); }, [active, questions.length, onAttention]);
   const answeredQuestions = useRef(new Set<string>());
   const [models, setModels] = useState<PiModel[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -86,6 +100,23 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
   const queuedMessages = useRef(queued);
   queuedMessages.current = queued;
   const [error, setError] = useState<string | null>(null);
+  const [openedElsewhere, setOpenedElsewhere] = useState(false);
+  const conversationWindows = usePiConversationWindows();
+  const showConversation = useRef<() => void>(() => {});
+  showConversation.current = () => {
+    chats.activate(entry.key); setSettings(false); setSetup(false);
+    if (compact) {
+      onAttention?.();
+      requestAnimationFrame(() => {
+        const host = document.getElementById('pi-assistant');
+        (host?.querySelector<HTMLElement>('textarea:not(:disabled)') ?? host)?.focus({ preventScroll: true });
+      });
+    } else {
+      actions.focusApp(win.id);
+      requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-window-id="${win.id}"] [data-testid="pi-prompt"]`)?.focus({ preventScroll: true }));
+    }
+  };
+  const showWindow = useCallback(() => showConversation.current(), []);
   const [notification, setNotification] = useState<{ id: number; message: string } | null>(null);
   const notify = useCallback((message: string) => setNotification((previous) => ({ id: (previous?.id ?? 0) + 1, message })), []);
   const [settings, setSettings] = useState(false);
@@ -120,6 +151,12 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
   const [pendingTitle, setPendingTitle] = useState('Close Pi?');
   const [pendingClose, setPendingClose] = useState<(() => void) | null>(null);
   const [picking, setPicking] = useState<'folder' | 'file' | null>(null);
+  const handledAssistantRequest = useRef<string>();
+  useEffect(() => {
+    if (!compact || !active || assistantRequest?.action !== 'workspace' || handledAssistantRequest.current === assistantRequest.id) return;
+    handledAssistantRequest.current = assistantRequest.id;
+    setPicking('folder');
+  }, [compact, active, assistantRequest]);
   const [remembered, setRemembered] = useAppPreference<string[]>('pi', 'projects', []);
   const [removedProjects, setRemovedProjects] = useAppPreference<string[]>('pi', 'removed-projects', []);
   const promptInput = useRef<HTMLDivElement>(null);
@@ -144,6 +181,19 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
   const noticeSession = status.sessionFile?.split('/').at(-1) ?? savedSession.current ?? run.session;
   const noticeName = status.sessionName || sessionLists[chats.normalize(run.project)]?.find((item) => item.id === noticeSession)?.name;
   noticeContext.current = noticeName && noticeName !== noticeProject ? `${noticeName} · ${noticeProject}` : noticeProject;
+  const noticeActive = useRef(active); noticeActive.current = active;
+  function shouldNotify() {
+    const host = compact ? document.getElementById('pi-assistant') : document.querySelector<HTMLElement>(`[data-window-id="${win.id}"]`);
+    return document.hidden || !host || host.hidden || !noticeActive.current || (!compact && (!host.classList.contains('focused') || !document.hasFocus()));
+  }
+  const announcedQuestions = useRef(new Set<string>());
+  useEffect(() => {
+    for (const question of questions) {
+      if (announcedQuestions.current.has(question.id)) continue;
+      announcedQuestions.current.add(question.id);
+      if (shouldNotify()) actions.notify('Pi needs your attention', [noticeContext.current, question.title].filter(Boolean).join('\n'));
+    }
+  }, [questions, actions]);
   function startRunNotice() {
     if (!runNotice.current.active) runNotice.current = { active: true, stopped: false, error: '' };
   }
@@ -153,7 +203,7 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
     currentNotice.active = false;
     const stopped = currentNotice.stopped;
     const failure = currentNotice.error;
-    actions.notify(title ?? (stopped ? 'Pi stopped' : failure ? 'Pi stopped with an error' : 'Pi finished'), [noticeContext.current, detail ?? (stopped ? 'Stopped by you.' : failure)].filter(Boolean).join('\n'), stopped || title === 'Pi stopped' ? 'stopped' : failure || title ? 'error' : 'done');
+    actions.notify(title ?? (stopped ? 'Pi stopped' : failure ? 'Pi stopped with an error' : 'Pi finished'), [noticeContext.current, detail ?? (stopped ? 'Stopped by you.' : failure)].filter(Boolean).join('\n'), stopped || title === 'Pi stopped' ? 'stopped' : failure || title ? 'error' : 'done', !shouldNotify());
   }
 
   useEffect(() => {
@@ -178,8 +228,8 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
   const anyRunning = chats.chats.some((chat) => chat.running);
   const anyDirty = chats.chats.some((chat) => chat.dirty);
   useLayoutEffect(() => { if (!active) return; return actions.registerWindowGuard(win.id, (proceed) => {
-    if (anyRunning || anyDirty || draft.trim() || attachments.length || references.length || referencePending || queuedEdit || settingsDirty) { setPendingTitle('Close Pi?'); setPendingClose(() => proceed); } else proceed();
-  }); }, [active, actions, win.id, anyRunning, anyDirty, draft, attachments.length, references.length, referencePending, queuedEdit, settingsDirty]);
+    if (anyRunning || anyDirty || draft.trim() || attachments.length || references.length || referencePending || queuedEdit || settingsDirty) { setPendingTitle('Close Pi?'); setPendingClose(() => proceed); if (compact) onAttention?.(); } else proceed();
+  }); }, [active, actions, win.id, anyRunning, anyDirty, draft, attachments.length, references.length, referencePending, queuedEdit, settingsDirty, compact, onAttention]);
 
   async function command(id: string, value: PiCommand): Promise<PiData> {
     const starting = value.type === 'prompt' && !runNotice.current.active;
@@ -252,7 +302,7 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
     let disposed = false; let id: string | null = null;
     const preserveView = preserveConversationView.current;
     preserveConversationView.current = false;
-    setWorking(true); setConnection(null); setError(null);
+    setWorking(true); setConnection(null); setError(null); setOpenedElsewhere(false);
     if (!preserveView) { setMessages([]); setQuestions([]); answeredQuestions.current.clear(); setQueued([]); setStatus({}); setStats({}); }
     const launch = lifecycle.current.catch(() => {}).then(async () => {
       if (disposed) return;
@@ -274,7 +324,10 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
       if (!disposed) { setConnection(id); setCompactionRevision((value) => value + 1); }
     }).catch(async (err) => {
       if (disposed) return;
-      finishRunNotice('Pi stopped with an error', err instanceof Error ? err.message : 'Could not reconnect to Pi.');
+      const elsewhere = err instanceof ApiError && err.code === 'conflict' && err.message === 'This conversation is already open in another Pi window.';
+      setOpenedElsewhere(elsewhere);
+      if (elsewhere) { setBusy(false); runNotice.current.active = false; }
+      if (!elsewhere) finishRunNotice('Pi stopped with an error', err instanceof Error ? err.message : 'Could not reconnect to Pi.');
       setError(err instanceof Error ? err.message : 'Something went wrong.');
       try {
         const list = await source.piSessions(run.project);
@@ -370,7 +423,7 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
   async function send() {
     if (working || !connection || questions.length) return;
     const slash = /^\s*\/(undo|rename|compact)(?:\s+([\s\S]*))?$/.exec(draft);
-    if (slash && !queuedEdit) {
+    if (!compact && slash && !queuedEdit) {
       const action = slash[1] as PiChatAction;
       if (chatActionDisabled(action)) { setError('Wait until Pi is idle and this conversation has messages.'); return; }
       runChatAction(action, slash[2] ?? '');
@@ -593,6 +646,14 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
     setProject(path); setRun({ project: path, session, permissionMode: run.permissionMode ?? confirmedPermissionMode, epoch: Date.now() }); if (!preserveDraft) { setQueuedEdit(null); setDraft(''); setAttachments([]); setReferences([]); setAttachmentOrder([]); referenceRequests.current = new Set(); referenceGeneration.current++; } follow.current = true;
   }
   const sessionID = status.sessionFile?.split('/').at(-1) ?? savedSession.current ?? run.session;
+  const conversationKey = `${win.id}:${entry.key}`;
+  const conversationProject = chats.normalize(run.project);
+  useEffect(() => {
+    if (!connection || !sessionID) return;
+    return conversationWindows.register({ key: conversationKey, project: conversationProject, session: sessionID, compact, show: showWindow });
+  }, [connection, sessionID, conversationKey, conversationProject, compact, showWindow, conversationWindows.register]);
+  const conversationOwner = conversationWindows.windows.find((owner) => owner.key !== conversationKey && owner.project === conversationProject && owner.session === sessionID);
+  const conversationLocation = openedElsewhere ? <PiConversationLocation owner={conversationOwner} onRetry={() => open(sessionID)}/> : undefined;
   async function moveConversation(folder: string, target: string | string[], restore = false, removeWorkspace = false) {
     if (actionLock.current || busy || chats.chats.some((chat) => chat.running && chats.normalize(chat.project) === folder && (removeWorkspace || (typeof target === 'string' ? [target] : target).includes(chat.session ?? '')))) throw new Error('Stop this conversation before archiving it.');
     actionLock.current = true; setWorking(true); setError(null); setMoveError('');
@@ -700,7 +761,17 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
     open(undefined, path, true, true, preserveView);
   }
 
+  const closeConfirmation = pendingClose && <AppConfirmation title={pendingTitle} confirm="Close" onCancel={() => setPendingClose(null)} onConfirm={pendingClose}><p>{anyRunning ? 'This stops the current task and any other running chats in this window. Your conversations are saved.' : settingsDirty ? 'Your unsaved settings will be discarded.' : 'Your unsent message will be discarded.'}</p></AppConfirmation>;
   if (!active) return null;
+  if (compact) return <PiImageScope.Provider value={chats.normalize(run.project)}><PiCompactChat
+    installed={Boolean(installed)} loading={loading} working={working} busy={busy} connection={Boolean(connection)}
+    messages={messages} transcript={transcript} onFollow={(value) => { follow.current = value; }}
+    draft={draft} onDraft={setDraft} onSend={() => void send()} onStop={() => void stop()} showStop={busy || requestPending}
+    models={models} model={status.model} levels={levels} level={status.thinkingLevel}
+    onModel={(model) => act({ type: 'set_model', provider: model.provider, modelId: model.id })} onLevel={(level) => act({ type: 'set_thinking_level', level })}
+    permissionMode={run.permissionMode ?? confirmedPermissionMode ?? 'ask'} onPermission={changePermissionMode}
+    questions={questions} onAnswer={answerQuestion}
+    location={conversationLocation} error={error} onReconnect={() => open(sessionID)} onSetup={() => actions.openApp(installed ? 'pi' : 'library')}/>{picking && <FilePicker mode="folder" initialPath={workspace === '~' ? source.homePath() : ['', ...workspace.split('/').filter(Boolean)]} onCancel={() => setPicking(null)} onOpen={(path) => { setPicking(null); chats.navigate(source.absolutePath(path)); }}/>}{closeConfirmation}</PiImageScope.Provider>;
   return <div className="app pi-app" data-testid="app-pi">
     {notification && <div className="pi-notification" key={notification.id} role="status" data-testid="pi-notification"><span>{notification.message}</span></div>}
     <nav className="pi-app-rail" aria-label="Pi navigation" data-testid="pi-app-rail">
@@ -719,7 +790,7 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
       <div className="pi-install"><p>{catalog ? 'Install Pi to start working with your projects.' : 'Checking for Pi…'}</p><button className="btn btn-primary" onClick={() => actions.openApp('library')}>Open App Library</button><button className="btn btn-icon" aria-label="Check installation" onClick={() => void refresh().catch((err) => setError(err instanceof Error ? err.message : 'Something went wrong.'))}><IconRefresh size={16}/></button></div>
     </div> : <>
       <main className={`pi-main${empty && !loading ? ' pi-new-conversation' : ''}`} aria-busy={loading || changingWorkspace}>
-          {loading ? <div className="pi-conversation-loading" role="status" aria-label="Loading conversation" data-testid="pi-conversation-loading"><span className="spinner" aria-hidden="true"/></div> : <>
+          {conversationLocation ?? (loading ? <div className="pi-conversation-loading" role="status" aria-label="Loading conversation" data-testid="pi-conversation-loading"><span className="spinner" aria-hidden="true"/></div> : <>
           {(moveError || error) && <div className="pi-notice" role="alert">{moveError || error}{!connection && !working && <button className="btn" onClick={() => open(sessionID)}>Reconnect</button>}</div>}
           {!empty && <PiImageScope.Provider value={chats.normalize(run.project)}><PiTranscript key={`${run.project}-${status.sessionFile ?? ''}`} messages={messages} busy={busy} canBranch={!busy && !working} onBranch={() => void branch()} transcript={transcript} onFollow={(value) => { follow.current = value; }}/></PiImageScope.Provider>}
           <footer className="pi-compose">
@@ -751,7 +822,7 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
               <IconFolder size={16}/><Select aria-label="Workspace project" data-testid="pi-project" value={workspace} disabled={busy || working} options={[...workspaces.map((path) => ({ value: path, label: projectNames[path] || (path === '~' ? 'Home' : path.split('/').filter(Boolean).at(-1) || '/') })), { value: '__browse__', label: 'Choose another folder…' }]} onChange={(path) => path === '__browse__' ? setPicking('folder') : chooseProject(path)}/>
             </div>}
           </footer>
-          </>}
+          </>)}
       </main>
     </>}
 
@@ -759,6 +830,6 @@ function PiChat({ entry, active, chats }: { entry: PiChatEntry; active: boolean;
     {editingMessage && connection && <PiEditMessage connection={connection} onCancel={() => setEditingMessage(false)} onResend={resend}/>}
     {archiveProject && <AppConfirmation title={archiveProject.remove ? 'Remove workspace' : 'Archive workspace chats?'} confirm={archiveProject.remove ? 'Remove workspace' : `Archive ${archiveProject.sessions.length} chats`} busy={working} confirmDisabled={busy} onCancel={() => setArchiveProject(null)} onConfirm={() => { void moveConversation(archiveProject.project, archiveProject.sessions.map((item) => item.id), false, archiveProject.remove).catch((err) => setMoveError((err instanceof Error ? err.message : 'Could not archive every chat.') + (archiveProject.remove ? ' The workspace was kept. Archived chats remain available in Settings.' : ' Any completed moves are available in Archived chats.'))).finally(() => setArchiveProject(null)); }}><p>{archiveProject.remove ? `This will remove “${archiveProject.name}” from the sidebar and archive all its chats.` : `Archive ${archiveProject.sessions.length} saved conversations in “${archiveProject.name}”? You can restore them in Settings → Archived chats.`}</p></AppConfirmation>}
     {rename && <AppConfirmation title="Rename conversation" confirm="Save" busy={working} confirmDisabled={!name.trim()} onCancel={() => setRename(false)} onConfirm={() => { void act({ type: 'set_session_name', name: name.trim() }).then((ok) => { if (ok) setRename(false); }); }}><input className="input" aria-label="Conversation name" value={name} onChange={(event) => setName(event.target.value)}/></AppConfirmation>}
-    {pendingClose && <AppConfirmation title={pendingTitle} confirm="Close" onCancel={() => setPendingClose(null)} onConfirm={pendingClose}><p>{anyRunning ? 'This stops the current task and any other running chats in this window. Your conversations are saved.' : settingsDirty ? 'Your unsaved settings will be discarded.' : 'Your unsent message will be discarded.'}</p></AppConfirmation>}
+    {closeConfirmation}
   </div>;
 }

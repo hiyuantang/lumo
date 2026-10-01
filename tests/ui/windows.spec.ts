@@ -147,6 +147,23 @@ test('top snapping preserves the floating size and Escape cancels an in-progress
   await page.mouse.up();
   await expect(page.getByTestId('window-files')).toHaveAttribute('data-window-placement', 'left');
   await startDrag(page, 'files', 720, 38);
+  const preview = page.getByTestId('window-snap-preview');
+  for (const y of [52, 32, 20, 9]) {
+    await page.mouse.move(720, y);
+    await expect(preview).toBeHidden();
+    await expect(page.getByTestId('window-files')).toHaveAttribute('data-window-placement', 'floating');
+  }
+  await page.mouse.move(720, 8);
+  await expect(preview).toHaveAttribute('data-snap-target', 'maximize');
+  await page.mouse.move(720, 9);
+  await expect(preview).toBeHidden();
+  await page.mouse.up();
+  await expect(page.getByTestId('window-files')).toHaveAttribute('data-window-placement', 'floating');
+  const atTop = await rect(page, 'files');
+  expect(atTop.y).toBe(32);
+  expect(atTop.width).toBe(original.width);
+  expect(atTop.height).toBe(original.height);
+  await startDrag(page, 'files', 720, 8);
   await expect(page.getByTestId('window-snap-preview')).toHaveAttribute('data-snap-target', 'maximize');
   await page.mouse.up();
   await expect(page.getByTestId('window-files')).toHaveAttribute('data-window-placement', 'maximized');
