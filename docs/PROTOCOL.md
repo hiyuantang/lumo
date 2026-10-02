@@ -1449,7 +1449,28 @@ apply. Pi has the Linux account's ordinary filesystem and command permissions.
   Pi's reported current usage; its hover/focus tooltip contains percentage,
   token usage, maximum model context and conversation cost. Unknown usage is
   shown explicitly. Running sidebar chats display a spinner, replaced by the
-  archive affordance on hover/focus, with reduced motion respected.
+  chat menu on hover/focus, with reduced motion respected. Workspace headings
+  and chat names share the same text column. Each chat menu offers Rename,
+  Move to assistant window (or Return to Pi window), and Archive. Rename opens
+  the selected session and uses Pi's documented `set_session_name` command;
+  running chats cannot be renamed or archived.
+
+  Assistant mode changes the presentation of the same mounted chat. Its Pi
+  connection, live reply, approval mode, draft and attachments stay in place.
+  The shared floating frame remains visible when the owning Pi window is
+  minimized or another chat is selected. Its close control and Escape return
+  the chat to the Pi window. Closing the owning Pi window still uses the normal
+  guard for all running chats and unsaved drafts. Queued messages remain queued;
+  completing an in-progress queued-message edit requires returning to Pi.
+  Floating mode is remembered for browser refresh, while draft persistence
+  follows the existing in-memory chat behavior.
+
+  Workspace labels, assistant presentation and archiving are Lumo features.
+  Pi's documented RPC supports session naming, switching, forking and cloning,
+  but has no workspace-move command. Moving an existing conversation to another
+  workspace would require a separate Lumo operation with explicit working-folder
+  and history semantics. The current sidebar does not move project files or
+  session histories between workspaces.
 
 - `GET /api/v1/pi/sessions?project=...` lists Pi-written sessions for the project.
 - `POST /api/v1/pi/sessions/archive` and `/pi/sessions/restore` accept

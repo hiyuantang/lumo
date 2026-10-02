@@ -93,7 +93,7 @@ export function useWindowMinimize(win: WindowState, viewport: Viewport, reducedM
   }, []);
 
   function rememberFocus(event: FocusEvent<HTMLElement>) {
-    if (event.target !== event.currentTarget && !event.target.closest('.window-controls')) lastFocus.current = event.target;
+    if (event.currentTarget.contains(event.target) && event.target !== event.currentTarget && !event.target.closest('.window-controls')) lastFocus.current = event.target;
   }
 
   return {

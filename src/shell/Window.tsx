@@ -192,8 +192,8 @@ export function Window({ win }: { win: WindowState }) {
         hidden={minimize.hidden}
         style={{ left: win.x, top: win.y, width: win.w, height: win.h, zIndex: win.z }}
         onFocusCapture={minimize.rememberFocus}
-        onPointerDownCapture={() => {
-          if (!focused) actions.focusApp(win.id);
+        onPointerDownCapture={(event) => {
+          if (event.currentTarget.contains(event.target as Node) && !focused) actions.focusApp(win.id);
         }}
       >
         <header

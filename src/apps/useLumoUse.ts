@@ -10,9 +10,9 @@ import type { WindowId } from '../shell/ShellContext';
 import { APPS } from './registry';
 import { COMPACT_WIDTH, workArea, type Rect } from '../shell/windowGeometry';
 
-export function useLumoUse(connection: string | null, active: boolean, enabled: boolean) {
+export function useLumoUse(connection: string | null, active: boolean, enabled: boolean, floatingId?: string) {
   const source = getDataSource(); const shell = useShell(); const win = useCurrentWindow();
-  const info = useRef({ connection, active, enabled, shell, win }); info.current = { connection, active, enabled, shell, win };
+  const info = useRef({ connection, active, enabled, shell, win, floatingId }); info.current = { connection, active, enabled, shell, win, floatingId };
   const abort = useRef(new AbortController());
   const seen = useRef(new Set<string>());
   const desktop = useRef<LumoUseDesktop>();
@@ -49,7 +49,9 @@ export function useLumoUse(connection: string | null, active: boolean, enabled: 
         let text: string; let error = false;
         try {
           const current = info.current;
-          if (signal.aborted || current.connection !== id || !current.active || !current.enabled || current.shell.state.windows[current.win.id]?.minimized || document.visibilityState !== 'visible') throw new Error('Lumo Use needs its active chat in a visible, connected tab.');
+          const floatingHost = current.floatingId ? document.getElementById(current.floatingId) : null;
+          const hidden = current.floatingId ? !floatingHost || floatingHost.hidden || !floatingHost.getClientRects().length : current.shell.state.windows[current.win.id]?.minimized;
+          if (signal.aborted || current.connection !== id || !current.active || !current.enabled || hidden || document.visibilityState !== 'visible') throw new Error('Lumo Use needs its active chat in a visible, connected tab.');
           if (claimed.action === 'app_preview') {
             const catalog = await source.desktopApps();
             const build = catalog.builds.find((item) => item.digest === claimed.target);

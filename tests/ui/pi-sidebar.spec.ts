@@ -27,10 +27,11 @@ test('Pi sidebar groups project chats, paginates, and opens recents in the corre
   await expect(tree.locator('[aria-current="page"]')).toHaveCount(1);
   await expect(recent.getByRole('button', { name: 'Website deployment', exact: true })).toBeVisible();
   const row = tree.getByRole('button', { name: 'Review sidebar design', exact: true });
-  expect((await row.boundingBox())!.height).toBeLessThan(40);
+  expect((await row.boundingBox())!.height).toBeLessThanOrEqual(30);
   const parentRow = tree.locator('.pi-project-row[title="/home/user/projects/lumo"]');
   const parentBox = (await parentRow.boundingBox())!;
-  expect((await row.boundingBox())!.y - parentBox.y - parentBox.height).toBeGreaterThanOrEqual(4);
+  expect((await row.boundingBox())!.y - parentBox.y - parentBox.height).toBeGreaterThanOrEqual(2);
+  expect((await row.locator('span').boundingBox())!.x).toBe((await parentRow.locator('span').boundingBox())!.x);
   await parentRow.hover();
   await expect(parentRow).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(parentRow.locator('svg')).toHaveCSS('opacity', '1');

@@ -29,14 +29,16 @@ async function openArchive(page: Page) {
   await expect(page.getByTestId('pi-archived').getByRole('status')).toHaveCount(0);
 }
 
-test('Pi archives with one click after stop, fills Settings, restores and keeps drafts', async ({ page }) => {
+test('Pi archives from the chat menu after stop, fills Settings, restores and keeps drafts', async ({ page }) => {
   const fixture = await archivePage(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
   const tree = page.getByRole('navigation', { name: 'Pi projects', exact: true });
   const recent = page.getByRole('navigation', { name: 'Recent Pi chats', exact: true });
-  const archive = tree.getByRole('button', { name: 'Archive Project notes', exact: true });
+  const options = tree.getByRole('button', { name: 'Chat options for Project notes', exact: true });
   await page.getByTestId('pi-prompt').fill('Keep this unsent draft');
-  await archive.focus();
+  await options.focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('menuitem', { name: 'Archive', exact: true }).focus();
   let release!: () => void; const wait = new Promise<void>((resolve) => { release = resolve; });
   await page.route('**/api/v1/pi/stop', async (route) => { fixture.order.push('stop'); await wait; return route.fulfill({ json: { ok: true, data: { closed: true } } }); });
   await page.keyboard.press('Enter');
@@ -96,12 +98,13 @@ test('Pi deletes one or all archived chats only after confirmation', async ({ pa
 test('Pi preserves active chats when stop or archive fails', async ({ page }) => {
   const fixture = await archivePage(page);
   await page.route('**/api/v1/pi/stop', (route) => route.fulfill({ status: 503, json: { ok: false, error: { code: 'UNAVAILABLE', message: 'Pi is still stopping. Try again.' } } }));
-  const archive = page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Archive Project notes' });
+  const options = page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Chat options for Project notes' });
+  const archive = async () => { await options.focus(); await page.keyboard.press('Enter'); await page.getByRole('menuitem', { name: 'Archive', exact: true }).click(); };
   await page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Project notes', exact: true }).hover();
-  await archive.click(); await expect(page.getByRole('alert')).toContainText('Pi is still stopping'); expect(fixture.archived.size).toBe(0);
+  await archive(); await expect(page.getByRole('alert')).toContainText('Pi is still stopping'); expect(fixture.archived.size).toBe(0);
   await page.route('**/api/v1/pi/stop', (route) => route.fulfill({ json: { ok: true, data: { closed: true } } }));
   await page.route('**/api/v1/pi/sessions/archive', (route) => route.fulfill({ status: 409, json: { ok: false, error: { code: 'CONFLICT', message: 'Project is open in another Pi window.' } } }));
-  await archive.click();
+  await archive();
   await expect(page.getByRole('alert')).toContainText('Project is open in another Pi window');
   await expect.poll(() => fixture.starts.at(-1)?.session).toBe('first.jsonl');
   expect(fixture.archived.size).toBe(0); expect(fixture.errors).toEqual([]);
@@ -110,9 +113,14 @@ test('Pi preserves active chats when stop or archive fails', async ({ page }) =>
 test('Pi disables archival while a reply is running', async ({ page }) => {
   const fixture = await archivePage(page);
   await page.getByTestId('pi-prompt').fill('Work on this'); await page.getByTestId('pi-send').click();
-  await expect(page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Archive Project notes' })).toBeDisabled();
+  const options = page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Chat options for Project notes' });
+  await options.focus(); await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Archive', exact: true })).toBeDisabled();
+  await page.keyboard.press('Escape');
   fixture.finish();
-  await expect(page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Archive Project notes' })).toBeEnabled();
+  await expect(page.getByTestId('pi-send')).toHaveAttribute('aria-label', 'Send');
+  await options.focus(); await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Archive', exact: true })).toBeEnabled();
 });
 
 test('Pi refreshes remaining archived chats after a partial bulk deletion failure', async ({ page }) => {
@@ -128,7 +136,8 @@ test('Pi refreshes remaining archived chats after a partial bulk deletion failur
 test('Pi archives an older conversation and resumes the active one', async ({ page }) => {
   const fixture = await archivePage(page);
   await page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Earlier work', exact: true }).hover();
-  await page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Archive Earlier work' }).click();
+  await page.getByRole('navigation', { name: 'Recent Pi chats' }).getByRole('button', { name: 'Chat options for Earlier work' }).click();
+  await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
   await expect.poll(() => fixture.starts.at(-1)?.session).toBe('first.jsonl');
   await expect(page.getByRole('button', { name: 'Earlier work', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('pi-prompt')).toBeEnabled();

@@ -5,7 +5,7 @@ import type { PiSession, PiPermissionMode } from '../api/pi';
 import { useShell } from '../shell/ShellContext';
 import { useCurrentWindow } from '../shell/WindowContext';
 
-export interface PiChatEntry { key: string; project: string; session?: string; permissionMode?: PiPermissionMode; autoRetry?: boolean; running: boolean; dirty: boolean }
+export interface PiChatEntry { key: string; project: string; session?: string; permissionMode?: PiPermissionMode; autoRetry?: boolean; floating?: boolean; renameRequest?: { id: string; name: string }; running: boolean; dirty: boolean }
 export function usePiChats() {
   const source = getDataSource();
   const { state } = useShell();
@@ -32,10 +32,10 @@ export function usePiChats() {
     launches.current = next;
     return next;
   }, [source]);
-  const navigate = (project: string, session?: string) => setGroup((previous) => {
+  const navigate = (project: string, session?: string, intent: Pick<PiChatEntry, 'floating' | 'renameRequest'> = {}) => setGroup((previous) => {
     const existing = session && previous.chats.find((chat) => normalize(chat.project) === normalize(project) && chat.session === session);
     const key = existing ? existing.key : crypto.randomUUID();
-    return { active: key, chats: existing ? previous.chats : [...previous.chats, { key, project, session, running: false, dirty: false }] };
+    return { active: key, chats: existing ? previous.chats.map((chat) => chat.key === key ? { ...chat, ...intent } : chat) : [...previous.chats, { key, project, session, running: false, dirty: false, ...intent }] };
   });
   const forget = (project: string, sessions: string[], except: string) => setGroup((previous) => ({ ...previous, chats: previous.chats.filter((chat) => chat.key === except || normalize(chat.project) !== normalize(project) || !chat.session || !sessions.includes(chat.session)) }));
   const activate = useCallback((key: string) => setGroup((previous) => previous.chats.some((chat) => chat.key === key) ? { ...previous, active: key } : previous), []);

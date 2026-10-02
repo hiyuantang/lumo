@@ -21,7 +21,7 @@ function latestAction(messages: PiMessage[]) {
   return 'Thinking…';
 }
 
-export function PiCompactChat({ installed, loading, working, busy, connection, messages, transcript, onFollow, draft, onDraft, onSend, onStop, showStop, models, model, levels, level, onModel, onLevel, permissionMode, onPermission, questions, onAnswer, location, error, onReconnect, onSetup }: {
+export function PiCompactChat({ installed, loading, working, busy, connection, messages, transcript, onFollow, draft, onDraft, onSend, onStop, showStop, models, model, levels, level, onModel, onLevel, permissionMode, onPermission, questions, onAnswer, context, hasDraft = Boolean(draft.trim()), location, error, onReconnect, onSetup }: {
   installed: boolean; loading: boolean; working: boolean; busy: boolean; connection: boolean;
   messages: PiMessage[]; transcript: RefObject<HTMLDivElement>; onFollow: (value: boolean) => void;
   draft: string; onDraft: (value: string) => void; onSend: () => void; onStop: () => void; showStop: boolean;
@@ -29,7 +29,7 @@ export function PiCompactChat({ installed, loading, working, busy, connection, m
   onModel: (model: PiModel) => Promise<boolean | undefined>; onLevel: (level: string) => Promise<boolean | undefined>;
   permissionMode: PiPermissionMode; onPermission: (value: string) => void;
   questions: PiQuestion[]; onAnswer: (answer: PiAnswer, requestId: string) => Promise<void>;
-  location?: ReactNode; error: string | null; onReconnect: () => void; onSetup: () => void;
+  context?: ReactNode; hasDraft?: boolean; location?: ReactNode; error: string | null; onReconnect: () => void; onSetup: () => void;
 }) {
   const input = useRef<HTMLTextAreaElement>(null);
   const history = useRef<HTMLDivElement>(null);
@@ -67,6 +67,7 @@ export function PiCompactChat({ installed, loading, working, busy, connection, m
     <div className="pi-compact-composer">
       <div className="pi-assistant-drag-handle" data-testid="pi-assistant-drag-handle" title="Drag to move Pi assistant"><div className="pi-compact-activity" role="status" data-testid="pi-compact-action">{questions.length ? 'Waiting for you' : loading ? 'Connecting…' : busy ? latestAction(current?.messages ?? []) : ''}</div></div>
       {error && <div className="pi-compact-error" role="alert">{error}{!connection && !working && <button type="button" className="btn" onClick={onReconnect}>Reconnect</button>}</div>}
+      {context}
       {!installed ? <div className="pi-compact-setup"><p>Install Pi to start using the assistant.</p><button className="btn" onClick={onSetup}>Open App Library</button></div> : <>
         {questions.length > 0 ? <div className="pi-compact-requests">{questions.map((question) => <PiQuestionCard key={question.id} question={question} onAnswer={onAnswer} compact/>)}</div> : <form onSubmit={(event) => { event.preventDefault(); if (!busy) onSend(); }}>
           <textarea ref={input} className="input" data-testid="pi-compact-prompt" aria-label="Message Pi" placeholder="Ask Pi to help…" rows={2} value={draft} disabled={!connection || working} onChange={(event) => onDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!busy) onSend(); } }}/>
@@ -74,7 +75,7 @@ export function PiCompactChat({ installed, loading, working, busy, connection, m
         <div className="pi-compact-controls">
           <Select className="pi-compact-permission" data-testid="pi-permission-mode" aria-label="Approval mode" value={permissionMode} options={piPermissionModes} onChange={onPermission} disabled={busy || working || !connection || !!questions.length}/>
           <PiModelControl model={model} models={models} levels={levels} level={level} disabled={busy || working || !connection} onModel={onModel} onLevel={onLevel}/>
-          <button type="button" className="btn btn-primary btn-icon" data-testid="pi-compact-send" aria-label={showStop ? 'Stop' : 'Send'} title={showStop ? 'Stop' : 'Send'} onClick={showStop ? onStop : onSend} disabled={!connection || working || (!showStop && !draft.trim())}>{showStop ? <IconStop size={16}/> : <IconSend size={18}/>}</button>
+          <button type="button" className="btn btn-primary btn-icon" data-testid="pi-compact-send" aria-label={showStop ? 'Stop' : 'Send'} title={showStop ? 'Stop' : 'Send'} onClick={showStop ? onStop : onSend} disabled={!connection || working || (!showStop && !hasDraft)}>{showStop ? <IconStop size={16}/> : <IconSend size={18}/>}</button>
         </div>
       </>}
     </div>
