@@ -2,19 +2,15 @@
 package desktopapps
 
 import (
+	_ "embed"
 	"encoding/base64"
 	"encoding/json"
 	"html"
 	"strings"
 )
 
-const Bootstrap = `const pending=new Map();let port;let serial=0;let rendered=false;
-function report(status,message=''){if(port)port.postMessage({type:'report',status,message:String(message).slice(0,2000)});}
-globalThis.lumo=Object.freeze({call(method,params){return new Promise((resolve,reject)=>{if(!port)return reject(new Error('App connection unavailable.'));if(pending.size>=8)return reject(new Error('Too many requests.'));const id=++serial;const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Request timed out.'));},10000);pending.set(id,{resolve,reject,timer});port.postMessage({type:'call',id,method,params});});},ready(){rendered=true;report('ready');}});
-addEventListener('message',function connect(event){if(event.source!==parent||event.data?.type!=='lumo-connect'||!event.ports[0]||port)return;port=event.ports[0];port.onmessage=({data})=>{if(data?.type==='theme'){document.documentElement.dataset.theme=data.theme;document.documentElement.dataset.motion=data.motion;return;}const p=pending.get(data?.id);if(!p)return;clearTimeout(p.timer);pending.delete(data.id);data.error?p.reject(Object.assign(new Error(data.error),{code:data.code})):p.resolve(data.value);};port.start();dispatchEvent(new Event('lumo-connected'));if(rendered)report('ready');});
-addEventListener('error',event=>report('error',event.message));addEventListener('unhandledrejection',event=>report('error',event.reason?.message||event.reason));
-parent.postMessage({type:'lumo-ready'},'*');
-`
+//go:embed sdk.js
+var Bootstrap string
 
 func Document(b Bundle, handshake ...string) (string, string) {
 	nonce := Token()

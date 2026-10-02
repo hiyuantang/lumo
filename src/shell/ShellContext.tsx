@@ -503,6 +503,7 @@ export interface ShellActions {
   openLogs(unit: string): void;
   openService(unit: string): void;
   closeApp(appId: WindowId): boolean;
+  closeWindows(ids: WindowId[], proceed: () => void): void;
   quitApp(appId: AppId): void;
   focusApp(appId: WindowId): void;
   focusDesktop(): void;
@@ -685,6 +686,18 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       openLogs: (unit) => dispatch({ type: 'open-related', target: 'logs', unit }),
       openService: (unit) => dispatch({ type: 'open-related', target: 'services', unit }),
       closeApp: closeWindow,
+      closeWindows: (ids, proceed) => {
+        const pending = [...ids];
+        const next = () => {
+          const id = pending.shift();
+          if (id) requestWindowAction(id, next);
+          else {
+            ids.forEach((id) => { clearWindowState(currentState.current.user, id); dispatch({ type: 'close-app', appId: id }); });
+            proceed();
+          }
+        };
+        next();
+      },
       quitApp: (appId) => {
         const ids = Object.values(currentState.current.windows).filter((win) => win?.appId === appId).map((win) => win!.id);
         const pending = [...ids];

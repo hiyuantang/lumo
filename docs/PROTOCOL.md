@@ -2325,6 +2325,14 @@ The SDK supplies `lumo.call`, theme updates, and TypeScript declarations. Compil
 TypeScript/React packaging is a follow-on extension of the build contract.
 `lumod desktop-app api|create|build|list|install|restore|status` reads one JSON
 object on stdin and writes one JSON result. Create accepts optional `template`
-(`pulse` by default, or `counter` for saved app data). Pi uses this adapter with its
+(`pulse` by default, `counter` for saved app data, or `notes` for editing). Pi uses this adapter with its
 existing permission enforcement. Preview uses the client-owned Lumo desktop
 request transport with `{action:"app_preview", target:<digest>, label:<name>}`.
+
+The frame SDK sends `{type:"dirty", value:<boolean>}` only over its dedicated
+message port. This state belongs to that window and does not grant server access.
+The shell guards close/quit/logout and management actions while dirty or saving,
+and retains dirty frames across catalog activation changes. The existing server
+revocation checks still apply. `lumo.setDirty(false)` clears the guard; apps must
+not clear it merely because a save was attempted. Browser unload warnings are
+best effort and do not replace durable saves.

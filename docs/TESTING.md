@@ -331,3 +331,9 @@ normal and narrow widths.
 The Ubuntu browser suite also builds the Counter through Pi's command adapter
 and verifies saved values across updates, rollback, normal reinstall and clean
 uninstall/reinstall.
+
+The Notes production-frame workflow checks close cancellation, saved-note
+reopening, app-management cancellation and continuation, pending-save guards,
+and preservation across external disable. Guard dialogs are checked in both
+themes at 1440px and 390px. `tests/desktop-sdk.test.mjs` checks dirty-state
+reporting, duplicate suppression, error codes and failed message cleanup.

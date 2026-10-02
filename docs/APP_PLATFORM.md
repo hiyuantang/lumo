@@ -145,8 +145,36 @@ Installing a preview does not copy its temporary data.
 Ask Pi to create a Counter using `lumo_app_create` with `template: "counter"`.
 This local example saves only after a button press, disables controls during
 saving, and requires a reload after a conflict or ambiguous failure. It does
-not buffer unsaved edits. Larger document editors still need the future
-unsaved-document lifecycle contract.
+not buffer unsaved edits. The Notes template demonstrates the unsaved-edit contract.
+
+## Unsaved edits
+
+`lumo.setDirty(true)` tells the shell that a window has unsaved edits. Call it
+immediately when editable content differs from the saved version, then call
+`lumo.setDirty(false)` only after a successful save or explicit discard. It is
+window-local, takes a boolean, and requires no additional capability.
+
+Close, Quit, Log out, and App Library changes respect this state. Cancel returns
+to the editor; Discard changes continues the requested action. Group actions
+wait for every affected window before closing any of them. App Library resumes
+the original action after confirmation. Storage writes also hold the window
+open while the response is pending. Saving successfully can complete a pending
+close automatically.
+
+When Pi or another tab updates, disables or removes an app, Lumo preserves a
+dirty window instead of replacing its frame. The old launch loses capability
+access immediately. A notice asks the user to copy unsaved work before reloading;
+reload also requires confirmation. Clean windows adopt the current version.
+There is no permission to save through a revoked launch.
+
+Browser reload and navigation use the standard unsaved-work warning when the
+browser permits it. This is not crash recovery, guaranteed mobile unload
+protection, or a way to prevent session expiry. App code must report dirty state
+correctly. Saving app data remains the durable persistence mechanism.
+
+The `notes` template demonstrates this contract with an explicit Save button,
+a bounded text editor and conflict handling that preserves the current draft.
+Ask Pi to create a project with `template: "notes"` to start an editor.
 
 ## Architecture
 
@@ -156,6 +184,7 @@ unsaved-document lifecycle contract.
 | `server/internal/httpapi/desktop_apps.go` | Authenticated launches, metrics and app-owned storage bridge |
 | `server/cmd/lumod/desktop_apps.go` | Same-account JSON command adapter for Pi |
 | `server/internal/httpapi/pi_apps.mjs` | Pi tool definitions and app workflow |
+| `server/internal/desktopapps/sdk.js` | Embedded frame SDK, capability requests and dirty-state reporting |
 | `src/platform/` | Dynamic catalog, App Library controls and isolated window contents |
 | `src/api/desktop-apps.ts` | Typed live/mock contract |
 
@@ -217,7 +246,7 @@ are not an isolation boundary against another process running as the same user.
 | Tool | Result |
 | --- | --- |
 | `lumo_app_api` | API version, capability and source rules |
-| `lumo_app_create` | New project; optional `template: "counter"` for saved data, default `"pulse"` for metrics |
+| `lumo_app_create` | New project; `pulse` for metrics (default), `counter` for saved data, or `notes` for an editor |
 | `lumo_app_build` | Checked snapshot and exact digest |
 | `lumo_app_list` | Installed revisions and staged builds |
 | `lumo_app_preview` | Open the exact build in the connected Lumo tab |
@@ -239,13 +268,13 @@ distinction when reporting results.
 
 This release supports small metrics apps and utilities with app-owned saved data. It does not
 provide arbitrary server plugins, filesystem access, background jobs, app-owned
-menus, an unsaved-document contract, React bundling or a
+menus, automatic draft recovery, React bundling or a
 marketplace. App Library closes affected app windows before a management change;
-Pi/CLI activation changes reload those windows when the catalog refreshes. Apps
-with unsaved editing state need a future lifecycle contract before deployment.
+Pi/CLI activation changes reload clean windows when the catalog refreshes and
+preserve dirty windows for recovery by the user.
 
 The next useful extension is a pinned React/TypeScript SDK and shared controls,
-and an unsaved-document lifecycle for richer editors. Built-in app
+followed by richer capabilities driven by real apps. Built-in app
 migration should follow proven API boundaries. Core Lumo edits still require the
 normal build, test and deployment process.
 

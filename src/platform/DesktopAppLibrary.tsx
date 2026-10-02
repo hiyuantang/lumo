@@ -15,17 +15,23 @@ export function DesktopAppLibrary({ updates = false }: { updates?: boolean }) {
   const [remove, setRemove] = useState<string>(); const [clean, setClean] = useState(false);
   const [selectedBuild, setSelectedBuild] = useState<Record<string, string>>({});
   const groups = [...new Set([...catalog.apps.map((a) => a.manifest.id), ...catalog.builds.map((b) => b.manifest.id)])];
-  async function change(id: string, action: DesktopChange['action'], digest?: string) {
+  function change(id: string, action: DesktopChange['action'], digest?: string, onComplete?: () => void) {
     if (busy) return;
     const app = catalog.apps.find((a) => a.manifest.id === id);
     const windows = Object.values(state.windows).filter((w) => w?.appId === `app:${id}`);
-    for (const win of windows) if (win && !actions.closeApp(win.id)) return;
-    setBusy(id); setError('');
-    try {
-      await getDataSource().desktopAppChange({ requestId: crypto.randomUUID(), action, id, digest, revision: app?.revision ?? '', clean: action === 'uninstall' && clean });
-      await refresh(); setRemove(undefined);
-    } catch (e) { setError(e instanceof Error ? e.message : 'App action failed.'); }
-    finally { setBusy(''); }
+    setRemove(undefined);
+    actions.closeWindows(windows.flatMap((win) => win ? [win.id] : []), () => { void performChange(); });
+    async function performChange() {
+      setBusy(id); setError('');
+      let complete = false;
+      try {
+        await getDataSource().desktopAppChange({ requestId: crypto.randomUUID(), action, id, digest, revision: app?.revision ?? '', clean: action === 'uninstall' && clean });
+        await refresh(); setRemove(undefined);
+        complete = true;
+      } catch (e) { setError(e instanceof Error ? e.message : 'App action failed.'); }
+      finally { setBusy(''); }
+      if (complete) onComplete?.();
+    }
   }
   const candidates = groups.map((id) => {
     const app = catalog.apps.find((a) => a.manifest.id === id);
@@ -34,7 +40,7 @@ export function DesktopAppLibrary({ updates = false }: { updates?: boolean }) {
     return { id, app, versions, build };
   }).filter(({ app, build }) => build && (!updates || (app && compareVersion(build.manifest.version, app.manifest.version) > 0)));
   return <section className="desktop-app-library" data-testid={updates ? 'desktop-app-updates' : 'desktop-app-library'}>
-    <div className="desktop-app-section-heading"><h2>{updates ? 'Desktop app updates' : 'Your desktop apps'}</h2>{updates && candidates.length > 1 && <button className="btn" disabled={!!busy} onClick={() => void (async () => { for (const item of candidates) if (item.build) await change(item.id, 'install', item.build.digest); })()}>Update all desktop apps</button>}</div>
+    <div className="desktop-app-section-heading"><h2>{updates ? 'Desktop app updates' : 'Your desktop apps'}</h2>{updates && candidates.length > 1 && <button className="btn" disabled={!!busy} onClick={() => { const queue = [...candidates]; const next = () => { const item = queue.shift(); if (item?.build) change(item.id, 'install', item.build.digest, next); }; next(); }}>Update all desktop apps</button>}</div>
     {catalogError && <p role="alert">{catalogError}</p>}{error && <p role="alert">{error}</p>}
     {!candidates.length && <p className="desktop-app-hint">{updates ? 'Desktop apps are up to date.' : 'Ask Pi to create an app. Validated builds appear here for preview and installation.'}</p>}
     <div className="desktop-app-grid">{candidates.map(({ id, app, versions, build }) => build && <article key={id} className="desktop-app-card" data-testid={`desktop-card-${id}`}>
