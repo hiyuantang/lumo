@@ -151,7 +151,8 @@ and the [clean-room rules](docs/CLEAN_ROOM.md).
 
 The [app platform guide](docs/APP_PLATFORM.md) explains how Pi can create,
 preview, install and update local JavaScript/CSS desktop apps inside Lumo.
-The initial API supports read-only CPU and memory access.
+The API supports read-only CPU and memory access plus app-owned saved data.
+Pi can create a Counter template to try persistence and multi-window conflict checks.
 
 ## License
 

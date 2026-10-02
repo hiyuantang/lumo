@@ -2283,7 +2283,7 @@ agent and `lumod desktop-app` share an account-local package store and file lock
   and history. Builds are staged, immutable snapshots.
 - `POST /desktop-apps/action` accepts `{requestId, action, id, digest?, revision,
   clean?}`. Actions are install, restore, disable, enable and uninstall. Install
-  grants only the declared API v1 read-only metrics capability. The trusted UI
+  grants the declared API v1 metrics and/or app-owned storage capabilities. The trusted UI
   presents this access before installation. Replay keys bind to the complete
   request; stale revisions and conflicting reuse fail.
 - `POST /desktop-apps/launch` accepts `{digest, preview}` and returns `{token,
@@ -2297,10 +2297,20 @@ agent and `lumod desktop-app` share an account-local package store and file lock
   The frame identifier is separate from the capability token and is session
   scoped. It only loads the document. The parent checks the sending frame and
   fresh handshake before establishing the capability message channel.
-- `POST /desktop-apps/call` accepts `{token, method}`; only
-  `system.metrics.read` is allowed when declared and granted. It returns CPU
-  percentage, memory usage, memory capacity, and sample time. Revocation and
-  activation changes invalidate existing launches.
+- `POST /desktop-apps/call` accepts `{token, method, params?}`. Declared
+  `system.metrics.read` returns CPU percentage, memory usage, capacity and sample
+  time, and does not accept params. Declared `app.storage` enables
+  `app.storage.get` (no params) and `app.storage.set` (params `{revision,value}`).
+  Both return `{revision,value}`; empty storage has revision `""` and value `null`.
+  Set atomically replaces at most 64 KiB of JSON, rejecting stale revisions with
+  `conflict` (409). It derives the app identity from the launch, never params.
+  Preview storage is isolated in memory per launch and starts empty; installed
+  storage is account-local and survives activation changes. Clean uninstall
+  moves it to Trash. Activation authorization and saves share the store lock.
+  Revocation and activation changes invalidate existing installed launches.
+  Capability calls are bounded to 30 per ten seconds per launch; metrics also
+  retain their 250 ms spacing. The frame receives error messages and protocol
+  error codes; capability tokens stay in the trusted host.
 - `POST /desktop-apps/report` accepts `{token, status, message}` for bounded
   ready/error diagnostics. `POST /desktop-apps/close` revokes a launch.
 
@@ -2309,6 +2319,7 @@ there are no package lifecycle hooks, external imports, or custom build scripts.
 The SDK supplies `lumo.call`, theme updates, and TypeScript declarations. Compiled
 TypeScript/React packaging is a follow-on extension of the build contract.
 `lumod desktop-app api|create|build|list|install|restore|status` reads one JSON
-object on stdin and writes one JSON result. Pi uses this adapter with its
+object on stdin and writes one JSON result. Create accepts optional `template`
+(`pulse` by default, or `counter` for saved app data). Pi uses this adapter with its
 existing permission enforcement. Preview uses the client-owned Lumo desktop
 request transport with `{action:"app_preview", target:<digest>, label:<name>}`.

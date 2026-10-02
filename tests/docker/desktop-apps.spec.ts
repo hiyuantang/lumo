@@ -46,3 +46,40 @@ test('A same-account app builds offline and survives activation, update and roll
   execFileSync('docker', ['exec', '-u', 'alice', container, 'test', '-f', project + '/src/main.js']);
   expect(errors).toEqual([]);
 });
+
+test('App-owned data survives Ubuntu app updates and normal reinstall', async ({ page }) => {
+  const project = '/home/alice/desktop-counter-test';
+  const id = 'local.docker-counter';
+  appCommand('create', { project, id, name: 'Counter', template: 'counter' });
+  const first = appCommand<DesktopBuild>('build', { project });
+  const installed = appCommand<DesktopApp>('install', { id, digest: first.digest, revision: '', requestId: crypto.randomUUID() });
+  await page.goto('/');
+  await page.getByTestId('login-username').fill('alice');
+  await page.getByTestId('login-password').fill('alice-pass');
+  await page.getByTestId('login-submit').click();
+  await page.getByTestId(`dock-app-app:${id}`).click();
+  const frame = page.getByTestId(`window-app:${id}`).frameLocator('iframe');
+  await expect(frame.locator('#count')).toHaveText('0');
+  await frame.getByRole('button', { name: 'Add one', exact: true }).click();
+  await expect(frame.locator('#count')).toHaveText('1');
+  execFileSync('docker', ['exec', '-u', 'alice', container, 'node', '-e', "const fs=require('fs');const f=process.argv[1]+'/lumo.app.json';const m=JSON.parse(fs.readFileSync(f));m.version='0.2.0';fs.writeFileSync(f,JSON.stringify(m));", project]);
+  const second = appCommand<DesktopBuild>('build', { project });
+  const updated = appCommand<DesktopApp>('install', { id, digest: second.digest, revision: installed.revision, requestId: crypto.randomUUID() });
+  await page.reload();
+  await expect(frame.locator('#count')).toHaveText('1');
+  appCommand('restore', { id, revision: updated.revision, requestId: crypto.randomUUID() });
+  await page.reload();
+  await expect(frame.locator('#count')).toHaveText('1');
+  for (const clean of [false, true]) {
+    await page.getByTestId('dock-app-library').click();
+    await page.getByTestId(`desktop-card-${id}`).getByRole('button', { name: 'Uninstall', exact: true }).click();
+    if (clean) await page.getByRole('checkbox', { name: 'Clean uninstall' }).check();
+    await page.getByTestId('server-app-confirm-ok').click();
+    await expect(page.getByTestId(`dock-app-app:${id}`)).toHaveCount(0);
+    const build = appCommand<DesktopBuild>('build', { project });
+    appCommand('install', { id, digest: build.digest, revision: '', requestId: crypto.randomUUID() });
+    await page.reload();
+    await page.getByTestId(`dock-app-app:${id}`).click();
+    await expect(frame.locator('#count')).toHaveText(clean ? '0' : '1');
+  }
+});

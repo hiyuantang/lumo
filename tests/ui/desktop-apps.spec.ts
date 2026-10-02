@@ -105,6 +105,42 @@ test('Production gateway hosts real app artifacts with isolated metrics access',
     await page.getByTestId('dock-app-app:local.server-pulse').click();
     await expect(page.getByTestId('window-app:local.server-pulse').frameLocator('iframe').locator('#cpu')).toHaveText(/\d+\.\d%/);
     await page.reload(); await expect(page.getByTestId('window-app:local.server-pulse').frameLocator('iframe').locator('#cpu')).toHaveText(/\d+\.\d%/);
+    await page.getByTestId('dock-app-library').click();
+    const counterCard = page.getByTestId('desktop-card-local.counter');
+    await expect(counterCard).toContainText('save this app’s data');
+    await counterCard.getByRole('button', { name: 'Preview', exact: true }).click();
+    const counterFrames = page.getByTestId('desktop-app-frame');
+    const previewCounter = counterFrames.last().contentFrame();
+    await expect(previewCounter.locator('#count')).toHaveText('0');
+    await previewCounter.getByRole('button', { name: 'Add one', exact: true }).click();
+    await expect(previewCounter.locator('#count')).toHaveText('1');
+    await page.getByTestId('dock-app-library').click();
+    await counterCard.getByRole('button', { name: 'Install', exact: true }).click();
+    await counterCard.getByRole('button', { name: 'Open', exact: true }).click();
+    const counter = page.getByTestId('window-app:local.counter');
+    const counterFrame = counter.frameLocator('iframe');
+    await expect(counterFrame.locator('#count')).toHaveText('0');
+    await counterFrame.getByRole('button', { name: 'Add one', exact: true }).click();
+    await expect(counterFrame.locator('#count')).toHaveText('1');
+    await page.reload();
+    await expect(counterFrame.locator('#count')).toHaveText('1');
+    await page.getByTestId('dock-app-app:local.counter').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'New Window', exact: true }).click();
+    const second = page.locator('[data-testid^="window-app:local.counter:"]').frameLocator('iframe');
+    await expect(second.locator('#count')).toHaveText('1');
+    await second.getByRole('button', { name: 'Add one', exact: true }).click();
+    await expect(second.locator('#count')).toHaveText('2');
+    await page.getByTestId('window-minimize-' + (await page.locator('[data-testid^="window-app:local.counter:"]').getAttribute('data-testid'))!.slice('window-'.length)).click();
+    await counterFrame.getByRole('button', { name: 'Add one', exact: true }).click();
+    await expect(counterFrame.locator('#status')).toContainText('Changed in another window');
+    await expect(counterFrame.locator('#count')).toHaveText('1');
+    await counterFrame.getByRole('button', { name: 'Reload saved count', exact: true }).click();
+    await expect(counterFrame.locator('#count')).toHaveText('2');
+    for (const colorScheme of ['light', 'dark'] as const) for (const width of [1440, 390]) {
+      await page.emulateMedia({ colorScheme }); await page.setViewportSize({ width, height: 900 });
+      await expect(counterFrame.getByRole('button', { name: 'Add one', exact: true })).toBeVisible();
+      await counter.screenshot({ path: `/tmp/lumo-counter-${colorScheme}-${width}.png` });
+    }
     expect(errors).toEqual([]);
   } finally {
     const home = output.match(/LUMO_DESKTOP_FIXTURE_HOME=([^\n]+)/)?.[1];

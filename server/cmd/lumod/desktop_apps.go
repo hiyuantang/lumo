@@ -18,6 +18,7 @@ func runDesktopApps(args []string) {
 		fail(desktopapps.ErrInvalid)
 	}
 	var req struct {
+		Template  string `json:"template"`
 		Project   string `json:"project"`
 		ID        string `json:"id"`
 		Name      string `json:"name"`
@@ -45,7 +46,7 @@ func runDesktopApps(args []string) {
 	case "api":
 		value = desktopapps.API()
 	case "create":
-		value, e = desktopapps.Create(req.Project, req.ID, req.Name)
+		value, e = desktopapps.Create(req.Project, req.ID, req.Name, req.Template)
 	case "build":
 		value, e = s.Build(ctx, req.Project)
 	case "list":

@@ -320,3 +320,14 @@ as Pi, under the authenticated test account. It builds local source, reads
 real Linux metrics, reloads, updates, restores and uninstalls an app. Cached
 build and runtime images need Node.js; the Docker preflight fails clearly if
 it is absent. Explicit dependency preparation includes Node.js.
+
+App storage checks cover simultaneous writers, restart and version persistence,
+app isolation, stale activation rejection, bounded JSON, symlink rejection, and
+recoverable clean uninstall. HTTP checks verify declared capabilities, session
+binding, temporary preview isolation and error codes. The production browser
+fixture creates the Counter template, checks preview/install separation, saves
+and reloads data, and recovers from a two-window conflict in both themes and at
+normal and narrow widths.
+The Ubuntu browser suite also builds the Counter through Pi's command adapter
+and verifies saved values across updates, rollback, normal reinstall and clean
+uninstall/reinstall.

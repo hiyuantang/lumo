@@ -40,7 +40,7 @@ export function DesktopAppLibrary({ updates = false }: { updates?: boolean }) {
     <div className="desktop-app-grid">{candidates.map(({ id, app, versions, build }) => build && <article key={id} className="desktop-app-card" data-testid={`desktop-card-${id}`}>
       <header><span className="desktop-app-icon"><AppIcon appId={`app:${id}`}/></span><div><h3>{build.manifest.name}</h3><p>{app ? `${app.manifest.version} · ${app.enabled ? 'Installed' : 'Disabled'}` : 'Ready to install'}</p></div></header>
       <p className="desktop-app-description">{build.manifest.description}</p>
-      <p className="desktop-app-permissions">{build.manifest.capabilities.length ? 'Access: read CPU and memory usage.' : 'No system access.'}</p>
+      <p className="desktop-app-permissions">{build.manifest.capabilities.length ? 'Access: ' + build.manifest.capabilities.map((capability) => capability.name === 'app.storage' ? 'save this app’s data' : 'read CPU and memory usage').join('; ') + '.' : 'No system access.'}</p>
       <div className="desktop-app-actions">
         {versions.length > 1 && <select className="input" aria-label={`${build.manifest.name} build`} value={build.digest} onChange={(e) => setSelectedBuild((v) => ({ ...v, [id]: e.target.value }))}>{versions.map((b) => <option key={b.digest} value={b.digest}>{b.manifest.version}</option>)}</select>}
         <button className="btn" disabled={!!busy} onClick={() => preview(build)}>Preview</button>

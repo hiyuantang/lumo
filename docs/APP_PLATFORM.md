@@ -2,8 +2,8 @@
 
 Lumo supports local desktop apps that Pi can create, build, preview, install and
 update without rebuilding Lumo. Apps run independently of the Pi conversation.
-The first implementation supports self-contained JavaScript and CSS, with an
-optional read-only CPU and memory capability.
+Apps use self-contained JavaScript and CSS, with optional read-only CPU and
+memory access and private saved data.
 
 ## Use it
 
@@ -25,7 +25,8 @@ exact tool input for approval. Read-only mode permits API discovery, listing and
 status checks, but blocks creation, builds, previews and installation.
 
 Validated builds appear in **App Library → Discovery → Your desktop apps**.
-Preview opens the selected build with temporary read access. Install adds it to
+Preview opens the selected build with declared access and separate temporary
+app data. Install adds it to
 the dock and app search. App Library also provides Open, Disable, Enable,
 Uninstall and Restore previous version. **Updates** shows newer staged versions,
 Update all when applicable, and completed version changes.
@@ -107,12 +108,52 @@ computes a SHA-256 digest over the normalized manifest and source. Limits are
 Runtime errors remain possible after a successful syntax check. Preview and
 runtime diagnostics are separate checks.
 
+## Saved data
+
+Declare `{"name":"app.storage"}` in the manifest to save one JSON document per
+app and Linux account. App Library displays this access before installation.
+The runtime selects the app identity from its launch; apps cannot choose another
+app's identity or a filesystem path.
+
+```js
+const current = await lumo.call('app.storage.get');
+const next = await lumo.call('app.storage.set', {
+  revision: current.revision,
+  value: { count: (current.value?.count ?? 0) + 1 }
+});
+```
+
+Reads return `{revision, value}`, initially `{"revision":"","value":null}`.
+Writes require the last read revision and return the newly saved snapshot. A
+stale revision fails with `error.code === 'conflict'`; reload before retrying.
+After a timeout, read again to determine whether the save completed. Never
+blindly replay a change. Display success only after the save response.
+
+Each value is limited to 64 KiB of serialized JSON in UTF-8. Unknown parameters,
+invalid JSON and oversized values fail without changing the saved document.
+Use `null` to clear the value. All capability calls share a limit of 30 requests
+per ten seconds per launch; metrics retain an additional four-per-second limit.
+Store changes are serialized with app activation changes and written atomically.
+Saved data lives in `data/<app-id>/storage.json` beneath the account's app store.
+
+Installed data survives reloads, agent restarts, updates, code rollback and
+normal uninstall/reinstall. Clean uninstall moves it to recoverable Trash.
+Previews start with empty, in-memory data for each launch, cannot read or change
+installed data, and discard it when closed, expired or the agent restarts.
+Installing a preview does not copy its temporary data.
+
+Ask Pi to create a Counter using `lumo_app_create` with `template: "counter"`.
+This local example saves only after a button press, disables controls during
+saving, and requires a reload after a conflict or ambiguous failure. It does
+not buffer unsaved edits. Larger document editors still need the future
+unsaved-document lifecycle contract.
+
 ## Architecture
 
 | Module | Responsibility |
 | --- | --- |
 | `server/internal/desktopapps/` | Manifest, template, source checks, immutable bundles, activation, recovery and app document generation |
-| `server/internal/httpapi/desktop_apps.go` | Authenticated launches and the narrow metrics bridge |
+| `server/internal/httpapi/desktop_apps.go` | Authenticated launches, metrics and app-owned storage bridge |
 | `server/cmd/lumod/desktop_apps.go` | Same-account JSON command adapter for Pi |
 | `server/internal/httpapi/pi_apps.mjs` | Pi tool definitions and app workflow |
 | `src/platform/` | Dynamic catalog, App Library controls and isolated window contents |
@@ -166,7 +207,8 @@ An incomplete artifact publication never becomes the active version.
 
 Catalog reads use saved metadata and check artifact presence. Launches check
 full bundle integrity. Code rollback switches the snapshot; it does not undo
-app data changes. The initial SDK has no persistence or data migration API.
+app data changes. Apps must keep stored data backward compatible. There is no
+automatic data migration API.
 Uninstall retains recoverable artifacts in Trash. These account-writable files
 are not an isolation boundary against another process running as the same user.
 
@@ -175,7 +217,7 @@ are not an isolation boundary against another process running as the same user.
 | Tool | Result |
 | --- | --- |
 | `lumo_app_api` | API version, capability and source rules |
-| `lumo_app_create` | New project from the local Server Pulse template |
+| `lumo_app_create` | New project; optional `template: "counter"` for saved data, default `"pulse"` for metrics |
 | `lumo_app_build` | Checked snapshot and exact digest |
 | `lumo_app_list` | Installed revisions and staged builds |
 | `lumo_app_preview` | Open the exact build in the connected Lumo tab |
@@ -195,15 +237,15 @@ distinction when reporting results.
 
 ## Boundaries and next steps
 
-This release supports small read-only apps and UI-only utilities. It does not
+This release supports small metrics apps and utilities with app-owned saved data. It does not
 provide arbitrary server plugins, filesystem access, background jobs, app-owned
-menus, persistent data, an unsaved-document contract, React bundling or a
+menus, an unsaved-document contract, React bundling or a
 marketplace. App Library closes affected app windows before a management change;
 Pi/CLI activation changes reload those windows when the catalog refreshes. Apps
 with unsaved editing state need a future lifecycle contract before deployment.
 
 The next useful extension is a pinned React/TypeScript SDK and shared controls,
-followed by one additional typed capability driven by a real app. Built-in app
+and an unsaved-document lifecycle for richer editors. Built-in app
 migration should follow proven API boundaries. Core Lumo edits still require the
 normal build, test and deployment process.
 

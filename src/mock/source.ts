@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { mockDesktopApps } from './desktop-apps';
-import type { DesktopCatalog, DesktopChange, DesktopApp, DesktopLaunch, DesktopMetrics } from '../api/desktop-apps';
+import type { DesktopCatalog, DesktopChange, DesktopApp, DesktopLaunch } from '../api/desktop-apps';
 import { MockCalendar } from './calendar';
 import { MockGit } from './git';
 import type { GitAction } from '../api/git';
@@ -83,7 +83,7 @@ export class MockDataSource implements DataSource {
   desktopApps(): Promise<DesktopCatalog> { return mockDesktopApps.catalog(); }
   desktopAppChange(change: DesktopChange): Promise<DesktopApp> { return mockDesktopApps.change(change); }
   desktopAppLaunch(digest: string, preview: boolean): Promise<DesktopLaunch> { return mockDesktopApps.launch(digest, preview); }
-  desktopAppCall(token: string, method: string): Promise<DesktopMetrics> { return mockDesktopApps.call(token, method); }
+  desktopAppCall(token: string, method: string, params?: unknown): Promise<unknown> { return mockDesktopApps.call(token, method, params); }
   async desktopAppReport(token: string, status: 'ready' | 'error', message: string) { mockDesktopApps.report(token, status, message); }
   async desktopAppClose(token: string) { mockDesktopApps.close(token); }
   private calendar = new MockCalendar();

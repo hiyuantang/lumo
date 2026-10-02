@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { DesktopCatalog, DesktopChange, DesktopApp, DesktopLaunch, DesktopMetrics } from './desktop-apps';
+import type { DesktopCatalog, DesktopChange, DesktopApp, DesktopLaunch } from './desktop-apps';
 import type { CalendarSnapshot, CalendarChange, CalendarItem, CalendarGoogleStatus, CalendarGoogleConfig, CalendarGoogleAction, CalendarGoogleResult, CalendarNotice } from './calendar';
 import type { DesktopRequest, PiExtensionSettings } from './lumo-use';
 import type { GitSnapshot, GitDiff, GitAction } from './git';
@@ -349,7 +349,7 @@ export interface DataSource {
   desktopApps(): Promise<DesktopCatalog>;
   desktopAppChange(change: DesktopChange): Promise<DesktopApp>;
   desktopAppLaunch(digest: string, preview: boolean): Promise<DesktopLaunch>;
-  desktopAppCall(token: string, method: string): Promise<DesktopMetrics>;
+  desktopAppCall(token: string, method: string, params?: unknown): Promise<unknown>;
   desktopAppReport(token: string, status: 'ready' | 'error', message: string): Promise<void>;
   desktopAppClose(token: string): Promise<void>;
   calendarSnapshot(from: string, to: string, includeGoogle?: boolean): Promise<CalendarSnapshot>;

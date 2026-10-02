@@ -31,6 +31,13 @@ func TestDesktopAppBrowserFixture(t *testing.T) {
 	if _, e := store.Build(context.Background(), project); e != nil {
 		t.Fatal(e)
 	}
+	counter := filepath.Join(home, "counter")
+	if _, e := desktopapps.Create(counter, "local.counter", "Counter", "counter"); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := store.Build(context.Background(), counter); e != nil {
+		t.Fatal(e)
+	}
 	agent := startStub(t, "apps-agent.sock", httpapi.NewServer(httpapi.Deps{Sampler: system.NewSampler()}).Handler())
 	session := startStub(t, "apps-session.sock", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]string

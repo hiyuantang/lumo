@@ -2,11 +2,13 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
 	"lumo/server/internal/desktopapps"
 	"lumo/server/internal/strictjson"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,6 +18,9 @@ type desktopLaunch struct {
 	Preview                                     bool
 	Expires                                     time.Time
 	LastCall                                    time.Time
+	Calls                                       int
+	WindowStart                                 time.Time
+	Data                                        desktopapps.DataSnapshot
 }
 type desktopAppRuntime struct {
 	mu       sync.Mutex
@@ -28,8 +33,10 @@ func appStore() (*desktopapps.Store, error) {
 }
 func appError(w http.ResponseWriter, e error) {
 	code := CodeValidationFailed
-	if errors.Is(e, desktopapps.ErrConflict) {
+	if errors.Is(e, desktopapps.ErrConflict) || errors.Is(e, desktopapps.ErrDataConflict) {
 		code = CodeConflict
+	} else if errors.Is(e, desktopapps.ErrCapability) {
+		code = CodeForbidden
 	} else if errors.Is(e, desktopapps.ErrMissing) {
 		code = CodeNotFound
 	}
@@ -109,7 +116,7 @@ func (s *Server) handleDesktopLaunch(w http.ResponseWriter, r *http.Request) {
 	}
 	token := desktopapps.Token()
 	frame := desktopapps.Token()
-	s.desktopApps.launches[token] = &desktopLaunch{Digest: req.Digest, Revision: revision, Preview: req.Preview, Frame: frame, Handshake: desktopapps.Token(), Session: r.Header.Get("X-Lumo-Session"), Expires: time.Now().Add(time.Hour)}
+	s.desktopApps.launches[token] = &desktopLaunch{Digest: req.Digest, Revision: revision, Preview: req.Preview, Data: desktopapps.EmptyData(), Frame: frame, Handshake: desktopapps.Token(), Session: r.Header.Get("X-Lumo-Session"), Expires: time.Now().Add(time.Hour)}
 	WriteData(w, map[string]string{"token": token, "handshake": s.desktopApps.launches[token].Handshake, "url": "/api/v1/desktop-apps/frame?frame=" + frame})
 }
 func (s *Server) handleDesktopFrame(w http.ResponseWriter, r *http.Request) {
@@ -146,12 +153,13 @@ func (s *Server) handleDesktopFrame(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) handleDesktopCall(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Token   string `json:"token"`
-		Method  string `json:"method"`
-		Status  string `json:"status"`
-		Message string `json:"message"`
+		Token   string          `json:"token"`
+		Method  string          `json:"method"`
+		Status  string          `json:"status"`
+		Message string          `json:"message"`
+		Params  json.RawMessage `json:"params,omitempty"`
 	}
-	if strictjson.Decode(w, r, 4096, &req) != nil {
+	if strictjson.Decode(w, r, desktopapps.MaxDataBytes*6+4096, &req) != nil {
 		appError(w, desktopapps.ErrInvalid)
 		return
 	}
@@ -199,12 +207,50 @@ func (s *Server) handleDesktopCall(w http.ResponseWriter, r *http.Request) {
 		WriteData(w, map[string]bool{"accepted": true})
 		return
 	}
-	if req.Method != "system.metrics.read" || len(b.Manifest.Capabilities) != 1 {
-		WriteError(w, NewError(CodeForbidden, "This app does not have that capability."))
+	capability := req.Method
+	if strings.HasPrefix(req.Method, "app.storage.") {
+		capability = "app.storage"
+	}
+	if (req.Method != "system.metrics.read" && req.Method != "app.storage.get" && req.Method != "app.storage.set") || !desktopapps.HasCapability(b.Manifest, capability) {
+		appError(w, desktopapps.ErrCapability)
 		return
 	}
-	if time.Since(launch.LastCall) < 250*time.Millisecond {
+	if time.Since(launch.WindowStart) >= 10*time.Second {
+		launch.WindowStart = time.Now()
+		launch.Calls = 0
+	}
+	launch.Calls++
+	if launch.Calls > 30 || (req.Method == "system.metrics.read" && time.Since(launch.LastCall) < 250*time.Millisecond) {
 		WriteError(w, NewError(CodeBusy, "Too many app requests."))
+		return
+	}
+	if capability == "app.storage" {
+		var value desktopapps.DataSnapshot
+		if launch.Preview {
+			if req.Method == "app.storage.get" {
+				if len(req.Params) != 0 {
+					e = desktopapps.ErrInvalid
+				} else {
+					value = launch.Data
+				}
+			} else {
+				value, e = desktopapps.UpdateData(launch.Data, req.Params)
+				if e == nil {
+					launch.Data = value
+				}
+			}
+		} else {
+			value, e = store.Data(launch.Digest, launch.Revision, req.Method, req.Params)
+		}
+		if e != nil {
+			appError(w, e)
+			return
+		}
+		WriteData(w, value)
+		return
+	}
+	if len(req.Params) != 0 {
+		appError(w, desktopapps.ErrInvalid)
 		return
 	}
 	launch.LastCall = time.Now()

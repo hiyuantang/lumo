@@ -34,14 +34,27 @@ const TemplateCSS = `/* SPDX-License-Identifier: AGPL-3.0-only */
 `
 const SDKTypes = `// SPDX-License-Identifier: AGPL-3.0-only
 interface LumoMetrics { cpuPercent: number; memoryUsedBytes: number; memoryTotalBytes: number; at: number }
-declare const lumo: { call(method: 'system.metrics.read'): Promise<LumoMetrics>; ready(): void };
+type LumoJSON = null | boolean | number | string | LumoJSON[] | { [key: string]: LumoJSON };
+interface LumoData { revision: string; value: LumoJSON }
+declare const lumo: { call(method: 'system.metrics.read'): Promise<LumoMetrics>; call(method: 'app.storage.get'): Promise<LumoData>; call(method: 'app.storage.set', params: LumoData): Promise<LumoData>; ready(): void };
 `
 
-func Create(project, id, name string) (any, error) {
+func Create(project, id, name string, template ...string) (any, error) {
+	kind := "pulse"
+	if len(template) > 0 && template[0] != "" {
+		kind = template[0]
+	}
+	if kind != "pulse" && kind != "counter" {
+		return nil, ErrInvalid
+	}
 	if !filepath.IsAbs(project) || !idPattern.MatchString(id) || len(name) < 1 || len(name) > 80 {
 		return nil, ErrInvalid
 	}
 	m := Manifest{SchemaVersion: 1, ID: id, Name: name, Version: "0.1.0", Description: "CPU and memory usage for this server.", License: "AGPL-3.0-only", APIVersion: 1, Entry: "src/main.js", Styles: "src/style.css", Window: Window{720, 480, 390, 320}, Capabilities: []Capability{{"system.metrics.read"}}}
+	if kind == "counter" {
+		m.Description = "A counter saved across windows and server restarts."
+		m.Capabilities = []Capability{{"app.storage"}}
+	}
 	if validate(m) != nil {
 		return nil, ErrInvalid
 	}
@@ -57,7 +70,10 @@ func Create(project, id, name string) (any, error) {
 	}
 	nameJSON, _ := json.Marshal(name)
 	js := strings.Replace(TemplateJS, "async function refresh() {", "root.querySelector('h1').textContent = "+string(nameJSON)+";\nasync function refresh() {", 1)
-	for file, content := range map[string]string{"lumo.app.json": string(data) + "\n", "src/main.js": js, "src/style.css": TemplateCSS, "lumo.d.ts": SDKTypes, "README.md": "# " + name + "\n\nEdit src/main.js and src/style.css. Increase lumo.app.json version before rebuilding changed source. Use Pi's lumo_app_build, lumo_app_preview and lumo_app_install tools. The runtime exposes lumo.call and lumo.ready; see lumo.d.ts. No external imports or package scripts are supported.\n"} {
+	if kind == "counter" {
+		js = strings.Replace(CounterJS, "TITLE", string(nameJSON), 1)
+	}
+	for file, content := range map[string]string{"lumo.app.json": string(data) + "\n", "src/main.js": js, "src/style.css": TemplateCSS, "lumo.d.ts": SDKTypes, "README.md": "# " + name + "\n\nEdit src/main.js and src/style.css. Increase lumo.app.json version before rebuilding changed source. Use Pi's lumo_app_build, lumo_app_preview and lumo_app_install tools. The runtime exposes lumo.call and lumo.ready; see lumo.d.ts. Storage values must stay backward compatible across app versions. Preview data is temporary and separate from installed data. No external imports or package scripts are supported.\n"} {
 		if e := os.WriteFile(filepath.Join(project, file), []byte(content), 0600); e != nil {
 			return nil, e
 		}

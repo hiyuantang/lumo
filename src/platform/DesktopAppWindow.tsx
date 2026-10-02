@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
+import { ApiError } from '../api/transport';
 import { getDataSource } from '../api/source';
 import type { DesktopLaunch } from '../api/desktop-apps';
 import { useCurrentWindow } from '../shell/WindowContext';
@@ -46,10 +47,11 @@ export function DesktopAppWindow() {
         if (++calls > 30 || pending >= 4) { stop('The app sent too many requests.'); return; }
         pending++;
         try {
-          if (data.method !== 'system.metrics.read') throw new Error('This app capability is unavailable.');
-          const value = await source.desktopAppCall(launch.token, data.method);
+          if (!['system.metrics.read', 'app.storage.get', 'app.storage.set'].includes(data.method)) throw new Error('This app capability is unavailable.');
+          if (data.params !== undefined && new TextEncoder().encode(JSON.stringify(data.params)).length > 64 * 1024 + 1024) throw new Error('App data is too large.');
+          const value = await source.desktopAppCall(launch.token, data.method, data.params);
           if (active) ports.port1.postMessage({ id: data.id, value });
-        } catch (e) { if (active) ports.port1.postMessage({ id: data.id, error: e instanceof Error ? e.message : 'App request failed.' }); }
+        } catch (e) { if (active) ports.port1.postMessage({ id: data.id, error: e instanceof Error ? e.message : 'App request failed.', code: e instanceof ApiError ? e.code : (e as { code?: string })?.code }); }
         finally { pending--; }
       };
       ports.port1.start(); event.source.postMessage({ type: 'lumo-connect' }, { targetOrigin: '*', transfer: [ports.port2] });
@@ -64,7 +66,7 @@ export function DesktopAppWindow() {
   }, [launch, source]);
   useEffect(() => { channel.current?.postMessage({ type: 'theme', ...settings.current }); }, [theme, reducedMotion]);
   return <div className="desktop-app-host" data-testid="desktop-app-host">
-    {preview && <div className="desktop-app-preview-label">Preview · Temporary read-only access</div>}
+    {preview && <div className="desktop-app-preview-label">Preview · Saved data is temporary</div>}
     {(!digest || error) && <div className="desktop-app-status" role="alert"><p>{error || 'This app is disabled, removed, or still loading.'}</p><button className="btn" onClick={() => { void refresh().catch(() => {}); setRetry((n) => n + 1); }}>Retry</button></div>}
     {digest && !ready && !error && <div className="desktop-app-loading" role="status">Opening app…</div>}
     {launch && <iframe key={launch.token} ref={frame} title={app?.manifest.name ?? 'App preview'} data-testid="desktop-app-frame" sandbox="allow-scripts" referrerPolicy="no-referrer" src={launch.url} srcDoc={launch.document} />}

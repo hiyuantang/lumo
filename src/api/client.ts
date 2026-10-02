@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { DesktopCatalog, DesktopChange, DesktopApp, DesktopLaunch, DesktopMetrics } from './desktop-apps';
+import type { DesktopCatalog, DesktopChange, DesktopApp, DesktopLaunch } from './desktop-apps';
 import type { CalendarSnapshot, CalendarChange, CalendarItem, CalendarGoogleStatus, CalendarGoogleConfig, CalendarGoogleAction, CalendarGoogleResult, CalendarNotice } from './calendar';
 import { desktopClientId, type DesktopRequest, type PiExtensionSettings } from './lumo-use';
 import type { GitSnapshot, GitDiff, GitAction } from './git';
@@ -164,7 +164,7 @@ export class LiveDataSource implements DataSource {
   desktopApps() { return apiGet<DesktopCatalog>('/desktop-apps'); }
   desktopAppChange(change: DesktopChange) { return apiPost<DesktopApp>('/desktop-apps/action', change); }
   desktopAppLaunch(digest: string, preview: boolean) { return apiPost<DesktopLaunch>('/desktop-apps/launch', { digest, preview }); }
-  desktopAppCall(token: string, method: string) { return apiPost<DesktopMetrics>('/desktop-apps/call', { token, method }); }
+  desktopAppCall(token: string, method: string, params?: unknown) { return apiPost<unknown>('/desktop-apps/call', { token, method, params }); }
   async desktopAppReport(token: string, status: 'ready' | 'error', message: string) { await apiPost('/desktop-apps/report', { token, status, message }); }
   async desktopAppClose(token: string) { await apiPost('/desktop-apps/close', { token }); }
   calendarSnapshot(from: string, to: string, includeGoogle = true): Promise<CalendarSnapshot> { return apiGet(`/calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&google=${includeGoogle ? 1 : 0}`); }

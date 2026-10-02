@@ -188,13 +188,15 @@ func validate(m Manifest) error {
 	if strings.ContainsAny(m.Name, "\x00\r\n") || m.Window.MinWidth < 320 || m.Window.MinWidth > 1600 || m.Window.MinHeight < 240 || m.Window.MinHeight > 1200 || m.Window.Width < m.Window.MinWidth || m.Window.Width > 2400 || m.Window.Height < m.Window.MinHeight || m.Window.Height > 1600 {
 		return ErrInvalid
 	}
-	if len(m.Capabilities) > 1 {
+	if len(m.Capabilities) > 2 {
 		return ErrInvalid
 	}
+	seen := map[string]bool{}
 	for _, c := range m.Capabilities {
-		if c.Name != "system.metrics.read" {
+		if (c.Name != "system.metrics.read" && c.Name != "app.storage") || seen[c.Name] {
 			return ErrInvalid
 		}
+		seen[c.Name] = true
 	}
 	return nil
 }
@@ -462,5 +464,5 @@ func (s *Store) Status(digest string) (json.RawMessage, error) {
 	return b, e
 }
 func API() any {
-	return map[string]any{"apiVersion": 1, "capabilities": []string{"system.metrics.read"}, "entry": "src/main.js", "styles": "src/style.css", "sdk": "await lumo.call('system.metrics.read') returns {cpuPercent,memoryUsedBytes,memoryTotalBytes,at}. lumo.ready() reports successful rendering. document.documentElement.dataset.theme follows Lumo. Source files are plain JavaScript and CSS. No imports, package scripts or downloads. Increase manifest.version for every changed build. lumo_app_status is diagnostic evidence, not independent visual verification."}
+	return map[string]any{"apiVersion": 1, "capabilities": []string{"system.metrics.read", "app.storage"}, "entry": "src/main.js", "styles": "src/style.css", "sdk": "await lumo.call('system.metrics.read') returns {cpuPercent,memoryUsedBytes,memoryTotalBytes,at}. Declare app.storage to use lumo.call('app.storage.get') returning {revision,value}, initially {revision:'',value:null}. Save with lumo.call('app.storage.set',{revision,value}) using the last revision; returns a new snapshot. Values are JSON up to 65536 UTF-8 bytes. Errors expose code, including conflict; reload before retrying. Preview storage is empty per launch and discarded on close; installed storage survives updates and normal uninstall, while clean uninstall moves it to Trash. Rollback changes code only; keep data backward compatible. lumo_app_create accepts optional template 'counter' for a saved counter example. lumo.ready() reports successful rendering. document.documentElement.dataset.theme follows Lumo. Source files are plain JavaScript and CSS. No imports, package scripts or downloads. Increase manifest.version for every changed build. lumo_app_status is diagnostic evidence, not independent visual verification."}
 }
