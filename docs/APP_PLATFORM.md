@@ -2,14 +2,14 @@
 
 Lumo supports local desktop apps that Pi can create, build, preview, install and
 update without rebuilding Lumo. Apps run independently of the Pi conversation.
-Apps use self-contained JavaScript and CSS, with optional read-only CPU and
-memory access and private saved data.
+Apps use JavaScript or a fixed React/TypeScript SDK with CSS, optional read-only
+CPU and memory access, and private saved data.
 
 ## Use it
 
 Deploy the updated Lumo frontend and `lumod` together. Pi must already be
-installed and configured. App builds require Node.js on the server; the build
-command never downloads it. Enable **Lumo Use** in Pi to open previews from the
+installed and configured. App builds use Pi's private Node.js runtime when installed, or system Node.js;
+the build command never downloads it. Enable **Lumo Use** in Pi to open previews from the
 chat, and use a permission mode that permits app changes.
 
 Ask Pi:
@@ -79,8 +79,7 @@ Example manifest:
 
 App IDs use `local.` followed by a lowercase letter and up to 63 lowercase
 letters, digits or hyphens. Versions contain three numeric components. A version
-cannot be reused for different source. The only accepted entry paths are those
-shown above. Unknown manifest fields, unsupported capabilities and API versions,
+cannot be reused for different source. Entry paths are `src/main.js` or `src/main.tsx`, with `src/style.css`. Unknown manifest fields, unsupported capabilities and API versions,
 invalid dimensions, oversized input and symlinked source entries are rejected.
 A package can declare an empty capabilities array for UI-only apps.
 
@@ -97,9 +96,10 @@ lumo.ready();
 The host sets `document.documentElement.dataset.theme` to `light` or `dark`, and
 `dataset.motion` to `reduced` or `full`. Apps must honor these settings. The local
 Server Pulse template demonstrates theme styling, metrics refresh and accessible
-status text. `lumo.d.ts` supplies editor declarations; this build does not compile
-TypeScript or React. External imports, package scripts, remote assets and custom
-build configurations are unsupported. There is no package installation step.
+status text. `lumo.d.ts` supplies editor declarations. The React template adds single-file
+TSX compilation and bundled SDK imports as described below. External packages,
+remote assets and custom build configurations are unsupported. There is no app
+package installation step.
 
 Build reads bounded source through a project-root handle, uses a fixed Node.js
 syntax-check command without executing the app, validates the manifest, and
@@ -107,6 +107,41 @@ computes a SHA-256 digest over the normalized manifest and source. Limits are
 1 MiB JavaScript, 128 KiB CSS, 64 staged builds and 32 installed apps per account.
 Runtime errors remain possible after a successful syntax check. Preview and
 runtime diagnostics are separate checks.
+
+## React and TypeScript
+
+Choose `template: "react"` with `lumo_app_create` to generate a saved-message
+app in `src/main.tsx`. It uses React 18.3.1 and TypeScript 5.7.3, pinned by the
+Lumo build. The source can import `react`, `react-dom/client`,
+`react/jsx-runtime`, and `@lumo/ui`. Shared controls are `Button`, `Field` (a
+text input with a required label), `Panel` (title and children), and `Status`
+(live status text). The template uses the same storage and dirty-state APIs as
+plain JavaScript apps. `lumo.d.ts` contains a minimal authoring declaration set,
+not the complete React type definitions.
+
+The server compiles one bounded TSX source file using an embedded compiler and
+bundles the fixed React runtime into the immutable app snapshot. Compilation
+checks syntax, not full TypeScript types. The runtime still uses the same opaque
+frame, policies and narrow capability bridge. Installed bundles keep their exact
+runtime when the server is upgraded; rebuilding with a changed SDK requires a
+new app version.
+
+Only the listed static SDK imports are supported. Local module imports, dynamic
+imports, direct `require`, project dependencies, `tsconfig.json`, source maps,
+package scripts and custom build steps are not part of this contract. Builds do
+not execute app source or install packages. Exported values and JSX are compiled
+to a private module wrapper whose loader only supplies SDK modules.
+
+For Lumo development, `npm run build` prepares the toolchain from existing locked
+dependencies through `npm run build:app-sdk`. It uses esbuild 0.25.12 for the
+fixed compiler/runtime bundles; version mismatches fail explicitly. The generated
+files in `server/internal/desktopapps/toolchain/` are ignored by Git and embedded
+in `lumod`. Prepare them before Go tests or a standalone Go build. Missing
+bundles fail TSX builds clearly without downloading dependencies. Production
+build scripts and Docker packaging include the generated toolchain.
+
+This compiler uses the documented [TypeScript single-file compilation model](https://www.typescriptlang.org/tsconfig/#isolatedModules)
+and [esbuild build API](https://esbuild.github.io/api/).
 
 ## Saved data
 
@@ -246,7 +281,7 @@ are not an isolation boundary against another process running as the same user.
 | Tool | Result |
 | --- | --- |
 | `lumo_app_api` | API version, capability and source rules |
-| `lumo_app_create` | New project; `pulse` for metrics (default), `counter` for saved data, or `notes` for an editor |
+| `lumo_app_create` | New project; `pulse` for metrics (default), `counter` for saved data, `notes` for an editor, or `react` for TSX |
 | `lumo_app_build` | Checked snapshot and exact digest |
 | `lumo_app_list` | Installed revisions and staged builds |
 | `lumo_app_preview` | Open the exact build in the connected Lumo tab |
@@ -268,13 +303,13 @@ distinction when reporting results.
 
 This release supports small metrics apps and utilities with app-owned saved data. It does not
 provide arbitrary server plugins, filesystem access, background jobs, app-owned
-menus, automatic draft recovery, React bundling or a
+menus, automatic draft recovery, arbitrary dependency bundling or a
 marketplace. App Library closes affected app windows before a management change;
 Pi/CLI activation changes reload clean windows when the catalog refreshes and
 preserve dirty windows for recovery by the user.
 
-The next useful extension is a pinned React/TypeScript SDK and shared controls,
-followed by richer capabilities driven by real apps. Built-in app
+Further extensions should add richer capabilities driven by real apps, then
+multiple source modules and full type checking for larger app projects. Built-in app
 migration should follow proven API boundaries. Core Lumo edits still require the
 normal build, test and deployment process.
 

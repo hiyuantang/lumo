@@ -37,7 +37,7 @@ normal Linux permissions.
 - Build focused web interfaces for selected Linux capabilities: Files,
   Terminal, Markdown editing and the system-management tools below.
 - Local desktop apps can be created by Pi, previewed in isolated windows and
-  installed without rebuilding Lumo. The first SDK supports JavaScript/CSS
+  installed without rebuilding Lumo. The SDK supports JavaScript/CSS or fixed React/TypeScript builds
   and optional read-only CPU and memory access or app-owned saved data.
   Preview data is temporary; installed app data survives updates and normal
   uninstall. Clean uninstall moves it to recoverable Trash.

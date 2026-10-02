@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "dev:live": "VITE_LUMO_LIVE=1 vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run build:app-sdk && tsc --noEmit && vite build",
     "build:mock": "VITE_LUMO_LIVE=0 npm run build",
     "preview": "vite preview",
     "test": "npm run test:ui",
@@ -17,7 +17,8 @@
     "test:unit": "bash scripts/unit-test.sh",
     "test:all": "npm run build && npm run test:unit && npm run test:ui && npm run test:docker",
     "test:docker:prepare": "bash scripts/prepare-test-deps.sh",
-    "test:online": "bash scripts/integration-test.sh --online"
+    "test:online": "bash scripts/integration-test.sh --online",
+    "build:app-sdk": "node scripts/build-app-toolchain.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.1.0",

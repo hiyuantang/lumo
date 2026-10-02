@@ -45,6 +45,13 @@ func TestDesktopAppBrowserFixture(t *testing.T) {
 	if _, e := store.Build(context.Background(), notes); e != nil {
 		t.Fatal(e)
 	}
+	react := filepath.Join(home, "react")
+	if _, e := desktopapps.Create(react, "local.react", "React Note", "react"); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := store.Build(context.Background(), react); e != nil {
+		t.Fatal(e)
+	}
 	agent := startStub(t, "apps-agent.sock", httpapi.NewServer(httpapi.Deps{Sampler: system.NewSampler()}).Handler())
 	session := startStub(t, "apps-session.sock", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]string

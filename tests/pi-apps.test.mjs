@@ -11,7 +11,7 @@ test('App tools expose the complete local workflow and exact preview digest', as
  assert.deepEqual([...tools.keys()], ['lumo_app_api','lumo_app_list','lumo_app_create','lumo_app_build','lumo_app_status','lumo_app_install','lumo_app_restore','lumo_app_preview']);
  const digest = 'a'.repeat(64); const preview = await tools.get('lumo_app_preview').execute('request', { digest, name: 'Pulse' }, undefined, undefined, {});
  assert.deepEqual(preview, { action: 'app_preview', target: digest, label: 'Pulse' });
- assert.deepEqual(tools.get('lumo_app_create').parameters.properties.template.enum, ['pulse', 'counter', 'notes']);
+ assert.deepEqual(tools.get('lumo_app_create').parameters.properties.template.enum, ['pulse', 'counter', 'notes', 'react']);
  assert.equal(tools.get('lumo_app_create').parameters.required.includes('template'), false);
  for (const tool of tools.values()) assert.equal(tool.parameters.additionalProperties, false);
 });

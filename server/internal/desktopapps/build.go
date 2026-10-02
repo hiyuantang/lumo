@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"lumo/server/internal/piruntime"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,7 +31,7 @@ refresh();
 setInterval(() => { if (!document.hidden) refresh(); }, 5000);
 `
 const TemplateCSS = `/* SPDX-License-Identifier: AGPL-3.0-only */
-:root{font:14px/1.5 system-ui,sans-serif;color:#242424;background:#fff;color-scheme:light} :root[data-theme=dark]{color:#eee;background:#202020;color-scheme:dark}body{margin:0;padding:24px}h1{font-size:24px;margin:0}p{opacity:.7}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;margin:24px 0}article{padding:20px;border:1px solid #8885;border-radius:12px}strong{display:block;font-size:26px;margin-top:8px}button{font:inherit;color:inherit;background:transparent;border:1px solid #8886;border-radius:6px;padding:6px 12px;cursor:pointer}textarea{box-sizing:border-box;width:100%;font:inherit;color:inherit;background:transparent;border:1px solid #8886;border-radius:6px;padding:10px;resize:vertical}textarea:focus{outline:none;border-color:#638dc8}button:disabled{opacity:.5;cursor:default}button:focus-visible{outline:2px solid #638dc8;outline-offset:2px}
+:root{font:14px/1.5 system-ui,sans-serif;color:#242424;background:#fff;color-scheme:light} :root[data-theme=dark]{color:#eee;background:#202020;color-scheme:dark}body{margin:0;padding:24px}h1{font-size:24px;margin:0}p{opacity:.7}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;margin:24px 0}article{padding:20px;border:1px solid #8885;border-radius:12px}strong{display:block;font-size:26px;margin-top:8px}button{font:inherit;color:inherit;background:transparent;border:1px solid #8886;border-radius:6px;padding:6px 12px;cursor:pointer}.lumo-field{display:grid;gap:6px;margin:16px 0}.lumo-field input{box-sizing:border-box;width:100%;font:inherit;color:inherit;background:transparent;border:1px solid #8886;border-radius:6px;padding:8px 10px}.lumo-field input:focus{outline:none;border-color:#638dc8}.lumo-panel{border:1px solid #8885;border-radius:12px;padding:20px;margin:24px 0}.lumo-panel h2{font-size:16px;margin:0}textarea{box-sizing:border-box;width:100%;font:inherit;color:inherit;background:transparent;border:1px solid #8886;border-radius:6px;padding:10px;resize:vertical}textarea:focus{outline:none;border-color:#638dc8}button:disabled{opacity:.5;cursor:default}button:focus-visible{outline:2px solid #638dc8;outline-offset:2px}
 `
 const SDKTypes = `// SPDX-License-Identifier: AGPL-3.0-only
 interface LumoMetrics { cpuPercent: number; memoryUsedBytes: number; memoryTotalBytes: number; at: number }
@@ -44,19 +45,23 @@ func Create(project, id, name string, template ...string) (any, error) {
 	if len(template) > 0 && template[0] != "" {
 		kind = template[0]
 	}
-	if kind != "pulse" && kind != "counter" && kind != "notes" {
+	if kind != "pulse" && kind != "counter" && kind != "notes" && kind != "react" {
 		return nil, ErrInvalid
 	}
 	if !filepath.IsAbs(project) || !idPattern.MatchString(id) || len(name) < 1 || len(name) > 80 {
 		return nil, ErrInvalid
 	}
 	m := Manifest{SchemaVersion: 1, ID: id, Name: name, Version: "0.1.0", Description: "CPU and memory usage for this server.", License: "AGPL-3.0-only", APIVersion: 1, Entry: "src/main.js", Styles: "src/style.css", Window: Window{720, 480, 390, 320}, Capabilities: []Capability{{"system.metrics.read"}}}
-	if kind == "counter" || kind == "notes" {
+	if kind == "counter" || kind == "notes" || kind == "react" {
 		m.Description = "A counter saved across windows and server restarts."
 		m.Capabilities = []Capability{{"app.storage"}}
 	}
 	if kind == "notes" {
 		m.Description = "A saved note with protection for unsaved edits."
+	}
+	if kind == "react" {
+		m.Entry = "src/main.tsx"
+		m.Description = "A React app with shared controls and a saved message."
 	}
 	if validate(m) != nil {
 		return nil, ErrInvalid
@@ -79,7 +84,12 @@ func Create(project, id, name string, template ...string) (any, error) {
 	if kind == "notes" {
 		js = strings.Replace(NotesJS, "TITLE", string(nameJSON), 1)
 	}
-	for file, content := range map[string]string{"lumo.app.json": string(data) + "\n", "src/main.js": js, "src/style.css": TemplateCSS, "lumo.d.ts": SDKTypes, "README.md": "# " + name + "\n\nEdit src/main.js and src/style.css. Increase lumo.app.json version before rebuilding changed source. Use Pi's lumo_app_build, lumo_app_preview and lumo_app_install tools. The runtime exposes lumo.call and lumo.ready; see lumo.d.ts. Storage values must stay backward compatible across app versions. Preview data is temporary and separate from installed data. No external imports or package scripts are supported.\n"} {
+	types := SDKTypes
+	if kind == "react" {
+		js = strings.Replace(ReactTSX, "TITLE", "{"+string(nameJSON)+"}", 1)
+		types += ReactTypes
+	}
+	for file, content := range map[string]string{"lumo.app.json": string(data) + "\n", m.Entry: js, "src/style.css": TemplateCSS, "lumo.d.ts": types, "README.md": "# " + name + "\n\nEdit the manifest entry file and src/style.css. Increase lumo.app.json version before rebuilding changed source. Use Pi's lumo_app_build, lumo_app_preview and lumo_app_install tools. The runtime exposes lumo.call and lumo.ready; see lumo.d.ts. Storage values must stay backward compatible across app versions. Preview data is temporary and separate from installed data. No external imports or package scripts are supported.\n"} {
 		if e := os.WriteFile(filepath.Join(project, file), []byte(content), 0600); e != nil {
 			return nil, e
 		}
@@ -137,12 +147,18 @@ func (s *Store) Build(ctx context.Context, project string) (Bundle, error) {
 	if e != nil {
 		return Bundle{}, e
 	}
-	node, e := exec.LookPath("node")
+	node, e := piruntime.Lookup(s.Home, "node")
 	if e != nil {
 		return Bundle{}, errors.New("Node.js is required to check app source. Install it explicitly before building.")
 	}
 	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	if m.Entry == "src/main.tsx" {
+		js, e = compileTSX(checkCtx, node, s.Home, js)
+		if e != nil {
+			return Bundle{}, e
+		}
+	}
 	cmd := exec.CommandContext(checkCtx, node, "--input-type=module", "--check")
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + s.Home}
 	cmd.Stdin = strings.NewReader(string(js))

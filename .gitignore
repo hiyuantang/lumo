@@ -12,3 +12,5 @@ server/internal/static/dist/
 docker/.build/
 __pycache__/
 *.pyc
+server/internal/desktopapps/toolchain/*.cjs
+server/internal/desktopapps/toolchain/*.js

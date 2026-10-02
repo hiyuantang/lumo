@@ -2319,13 +2319,16 @@ agent and `lumod desktop-app` share an account-local package store and file lock
 - `POST /desktop-apps/report` accepts `{token, status, message}` for bounded
   ready/error diagnostics. `POST /desktop-apps/close` revokes a launch.
 
-The initial fixed offline build supports self-contained JavaScript and CSS;
-there are no package lifecycle hooks, external imports, or custom build scripts.
-The SDK supplies `lumo.call`, theme updates, and TypeScript declarations. Compiled
-TypeScript/React packaging is a follow-on extension of the build contract.
+The fixed offline build supports `src/main.js` or `src/main.tsx` plus CSS.
+TSX uses embedded React 18.3.1 and TypeScript 5.7.3 with syntax diagnostics;
+only static imports from `react`, `react-dom/client`, `react/jsx-runtime`, and
+`@lumo/ui` are accepted. It does not read project build configuration or execute
+app source. No package hooks, downloads, local module resolution or custom
+build scripts are available. SDK discovery includes `entries` and pinned
+`reactSDK` metadata. Compiled output remains bounded by the existing bundle limit.
 `lumod desktop-app api|create|build|list|install|restore|status` reads one JSON
 object on stdin and writes one JSON result. Create accepts optional `template`
-(`pulse` by default, `counter` for saved app data, or `notes` for editing). Pi uses this adapter with its
+(`pulse` by default, `counter` for saved app data, `notes` for editing, or `react` for TSX). Pi uses this adapter with its
 existing permission enforcement. Preview uses the client-owned Lumo desktop
 request transport with `{action:"app_preview", target:<digest>, label:<name>}`.
 

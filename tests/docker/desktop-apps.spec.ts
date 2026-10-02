@@ -83,3 +83,24 @@ test('App-owned data survives Ubuntu app updates and normal reinstall', async ({
     await expect(frame.locator('#count')).toHaveText(clean ? '0' : '1');
   }
 });
+
+test('React apps compile offline inside lumod and preserve edits through save and reopen', async ({ page }) => {
+  const project = '/home/alice/react-app-test'; const id = 'local.docker-react';
+  appCommand('create', { project, id, name: 'React Message', template: 'react' });
+  const build = appCommand<DesktopBuild>('build', { project });
+  appCommand('install', { id, digest: build.digest, revision: '', requestId: crypto.randomUUID() });
+  await page.goto('/');
+  await page.getByTestId('login-username').fill('alice');
+  await page.getByTestId('login-password').fill('alice-pass');
+  await page.getByTestId('login-submit').click();
+  await page.getByTestId(`dock-app-app:${id}`).click();
+  const app = page.getByTestId(`window-app:${id}`); const frame = app.frameLocator('iframe');
+  await frame.getByRole('textbox', { name: 'Message', exact: true }).fill('Compiled and saved on Ubuntu');
+  await page.getByTestId(`window-close-app:${id}`).click();
+  const guard = page.getByRole('alertdialog', { name: 'Discard unsaved app changes?' });
+  await guard.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await frame.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(frame.getByRole('status')).toHaveText('Saved');
+  await page.reload();
+  await expect(frame.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('Compiled and saved on Ubuntu');
+});

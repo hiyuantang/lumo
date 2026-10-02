@@ -337,3 +337,10 @@ reopening, app-management cancellation and continuation, pending-save guards,
 and preservation across external disable. Guard dialogs are checked in both
 themes at 1440px and 390px. `tests/desktop-sdk.test.mjs` checks dirty-state
 reporting, duplicate suppression, error codes and failed message cleanup.
+
+React app checks require `npm run build:app-sdk` (also part of `npm run build`)
+before Go tests. They verify deterministic TSX output, rejected imports and
+syntax, ignored project configuration, non-execution of source, linked-entry
+rejection and use of Pi's private Node.js without system Node. The production
+browser and Ubuntu workflows compile a React app and verify shared controls,
+unsaved-edit protection and saved data after reload.

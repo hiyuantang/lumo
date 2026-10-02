@@ -203,6 +203,26 @@ test('Production gateway hosts real app artifacts with isolated metrics access',
     await notes.getByRole('button', { name: 'Reload app', exact: true }).click();
     await discard.getByRole('button', { name: 'Discard changes', exact: true }).click();
     await expect(notes.getByText('This app is disabled, removed, or still loading.')).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByTestId('dock-app-library').click();
+    const reactCard = page.getByTestId('desktop-card-local.react');
+    await reactCard.getByRole('button', { name: 'Install', exact: true }).click();
+    await reactCard.getByRole('button', { name: 'Open', exact: true }).click();
+    const reactWindow = page.getByTestId('window-app:local.react');
+    const reactFrame = reactWindow.frameLocator('iframe');
+    await expect(reactFrame.getByRole('heading', { name: 'React Note', exact: true })).toBeVisible();
+    await reactFrame.getByRole('textbox', { name: 'Message', exact: true }).fill('Saved from React and TypeScript');
+    await page.getByTestId('window-close-app:local.react').click();
+    await expect(discard).toBeVisible();
+    await discard.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await reactFrame.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(reactFrame.getByRole('status')).toHaveText('Saved');
+    await page.reload();
+    await expect(reactFrame.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('Saved from React and TypeScript');
+    for (const colorScheme of ['light', 'dark'] as const) for (const width of [1440, 390]) {
+      await page.emulateMedia({ colorScheme }); await page.setViewportSize({ width, height: 900 });
+      await reactWindow.screenshot({ path: `/tmp/lumo-react-${colorScheme}-${width}.png` });
+    }
     expect(errors).toEqual([]);
   } finally {
     const home = output.match(/LUMO_DESKTOP_FIXTURE_HOME=([^\n]+)/)?.[1];

@@ -5,6 +5,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY index.html tsconfig.json vite.config.ts playwright.config.ts playwright.docker.config.ts ./
 COPY src/ src/
+COPY scripts/build-app-toolchain.mjs scripts/build-app-toolchain.mjs
+COPY scripts/app-toolchain/ scripts/app-toolchain/
 COPY tests/ tests/
 RUN VITE_LUMO_LIVE=1 npm run build
 
@@ -15,6 +17,7 @@ COPY server/go.mod server/go.sum ./
 RUN go mod download
 COPY server/ ./
 COPY --from=web /src/dist ./internal/static/dist
+COPY --from=web /src/server/internal/desktopapps/toolchain ./internal/desktopapps/toolchain
 RUN CGO_ENABLED=1 go build -tags pam,webdist -o /out/lumod ./cmd/lumod
 
 FROM ubuntu:24.04
