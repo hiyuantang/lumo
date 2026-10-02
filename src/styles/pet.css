@@ -107,6 +107,7 @@
 
 .pet-magic-pole {display:none;position:absolute;left:var(--pet-pole-left);top:var(--pet-pole-top);width:10px;height:var(--pet-pole-height);overflow:visible;pointer-events:none;transform-origin:50% 100%;}
 .pet-climb-arms,.pet-wand,.pet-conjure-stars,.pet-soccer-prop,.pet-juggle-prop {opacity:0;}
+.pet-soccer-prop,.pet-juggle-prop {display:none;}
 .pet-wand {transform-origin:73px 42px;}
 .desktop-pet[data-activity='pole'] .pet-magic-pole {display:block;}
 .desktop-pet[data-activity='pole'][data-motion='conjure'] .pet-magic-pole {animation:pet-pole-appear 750ms cubic-bezier(.2,.8,.2,1) both;}
@@ -138,7 +139,7 @@
 .desktop-pet[data-activity='notes'][data-motion='perform'] .pet-arm-left {animation:none;transform:rotate(-40deg);}
 .desktop-pet[data-activity='notes'][data-motion='perform'] .pet-arm-right {animation:pet-write calc(700ms / var(--pet-trick-speed)) ease-in-out infinite;}
 .desktop-pet[data-activity='notes'][data-motion='perform'] .pet-pencil {animation:pet-scribble calc(700ms / var(--pet-trick-speed)) ease-in-out infinite;}
-.desktop-pet[data-activity='soccer']:is([data-motion='conjure'],[data-motion='perform'],[data-motion='vanish']) .pet-soccer-prop,.desktop-pet[data-activity='juggle']:is([data-motion='conjure'],[data-motion='perform'],[data-motion='vanish']) .pet-juggle-prop {opacity:1;transform-origin:48px 72px;}
+.desktop-pet[data-activity='soccer']:is([data-motion='conjure'],[data-motion='perform'],[data-motion='vanish']) .pet-soccer-prop,.desktop-pet[data-activity='juggle']:is([data-motion='conjure'],[data-motion='perform'],[data-motion='vanish']) .pet-juggle-prop {display:block;opacity:1;transform-origin:48px 72px;}
 .desktop-pet[data-motion='conjure'] :is(.pet-soccer-prop,.pet-juggle-prop) {animation:pet-prop-appear 750ms ease-out both;}
 .pet-soccer-ball {transform:translate(var(--pet-ball-x,73px),var(--pet-ball-y,82px)) rotate(var(--pet-ball-spin,0deg));}
 .desktop-pet[data-activity='soccer'][data-motion='perform'] .pet-body {animation:none;transform:rotate(calc(var(--pet-kick) * -4deg));}
@@ -185,3 +186,56 @@
 .motion-reduced .pet-juggle-two {transform:translate(48px,15px);}
 .motion-reduced .pet-juggle-three {transform:translate(76px,40px);}
 @media (prefers-reduced-motion:reduce) {.desktop-pet[data-motion][data-activity] .pet-sprite * {animation:none;transition:none;}.pet-juggle-one {transform:translate(20px,40px);}.pet-juggle-two {transform:translate(48px,15px);}.pet-juggle-three {transform:translate(76px,40px);}}
+
+.pet-pastime-prop {display:none;opacity:0;transform-origin:48px 72px;}
+.desktop-pet[data-activity='reading']:is([data-motion='conjure'],[data-motion='perform'],[data-motion='vanish']) .pet-reading-prop,
+.desktop-pet[data-activity='golf']:is([data-motion='conjure'],[data-motion='perform'],[data-motion='vanish']) .pet-golf-prop,
+.desktop-pet[data-activity='basketball']:is([data-motion='conjure'],[data-motion='perform'],[data-motion='vanish']) .pet-basketball-prop,
+.desktop-pet[data-activity='painting']:is([data-motion='conjure'],[data-motion='perform'],[data-motion='vanish']) .pet-painting-prop,
+.desktop-pet[data-activity='drums']:is([data-motion='conjure'],[data-motion='perform'],[data-motion='vanish']) .pet-drums-prop,
+.desktop-pet[data-activity='bubbles']:is([data-motion='conjure'],[data-motion='perform'],[data-motion='vanish']) .pet-bubbles-prop {display:block;opacity:1;}
+.desktop-pet[data-motion='conjure'] .pet-pastime-prop {animation:pet-prop-appear 750ms ease-out both;}
+.desktop-pet[data-motion='vanish'] .pet-pastime-prop {animation:pet-prop-vanish 450ms ease-out both;}
+.pet-play-ball {display:none;position:absolute;left:var(--pet-play-ball-x);top:var(--pet-play-ball-y);width:var(--pet-play-ball-size);height:var(--pet-play-ball-size);pointer-events:none;transform:rotate(var(--pet-play-ball-spin));overflow:visible;}
+.pet-golf-ball,.pet-basketball-ball {display:none;}
+.desktop-pet:is([data-activity='golf'],[data-activity='basketball']):is([data-motion='conjure'],[data-motion='perform'],[data-motion='vanish']) .pet-play-ball {display:block;}
+.desktop-pet[data-activity='golf'] .pet-golf-ball,.desktop-pet[data-activity='basketball'] .pet-basketball-ball {display:block;}
+.desktop-pet[data-motion='conjure'] .pet-play-ball {animation:pet-prop-appear 750ms ease-out both;}
+.desktop-pet[data-motion='vanish'] .pet-play-ball {animation:pet-prop-vanish 450ms ease-out both;}
+.desktop-pet[data-activity='golf'][data-motion='perform'] .pet-golf-club {transform-origin:69px 55px;transform:rotate(var(--pet-swing));}
+.desktop-pet[data-activity='golf'][data-motion='perform'] .pet-arm-right {animation:none;transform:rotate(var(--pet-swing));}
+.desktop-pet[data-activity='golf'][data-motion='perform'] .pet-arm-left {animation:none;transform:rotate(-25deg);}
+.desktop-pet[data-activity='golf'][data-motion='perform'] .pet-face {animation:none;transform:translate(3px,2px);}
+.desktop-pet[data-activity='basketball'][data-motion='perform'] :is(.pet-basketball-prop,.pet-arm-right) {animation:pet-dribble 820ms ease-in-out infinite;transform-origin:71px 51px;}
+.desktop-pet[data-activity='reading'][data-motion='perform'] .pet-book-page {animation:pet-turn-page 3s ease-in-out infinite;transform-origin:48px 76px;}
+.desktop-pet:is([data-activity='reading'],[data-activity='painting'])[data-motion='perform'] .pet-face {animation:pet-study 3s ease-in-out infinite;}
+.desktop-pet[data-activity='reading'][data-motion='perform'] .pet-arm-left {animation:none;transform:rotate(-35deg);}
+.desktop-pet[data-activity='reading'][data-motion='perform'] .pet-arm-right {animation:none;transform:rotate(35deg);}
+.desktop-pet[data-activity='painting'][data-motion='perform'] :is(.pet-paintbrush,.pet-arm-right) {animation:pet-paint 1.3s ease-in-out infinite;transform-origin:68px 56px;}
+.desktop-pet[data-activity='painting'][data-motion='perform'] .pet-painted-stroke {stroke-dasharray:48;animation:pet-paint-stroke 3s ease-in-out infinite;}
+.desktop-pet[data-activity='drums'][data-motion='perform'] :is(.pet-drumstick-left,.pet-arm-left) {animation:pet-drum-left 600ms ease-in-out infinite;transform-origin:24px 57px;}
+.desktop-pet[data-activity='drums'][data-motion='perform'] :is(.pet-drumstick-right,.pet-arm-right) {animation:pet-drum-right 600ms 300ms ease-in-out infinite;transform-origin:72px 55px;}
+.desktop-pet[data-activity='drums'][data-motion='perform'] .pet-body {animation:pet-working-breathe 1.2s ease-in-out infinite;}
+.pet-play-bubble-one {transform:translate(74px,33px);}
+.pet-play-bubble-two {transform:translate(87px,20px);}
+.desktop-pet[data-activity='bubbles'][data-motion='perform'] .pet-play-bubble {animation:pet-bubble-float 2.8s ease-out infinite;}
+.desktop-pet[data-activity='bubbles'][data-motion='perform'] .pet-play-bubble-two {animation-delay:-1.4s;}
+.desktop-pet[data-activity='bubbles'][data-motion='perform'] .pet-bubble-wand {animation:pet-paint 2.8s ease-in-out infinite;transform-origin:73px 59px;}
+@keyframes pet-dribble {0%,100% {transform:rotate(5deg);} 50% {transform:rotate(-20deg);}}
+@keyframes pet-turn-page {0%,35%,100% {transform:scaleX(1);} 60%,75% {transform:scaleX(-.9);}}
+@keyframes pet-paint {0%,100% {transform:rotate(-8deg);} 50% {transform:rotate(12deg);}}
+@keyframes pet-paint-stroke {0% {stroke-dashoffset:48;} 65%,100% {stroke-dashoffset:0;}}
+@keyframes pet-drum-left {0%,100% {transform:rotate(-20deg);} 45% {transform:rotate(15deg);}}
+@keyframes pet-drum-right {0%,100% {transform:rotate(20deg);} 45% {transform:rotate(-15deg);}}
+@keyframes pet-bubble-float {0% {opacity:0;transform:translate(65px,43px) scale(.4);} 20% {opacity:1;} 80% {opacity:.8;} 100% {opacity:0;transform:translate(90px,-22px) scale(1.2);}}
+.motion-reduced .desktop-pet[data-motion] .pet-play-ball {animation:none;transition:none;}
+@media (prefers-reduced-motion:reduce) {.desktop-pet[data-motion] .pet-play-ball {animation:none;transition:none;}}
+
+.pi-pet-settings h3 {font-size:13px;font-weight:600;margin:20px 0 8px;}
+.pi-pet-settings > section {container:pet-settings / inline-size;}
+.pi-pet-activities.pi-extension-list {display:grid;grid-template-columns:minmax(0,1fr);column-gap:12px;margin-top:0;}
+.pi-pet-activities .pi-settings-toggle {padding:10px 0;gap:12px;}
+@container pet-settings (min-width:400px) {
+  .pi-pet-activities.pi-extension-list {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .pi-pet-activities > .pi-extension-item:nth-child(2)::before {border-top:0;}
+}

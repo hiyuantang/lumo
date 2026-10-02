@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useAppPreference } from './useAppState';
+import { PET_ACTIVITIES, type PetTrick } from './petActivities';
 
 export const PETS = [{ value: 'triangle', label: 'Triangle' }, { value: 'pebble', label: 'Pebble' }, { value: 'square', label: 'Square' }, { value: 'diamond', label: 'Diamond' }] as const;
 export type PetKind = typeof PETS[number]['value'];
@@ -16,7 +17,10 @@ export function usePetPreferences() {
   const [gravity, setGravity] = useAppPreference<boolean>('desktop', 'pet-gravity', false);
   const [bubbles, setBubbles] = useAppPreference<boolean>('desktop', 'pet-bubbles', true);
   const [position, setPosition] = useAppPreference<string>('desktop', 'pet-position', '');
-  return { enabled, setEnabled, kind, setKind, coat, setCoat, gravity, setGravity, bubbles, setBubbles, position, setPosition };
+  const [disabledActivities, setDisabledActivities] = useAppPreference<string[]>('desktop', 'pet-disabled-activities', []);
+  const activities = PET_ACTIVITIES.filter((item) => !disabledActivities.includes(item.value)).map((item) => item.value);
+  const setActivity = (activity: PetTrick, enabled: boolean) => setDisabledActivities((items) => enabled ? items.filter((item) => item !== activity) : [...new Set([...items, activity])]);
+  return { enabled, setEnabled, kind, setKind, coat, setCoat, gravity, setGravity, bubbles, setBubbles, position, setPosition, activities, setActivity };
 }
 
 export function petPosition(raw: string) {

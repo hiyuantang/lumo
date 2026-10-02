@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { PET_ACTIVITIES, type PetTrick } from './petActivities';
+export type { PetTrick } from './petActivities';
 export const PET_SIZE = 84;
 export const PET_FEET = 78;
 export type PetPoint = { x: number; y: number };
 export type PetTerrain = { width: number; height: number; top: number; dock: { left: number; right: number; top: number } | null };
 export type PetMovement = 'rest' | 'walk' | 'run' | 'crouch' | 'jump' | 'throw' | 'fall' | 'bounce' | 'slide' | 'climb' | 'mantle' | 'vault' | 'conjure' | 'perform' | 'vanish' | 'land' | 'held';
-export type PetActivity = 'none' | 'notes' | 'soccer' | 'juggle' | 'pole';
-export type PetTrick = Exclude<PetActivity, 'none' | 'pole'>;
+export type PetActivity = PetTrick | 'none' | 'pole';
 export type PetSurface = 'dock' | 'floor' | 'air';
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const approach = (value: number, target: number, amount: number) => value < target ? Math.min(target, value + amount) : Math.max(target, value - amount);
@@ -32,6 +33,8 @@ export class PetMotion {
   progress = 0;
   trickDuration = 6;
   trickSpeed = 1;
+  activities: readonly PetTrick[] = PET_ACTIVITIES.map((item) => item.value);
+  ball: { x: number; y: number; vx: number; vy: number; radius: number; spin: number; bounces: number; ground: number; launched: boolean } | null = null;
   private manual = false;
   private previousTrick: PetTrick | null = null;
   private lastWasTrick = false;
@@ -61,10 +64,15 @@ export class PetMotion {
     if (dock && this.point.x + PET_SIZE / 2 < (dock.left + dock.right) / 2) return { left: 8, right: Math.max(8, dock.left - PET_SIZE + 8) };
     return { left: Math.min(this.terrain.width - PET_SIZE - 8, (dock?.right ?? 16) - 8), right: Math.max(8, this.terrain.width - PET_SIZE - 8) };
   }
-  private clearProps() { this.activity = 'none'; this.pole = null; this.manual = false; this.progress = 0; }
+  private clearProps() { this.activity = 'none'; this.pole = null; this.ball = null; this.manual = false; this.progress = 0; }
+  setActivities(activities: readonly PetTrick[]) {
+    this.activities = PET_ACTIVITIES.map((item) => item.value).filter((activity) => activities.includes(activity));
+    if (this.activity !== 'none' && this.activity !== 'pole' && !this.activities.includes(this.activity)) this.rest(.8, 1.4);
+  }
   private rest(min = 1.8, max = 5.5) { this.clearProps(); this.vx = 0; this.vy = 0; this.tilt = 0; this.restFor = this.between(min, max); this.phase('rest'); }
   setTerrain(terrain: PetTerrain) {
     this.terrain = terrain;
+    if (this.ball) this.rest(.8, 1.4);
     this.point.x = clamp(this.point.x, 8, Math.max(8, terrain.width - PET_SIZE - 8));
     this.point.y = clamp(this.point.y, terrain.top, this.floorY());
     if (!this.gravity || this.movement === 'held') return;
@@ -179,18 +187,25 @@ export class PetMotion {
     } else { this.surface = 'air'; this.phase('climb'); }
   }
   startActivity(activity: PetTrick, manual = true) {
-    if (this.blocked || this.movement === 'held' || ['climb', 'mantle', 'vault', 'jump', 'throw', 'fall', 'bounce', 'slide', 'crouch'].includes(this.movement) || this.activity === 'pole') return false;
+    if (!this.activities.includes(activity) || this.blocked || this.movement === 'held' || ['climb', 'mantle', 'vault', 'jump', 'throw', 'fall', 'bounce', 'slide', 'crouch'].includes(this.movement) || this.activity === 'pole') return false;
+    this.clearProps();
     this.vx = 0; this.vy = 0; this.manual = manual; this.activity = activity; this.previousTrick = activity;
     this.lastWasTrick = true;
     this.trickDuration = this.between(4.5, 7.5); this.trickSpeed = this.between(.85, 1.2);
     this.direction = this.point.x + PET_SIZE + 24 > this.terrain.width ? -1 : this.point.x < 24 ? 1 : this.direction;
+    if (activity === 'golf' || activity === 'basketball') {
+      const radius = activity === 'golf' ? 5 : 9;
+      const ground = Math.min(this.terrain.height - radius - 8, this.point.y + PET_FEET - radius);
+      this.ball = { x: clamp(this.point.x + (this.direction > 0 ? 76 : 8), radius + 8, this.terrain.width - radius - 8), y: ground, vx: 0, vy: 0, radius, spin: 0, bounces: 0, ground, launched: false };
+    }
     this.phase(this.reduced ? 'perform' : 'conjure'); return true;
   }
   private decide() {
     const deck = this.deck(); const dock = this.terrain.dock; const bounds = this.bounds();
     if (bounds.right - bounds.left < 16) { this.rest(); return; }
-    if (!this.lastWasTrick && this.random() < .32) {
-      const tricks = (['notes', 'soccer', 'juggle'] as const).filter((trick) => trick !== this.previousTrick);
+    if (this.activities.length && !this.lastWasTrick && this.random() < .32) {
+      const alternatives = this.activities.filter((trick) => trick !== this.previousTrick);
+      const tricks = alternatives.length ? alternatives : this.activities;
       this.startActivity(tricks[Math.min(tricks.length - 1, Math.floor(this.random() * tricks.length))], false); return;
     }
     this.lastWasTrick = false;
@@ -212,6 +227,30 @@ export class PetMotion {
     this.speed = running ? this.between(88, 135) : this.between(28, 52);
     this.direction = this.target < this.point.x ? -1 : 1; this.phase(running ? 'run' : 'walk');
   }
+  private playBall(seconds: number) {
+    const ball = this.ball;
+    if (!ball || this.reduced || this.elapsed < .5) return;
+    if (!ball.launched) {
+      ball.launched = true;
+      ball.vx = this.activity === 'golf' ? this.direction * clamp(this.terrain.width * .65, 360, 1000) : 0;
+      ball.vy = this.activity === 'golf' ? -140 : -280;
+    }
+    for (let remaining = seconds; remaining > .000001;) {
+      const dt = Math.min(remaining, 1 / 120); remaining -= dt;
+      ball.x += ball.vx * dt; ball.y += ball.vy * dt + 340 * dt * dt;
+      ball.vy += 680 * dt; ball.spin += ball.vx * dt / ball.radius * 180 / Math.PI;
+      const left = ball.radius + 8; const right = Math.max(left, this.terrain.width - ball.radius - 8);
+      if (ball.x < left) { ball.x = left; ball.vx = Math.abs(ball.vx) * .86; ball.bounces++; }
+      if (ball.x > right) { ball.x = right; ball.vx = -Math.abs(ball.vx) * .86; ball.bounces++; }
+      if (ball.y < this.terrain.top + ball.radius) { ball.y = this.terrain.top + ball.radius; ball.vy = Math.abs(ball.vy) * .5; }
+      if (ball.y >= ball.ground && ball.vy >= 0) {
+        ball.y = ball.ground;
+        ball.vy = this.activity === 'basketball' ? -280 : ball.vy > 45 ? -ball.vy * .48 : 0;
+        ball.vx *= Math.exp(-.28 * dt);
+      }
+      ball.vx *= Math.exp(-.08 * dt);
+    }
+  }
   step(seconds: number) {
     const dt = clamp(seconds, 0, .04);
     if (this.movement === 'held') return false;
@@ -223,7 +262,7 @@ export class PetMotion {
       if (this.progress === 1) { if (this.activity === 'pole') { this.surface = 'air'; this.phase('climb'); } else this.phase('perform'); }
       return true;
     }
-    if (this.movement === 'perform') { if (this.elapsed >= this.trickDuration) { if (this.reduced) this.rest(); else this.phase('vanish'); } return true; }
+    if (this.movement === 'perform') { this.playBall(dt); if (this.elapsed >= this.trickDuration) { if (this.reduced) this.rest(); else this.phase('vanish'); } return true; }
     if (this.movement === 'vanish') { if (this.elapsed >= .45) this.rest(); return true; }
     if (!this.gravity || this.reduced) return false;
     if (this.movement === 'slide') {

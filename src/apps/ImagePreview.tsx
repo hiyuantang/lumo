@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { describeError, getDataSource } from '../api/source';
 import { useAppMenus } from '../shell/appMenus';
 import { IconRefresh } from '../shell/icons';
@@ -21,6 +21,10 @@ export function ImagePreview({ path, onOpen, toolsHeld }: { path: string[]; onOp
   const pane = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; x: number; y: number; left: number; top: number } | null>(null);
   const dragged = useRef(false);
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ distance: number; scale: number } | null>(null);
+  const gestureScale = useRef<number | null>(null);
+  const scrollAnchor = useRef<{ x: number; y: number; imageX: number; imageY: number } | null>(null);
   const [panning, setPanning] = useState(false);
   const [available, setAvailable] = useState({ width: 0, height: 0 });
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
@@ -30,6 +34,55 @@ export function ImagePreview({ path, onOpen, toolsHeld }: { path: string[]; onOp
   const pannable = !!size && (size.width * scale > available.width + 1 || size.height * scale > available.height + 1);
   const selectSize = (value: boolean) => { setZoom(null); setActual(value); };
   const endPan = () => { drag.current = null; setPanning(false); };
+  const currentScale = useRef(scale); currentScale.current = scale;
+  const zoomAt = useRef<((value: number, x: number, y: number) => void)>(() => {});
+  zoomAt.current = (value, x, y) => {
+    const node = pane.current;
+    const image = node?.querySelector('img');
+    if (!node || !image || !size || loading || error || !fit || !Number.isFinite(value)) return;
+    const next = Math.min(Math.max(value, Math.min(fit, .05)), Math.max(fit, 8));
+    const box = node.getBoundingClientRect(); const imageBox = image.getBoundingClientRect();
+    scrollAnchor.current = { x: x - box.left, y: y - box.top, imageX: (x - imageBox.left) / scale, imageY: (y - imageBox.top) / scale };
+    currentScale.current = next;
+    setZoom(next);
+  };
+  useLayoutEffect(() => {
+    const node = pane.current; const anchor = scrollAnchor.current;
+    if (!node || !anchor || !size) return;
+    node.scrollLeft = anchor.imageX * scale + Math.max(0, (node.clientWidth - size.width * scale) / 2) - anchor.x;
+    node.scrollTop = anchor.imageY * scale + Math.max(0, (node.clientHeight - size.height * scale) / 2) - anchor.y;
+    scrollAnchor.current = null;
+  }, [scale, size]);
+  useEffect(() => {
+    const node = pane.current;
+    if (!node) return;
+    const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? node.clientHeight : 1;
+      zoomAt.current(currentScale.current * Math.exp(Math.max(-1, Math.min(1, -event.deltaY * unit * .01))), event.clientX, event.clientY);
+    };
+    const gestureStart = (event: Event) => { event.preventDefault(); gestureScale.current = touches.current.size > 1 ? null : currentScale.current; };
+    const gestureChange = (event: Event) => {
+      event.preventDefault();
+      const gesture = event as Event & { scale: number; clientX: number; clientY: number };
+      if (gestureScale.current !== null) zoomAt.current(gestureScale.current * gesture.scale, gesture.clientX, gesture.clientY);
+    };
+    const gestureEnd = () => { gestureScale.current = null; };
+    node.addEventListener('wheel', wheel, { passive: false });
+    node.addEventListener('gesturestart', gestureStart, { passive: false });
+    node.addEventListener('gesturechange', gestureChange, { passive: false });
+    node.addEventListener('gestureend', gestureEnd);
+    return () => {
+      node.removeEventListener('wheel', wheel);
+      node.removeEventListener('gesturestart', gestureStart);
+      node.removeEventListener('gesturechange', gestureChange);
+      node.removeEventListener('gestureend', gestureEnd);
+    };
+  }, []);
+  const endPointer = (id: number) => {
+    touches.current.delete(id); pinch.current = null; endPan();
+  };
   useEffect(() => {
     const node = pane.current;
     if (!node) return;
@@ -62,6 +115,16 @@ export function ImagePreview({ path, onOpen, toolsHeld }: { path: string[]; onOp
     </PreviewTools>
     <div ref={pane} className={`preview-image-content${enlarged ? ' preview-image-actual' : ''}${pannable ? ' preview-image-pannable' : ''}${panning ? ' is-panning' : ''}`} data-testid="preview-image-content" tabIndex={0} aria-label="Image preview" aria-busy={loading}
       onPointerDown={(event) => {
+        if (loading || error || !size) return;
+        if (event.pointerType === 'touch') {
+          touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          event.currentTarget.setPointerCapture(event.pointerId);
+          if (touches.current.size > 1) {
+            const [first, second] = [...touches.current.values()];
+            pinch.current = { distance: Math.hypot(second.x - first.x, second.y - first.y), scale };
+            dragged.current = true; endPan(); return;
+          }
+        }
         dragged.current = false;
         if (event.button !== 0 || !event.isPrimary || !pannable || loading || error) return;
         const node = event.currentTarget;
@@ -69,6 +132,13 @@ export function ImagePreview({ path, onOpen, toolsHeld }: { path: string[]; onOp
         node.setPointerCapture(event.pointerId);
       }}
       onPointerMove={(event) => {
+        if (touches.current.has(event.pointerId)) touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (pinch.current && touches.current.size > 1) {
+          const [first, second] = [...touches.current.values()];
+          const distance = Math.hypot(second.x - first.x, second.y - first.y);
+          if (pinch.current.distance > 0) zoomAt.current(pinch.current.scale * distance / pinch.current.distance, (first.x + second.x) / 2, (first.y + second.y) / 2);
+          return;
+        }
         const start = drag.current;
         if (!start || start.id !== event.pointerId) return;
         const x = event.clientX - start.x; const y = event.clientY - start.y;
@@ -77,7 +147,7 @@ export function ImagePreview({ path, onOpen, toolsHeld }: { path: string[]; onOp
         event.currentTarget.scrollLeft = start.left - x;
         event.currentTarget.scrollTop = start.top - y;
       }}
-      onPointerUp={endPan} onPointerCancel={endPan} onLostPointerCapture={endPan}
+      onPointerUp={(event) => endPointer(event.pointerId)} onPointerCancel={(event) => endPointer(event.pointerId)} onLostPointerCapture={(event) => endPointer(event.pointerId)}
       onDoubleClick={() => { if (size && !loading && !error && !dragged.current) setZoom((value) => value === null ? Math.max(1, scale * 2) : null); }}>
       {loading && <p className="preview-image-status" role="status">Loading image…</p>}
       {error ? <p className="preview-image-status preview-error" role="alert">{error}</p> : image && <img key={image + revision} src={image} alt={name} title={zoom !== null ? 'Double-click to zoom out' : 'Double-click to zoom in'} data-testid="preview-image" draggable={false} className={zoom !== null ? 'preview-image-zoomed' : undefined} style={{ visibility: size && scale ? 'visible' : 'hidden', width: size ? size.width * scale : undefined, height: size ? size.height * scale : undefined }} onLoad={(event) => { setSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight }); setLoading(false); }} onError={() => { setError('This image could not be displayed. It may be damaged or use an unsupported format.'); setLoading(false); }}/>}

@@ -9,6 +9,8 @@ import { workArea } from './windowGeometry';
 import { IconX } from './icons';
 import { PetSprite } from './PetSprite';
 import { PETS, PET_POSITION_RESET, PET_BUBBLE_PREVIEW, petPosition, usePetPreferences } from './pet';
+import { PET_ACTIVITIES } from './petActivities';
+import { PetPlayBall } from './PetPastimes';
 
 const size = PET_SIZE;
 type Point = { x: number; y: number };
@@ -41,7 +43,7 @@ export function DesktopPet() {
   const working = Object.keys(state.piActivity).length > 0;
   const mood = working ? 'working' : bubble?.done || greeting ? 'done' : 'idle';
   const blocked = nativeDrag || working || !!bubble || greeting;
-  const motion = usePetMotion(root, { active: !!installed && pet.enabled, gravity: pet.gravity, reduced: reducedMotion, paused: engaged || blocked, blocked, width: state.viewport.w, height: state.viewport.h, saved: savedPoint });
+  const motion = usePetMotion(root, { active: !!installed && pet.enabled, gravity: pet.gravity, reduced: reducedMotion, paused: engaged || blocked, blocked, activities: pet.activities, width: state.viewport.w, height: state.viewport.h, saved: savedPoint });
   function resetPosition() {
     pet.setPosition('');
     const dock = motion.engine.terrain.dock;
@@ -127,7 +129,8 @@ export function DesktopPet() {
     {bubble && pet.bubbles && <div className="pet-bubble" role="status" data-testid="pet-bubble">
       <span>{bubble.text}</span><button type="button" className="pet-bubble-close" aria-label="Dismiss pet bubble" onClick={() => setBubble(null)}><IconX size={12} /></button>
     </div>}
-    <button ref={button} type="button" className="pet-handle" data-testid="pet-handle" aria-label={`${character.label} pet, ${working ? 'Pi is working' : 'idle'}. Drag or use arrow keys to move.`} title={`${character.label} · ${working ? 'Working' : 'Idle'}`} onContextMenu={(event) => contextMenu(event, [{ label: 'Pet settings', run: () => actions.openPiSettings('pet') }, { label: 'Take notes', separator: true, disabled: blocked, run: () => motion.trick('notes') }, { label: 'Play soccer', disabled: blocked, run: () => motion.trick('soccer') }, { label: 'Juggle stars', disabled: blocked, run: () => motion.trick('juggle') }, { label: 'Reset position', separator: true, run: resetPosition }, { label: 'Hide pet', run: () => pet.setEnabled(false) }])}
+    <PetPlayBall/>
+    <button ref={button} type="button" className="pet-handle" data-testid="pet-handle" aria-label={`${character.label} pet, ${working ? 'Pi is working' : 'idle'}. Drag or use arrow keys to move.`} title={`${character.label} · ${working ? 'Working' : 'Idle'}`} onContextMenu={(event) => contextMenu(event, [{ label: 'Pet settings', run: () => actions.openPiSettings('pet') }, ...PET_ACTIVITIES.filter((item) => pet.activities.includes(item.value)).map((item, index) => ({ label: item.label, separator: index === 0, disabled: blocked, run: () => motion.trick(item.value) })), { label: 'Reset position', separator: true, run: resetPosition }, { label: 'Hide pet', run: () => pet.setEnabled(false) }])}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         gesture.current = { id: event.pointerId, start: { x: event.clientX, y: event.clientY }, origin: { ...motion.engine.point }, moved: false, time: event.timeStamp };

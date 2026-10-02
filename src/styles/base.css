@@ -13,6 +13,7 @@ body,
 html,
 body {
   overscroll-behavior-x: none;
+  touch-action: pan-x pan-y;
 }
 
 body {
@@ -50,7 +51,7 @@ textarea {
   line-height: 20px;
 }
 .input::placeholder { color: var(--text-muted); opacity: 1; }
-.input:focus-visible { border-color: transparent; }
+.input:focus { border-color: var(--border-strong); outline: none; }
 .input::-webkit-search-decoration { appearance: none; }
 
 button {
@@ -64,6 +65,10 @@ button {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: var(--radius-s);
+}
+
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file'], [type='button'], [type='submit'], [type='reset']), textarea, select, [contenteditable='true']):focus {
+  outline: none;
 }
 
 .motion-reduced *,

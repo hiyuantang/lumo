@@ -135,7 +135,7 @@ test('Pet and settings stay reachable in both themes and narrow layouts with red
     expect(labelBounds.height).toBeLessThan(20);
     expect(labelBounds.x).toBe((await group.getByText('Desktop pet', {exact:true}).boundingBox())!.x);
     expect(labelBounds.x + labelBounds.width).toBeLessThan((await preview.boundingBox())!.x);
-    expect((await group.locator('.pi-extension-list').boundingBox())!.height).toBeLessThan(450);
+    expect((await group.locator('.pi-extension-list').first().boundingBox())!.height).toBeLessThan(450);
     await page.screenshot({ path: `/tmp/lumo-pet-settings-${width}-${colorScheme}.png`, animations: 'disabled' });
   }
 });

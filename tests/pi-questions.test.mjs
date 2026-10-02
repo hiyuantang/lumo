@@ -110,11 +110,11 @@ test('Session metrics do not invent timing or usage for missing, invalid, failed
 test('Loaded extension tools join the active set without activating excluded builtins or hidden tools', async () => {
   const handlers = {}; let active = ['read', 'ask_user'];
   questions({ on(name, handler) { handlers[name] = handler; }, registerTool() {},
-    getAllTools: () => [{ name: 'write' }, { name: 'custom' }, { name: 'ask_user' }, { name: 'hidden', exposure: 'hidden' }, { name: 'deferred', exposure: 'deferred' }],
+    getAllTools: () => [{ name: 'lumo_calendar_list' }, { name: 'write' }, { name: 'custom' }, { name: 'ask_user' }, { name: 'hidden', exposure: 'hidden' }, { name: 'deferred', exposure: 'deferred' }],
     getActiveTools: () => active, setActiveTools: (value) => { active = value; },
   });
   await handlers.session_start({}, { sessionManager: { getBranch: () => [] }, ui: { setStatus() {} } });
-  assert.deepEqual(active, ['read', 'ask_user', 'grep', 'find', 'ls', 'lumo_observe', 'custom']);
+  assert.deepEqual(active, ['read', 'ask_user', 'grep', 'find', 'ls', 'lumo_observe', 'lumo_calendar_list', 'custom']);
 });
 
 test('Disabling Questions removes ask_user while approval enforcement and session hooks remain active', async () => {

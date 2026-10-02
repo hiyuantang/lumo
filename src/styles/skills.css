@@ -7,7 +7,7 @@
 .skills-heading h2 { margin: 0; font-size: 16px; }
 .skills-heading svg { color: var(--accent); }
 .skills-count { padding: 0 6px; color: var(--text-muted); font-size: 11px; }
-.skills-list { min-height: 0; flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 7px; }
+.skills-list { min-height: 0; flex: 1; overflow: auto; scrollbar-gutter: stable; padding-inline-end: var(--scroll-content-inset); display: flex; flex-direction: column; gap: 7px; }
 .skills-list button { flex-shrink: 0; min-width: 0; max-width: 100%; max-height: 114px; overflow: hidden; text-align: left; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 6px; padding: 14px 12px; border: 1px solid transparent; border-radius: 12px; }
 .skills-list button:hover { background: var(--accent-soft); }
 .skills-list [aria-current='page'] { background: var(--accent-soft); border-color: var(--border-strong); }
@@ -46,6 +46,6 @@
   .skills-detail { flex: 1; }
   .skills-sidebar { max-height: 215px; border-right: 0; border-bottom: 1px solid var(--border); gap: 9px; }
   .skills-location, .skills-count, .skills-list span { display: none; }
-  .skills-list { flex-direction: row; overflow: auto; min-height: 48px; }
+  .skills-list { flex-direction: row; overflow: auto; min-height: 48px; padding-block-end: var(--scroll-content-inset); }
   .skills-list button { max-width: 200px; padding: 10px; }
 }

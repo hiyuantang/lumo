@@ -22,6 +22,7 @@ type piOptionalExtension struct {
 }
 
 type piExtensionSettings struct {
+	Calendar   bool                  `json:"calendar"`
 	Extensions []piOptionalExtension `json:"extensions"`
 	Questions  bool                  `json:"questions"`
 	LumoUse    bool                  `json:"lumoUse"`
@@ -30,7 +31,7 @@ type piExtensionSettings struct {
 
 func readPiExtensionSettings(dir string) (piExtensionSettings, error) {
 	settings, _, err := readPiSettingsJSON(dir)
-	value := piExtensionSettings{LumoUse: true, Questions: true, Extensions: []piOptionalExtension{}, Revision: piSettingsRevision(dir, settings, "lumoUse", "lumoQuestions", "lumoDisabledExtensions", "extensions")}
+	value := piExtensionSettings{Calendar: true, LumoUse: true, Questions: true, Extensions: []piOptionalExtension{}, Revision: piSettingsRevision(dir, settings, "lumoCalendar", "lumoUse", "lumoQuestions", "lumoDisabledExtensions", "extensions")}
 	if err != nil {
 		return value, err
 	}
@@ -47,6 +48,13 @@ func readPiExtensionSettings(dir string) (piExtensionSettings, error) {
 			return value, NewError(CodeValidationFailed, "Invalid Questions setting.")
 		}
 		value.Questions = *enabled
+	}
+	if raw, ok := settings["lumoCalendar"]; ok {
+		var enabled *bool
+		if json.Unmarshal(raw, &enabled) != nil || enabled == nil {
+			return value, NewError(CodeValidationFailed, "Invalid Calendar setting.")
+		}
+		value.Calendar = *enabled
 	}
 	var disabled []string
 	if raw, ok := settings["lumoDisabledExtensions"]; ok && json.Unmarshal(raw, &disabled) != nil {
@@ -193,6 +201,7 @@ func (s *Server) handlePiExtensions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
+		Calendar   *bool  `json:"calendar"`
 		RequestID  string `json:"requestId"`
 		Revision   string `json:"revision"`
 		LumoUse    *bool  `json:"lumoUse"`
@@ -248,6 +257,9 @@ func (s *Server) handlePiExtensions(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.Questions != nil {
 			settings["lumoQuestions"], _ = json.Marshal(*req.Questions)
+		}
+		if req.Calendar != nil {
+			settings["lumoCalendar"], _ = json.Marshal(*req.Calendar)
 		}
 		settings["lumoUse"], _ = json.Marshal(*req.LumoUse)
 		if err := writePiSettingsJSON(dir, settings); err != nil {

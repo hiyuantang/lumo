@@ -30,6 +30,16 @@ the foundation. No third-party implementation code or assets are used.
   Compact button groups use one shared height for all their controls. Fields
   and selectors share a 34px height. Use the shared size tokens and horizontal
   padding; responsive labels must not add vertical padding or stretch icons.
+- Search boxes, text fields and editors have no outer focus ring or focus
+  shadow. Fields with borders indicate focus by subtly strengthening the
+  existing border. Other controls retain visible keyboard focus indicators.
+- Scrollbars sit at the edge of their panel or dialog, with content padding
+  inside the scroll area. Scrollable forms and compact lists reserve a stable
+  scrollbar gutter and
+  at least 8px of clearance beside it, including a track allowance for overlay
+  scrollbars. Fields, trailing checkboxes and
+  rounded row highlights must stay clear of the track. Preserve larger insets
+  and the alignment of table and calendar columns.
 - Window controls are 14px matte circles at the top left, ordered close,
   minimize, maximize/restore. Coral, amber and green distinguish actions.
   Bold 11px glyphs appear on group hover or individual keyboard focus.
@@ -200,11 +210,20 @@ receive input. During file or other native drag operations the pet becomes
 passive so underlying destinations can receive the drop. Lumo Use excludes these controls from observations and actions.
 
 Drag or use arrow keys to move the pet. Shift moves farther; Home resets position.
-Shape, coat, gravity, visibility, completion bubbles and relative position are remembered per
+Shape, coat, gravity, visibility, completion bubbles, individual activity choices and relative position are remembered per
 account in the current browser. Relative coordinates keep the pet reachable after
 resizing and clear of the menu bar. Right-click offers settings, Take notes,
-Play soccer, Juggle stars, reset and hide. Each trick conjures its props with a
+Play soccer, Juggle stars, Read a book, Play golf, Play basketball, Paint, Play drums,
+Blow bubbles, reset and hide. Each trick conjures its props with a
 wand and sparkles, performs for a few seconds, then makes the props disappear.
+Pet settings includes a trailing switch for each activity in compact rows, with two
+columns when the content has enough room and one in narrow windows. Disabled activities leave
+the context menu and idle selection, and disabling the current one clears its props.
+Golf balls travel across the desktop, rebound off either edge with decreasing speed,
+and bounce on their play surface; basketballs dribble. Sports props stay below the
+menu bar and inside the viewport, clear on pickup or resize, and ignore pointer input.
+Reduced motion shows still props without moving the ball.
+
 Free mode allows these stationary tricks; Gravity also chooses them between
 walks and rests, avoiding consecutive tricks and repeated activities.
 
@@ -255,3 +274,43 @@ removes the sidebar's width and border, leaving one rail beside the conversation
 New chat moves into that rail while collapsed; Settings stays at the bottom.
 Settings keeps the sidebar toggle and New chat visible but disabled.
 Hidden sidebar controls are excluded from keyboard and accessibility navigation.
+
+## Calendar and Reminders
+
+Calendar is a built-in app. Its compact vertical rail switches between calendar
+views, local reminders and account connection. The adjacent sidebar holds
+calendar visibility or reminder filters and lists; it becomes dismissible at
+narrow widths. Calendar uses a month grid, a scrolling day/week timeline with a
+persistent all-day strip, and an adaptive year grid. Overlapping timed events
+share columns. Today uses a red date marker with white text in both themes; calendar colors identify events.
+Month uses continuous native vertical scrolling through unique week rows, with
+a fixed weekday header. Boxes fit whole rows to the window, and scrolling
+settles to the nearest week row after input and momentum end. New input
+immediately interrupts settling. The month with the largest visible cell area
+determines the title and date highlighting; ties retain the current month.
+Only nearby rows render, and the scroll range extends
+in both directions while preserving pixel position. Explicit date navigation
+positions the requested month's first week. Day, week and year pages move horizontally.
+Trackpad input directly moves the current and adjacent calendar
+pages with the fingers, including reversal. Navigation commits after gesture
+input and momentum end; distance and velocity decide whether to settle on the
+adjacent period or return to the starting page. Reduced motion retains direct
+tracking and omits settling animation. Vertical scrolling within timelines
+and year grids, and sideways scrolling within a narrow
+timeline retain their native behavior;
+an outward swipe begun at a timeline edge navigates dates. Gestures are scoped
+to the calendar content, leaving the rail, sidebar, details and sheets alone.
+Neighboring pages reuse known events while loading their date range through the
+existing data source. A prepared snapshot can serve the committed
+page without a second read, and previews remain outside keyboard navigation.
+
+Event details show the item's own title, collection and Edit action, followed by
+one divider and metadata. Editing uses the shared app sheet and protects unsaved
+changes. Selection, visibility and completion controls sit on the right and only
+the input itself toggles them. Search filters the current event range or reminder
+list. The shared menu exposes New Event, New Reminder and the four views.
+
+The user's Calendar/Reminders reference screenshots establish the view anatomy
+and grouping, while Pi's rail, shared search, fields, checkboxes, sheets and matte
+tokens establish Lumo's implementation. No Apple assets, sample events, typography
+or source code are used. The app identity is an original blue calendar/check SVG.

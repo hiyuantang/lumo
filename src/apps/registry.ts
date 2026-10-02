@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ComponentType, SVGProps } from 'react';
-import { IconBranch, IconSkills, IconTrash, IconCode, IconEye, IconBoxes, IconFolder, IconGear, IconGlobe, IconGrid, IconMonitor, IconTerminal } from '../shell/icons';
+import { IconCalendar, IconBranch, IconSkills, IconTrash, IconCode, IconEye, IconBoxes, IconFolder, IconGear, IconGlobe, IconGrid, IconMonitor, IconTerminal } from '../shell/icons';
 
-export type AppId = 'git' | 'skills' | 'trash' | 'pi' | 'preview' | 'home' | 'files' | 'terminal' | 'settings' | 'containers' | 'websites' | 'library';
+export type AppId = 'calendar' | 'git' | 'skills' | 'trash' | 'pi' | 'preview' | 'home' | 'files' | 'terminal' | 'settings' | 'containers' | 'websites' | 'library';
 export type SettingsSection = 'system' | 'folders' | 'time' | 'network' | 'appearance' | 'updates' | 'about';
 
 export interface AppMeta {
@@ -14,9 +14,10 @@ export interface AppMeta {
   minSize: { w: number; h: number };
 }
 
-export const APP_ORDER: AppId[] = ['home', 'files', 'preview', 'terminal', 'git', 'pi', 'containers', 'websites', 'library', 'skills', 'settings', 'trash'];
+export const APP_ORDER: AppId[] = ['home', 'files', 'preview', 'terminal', 'git', 'pi', 'calendar', 'containers', 'websites', 'library', 'skills', 'settings', 'trash'];
 
 export const APPS: Record<AppId, AppMeta> = {
+  calendar: { id: 'calendar', title: 'Calendar', icon: IconCalendar, defaultSize: { w: 1100, h: 720 }, minSize: { w: 390, h: 380 } },
   git: { id: 'git', requiredPackage: 'git', title: 'Git', icon: IconBranch, defaultSize: { w: 1060, h: 680 }, minSize: { w: 390, h: 400 } },
   skills: { id: 'skills', title: 'Skills', icon: IconSkills, defaultSize: { w: 960, h: 650 }, minSize: { w: 390, h: 380 } },
   trash: { id: 'trash', title: 'Trash', icon: IconTrash, defaultSize: { w: 860, h: 590 }, minSize: { w: 390, h: 320 } },

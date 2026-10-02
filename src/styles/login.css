@@ -66,9 +66,9 @@
   color: var(--text);
 }
 
-.login-field input:focus-visible {
-  outline-offset: 0;
-  border-color: var(--accent);
+.login-field input:focus {
+  outline: none;
+  border-color: var(--border-strong);
 }
 
 .login-submit {

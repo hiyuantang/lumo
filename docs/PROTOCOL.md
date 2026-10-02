@@ -63,6 +63,12 @@ GET  /api/v1/updates/packages            Phase 5
 POST /api/v1/updates/refresh             Phase 5
 POST /api/v1/updates/plan                Phase 5
 POST /api/v1/updates/apply               Phase 5
+GET  /api/v1/calendar                    Date-range snapshot
+POST /api/v1/calendar                    Typed item/list changes
+POST /api/v1/calendar/notices            Claim due local alerts
+GET  /api/v1/calendar/google             Connection status, no secrets
+POST /api/v1/calendar/google             Configure, authorize or disconnect
+GET  /api/v1/calendar/google/callback    One-use OAuth return
 GET  /api/v1/apps
 POST /api/v1/apps/plan
 POST /api/v1/apps/pi/uninstall
@@ -2205,3 +2211,63 @@ Reference specifications: [Pi extensions](https://pi.dev/docs/latest/extensions)
 DOM events. The original design uses the existing authenticated Pi event stream
 and live Lumo browser, keeping traffic text-only and operating the user's actual
 windows without maintaining another desktop session.
+
+## Calendar and Reminders
+
+These capabilities run as the authenticated Linux user. Reminders are local to
+Lumo; no Google Tasks scopes or API calls are used. See [CALENDAR.md](CALENDAR.md)
+for account setup, recurrence semantics and notification delivery.
+
+`GET /calendar?from=<RFC3339>&to=<RFC3339>` accepts an exclusive end and a range
+of at most 370 days. Optional `google=0` skips all remote reads for local reminder
+and account views. It returns `{collections, items, occurrences, google,
+googleError?}`. Collections have `id`, `name`, `color`, `kind` (`event` or
+`reminder`), `provider` (`local` or `google`), and `readOnly`. Local items include
+completed reminders, exclude deleted items, and retain their original series
+anchor. Google items are expanded instances within the requested range.
+Occurrences have an additional `occurrenceId` and expanded start/end values.
+
+Items have `id`, `revision`, `collectionId`, `kind`, `title`, `notes`, `location`,
+`start`, `end`, `due`, `allDay`, `timeZone`, `repeat`, `repeatUntil`,
+`alertMinutes`, `flagged`, `priority`, `completed`, `deleted` and optional
+`recurrence`. Timed dates are RFC3339 instants; all-day events use `YYYY-MM-DD`
+and an exclusive end date. Reminder `due` may be empty, a date, or an RFC3339
+instant. Time zones are IANA names. Repeat is `none`, `daily`, `weekly`,
+`monthly`, or `yearly`. Priority is `none`, `low`, `medium`, or `high`.
+
+`POST /calendar` carries `requestId`, `action` and action-specific fields:
+
+- `save`: an `item`; omit its ID to create, otherwise include its current revision.
+- `delete` or `restore`: `id` and current `revision`. Restore is local only.
+- `complete`: a local reminder's `id` and current `revision`; toggles completion.
+- `collection`: a local collection's `name`, `color` and `kind`.
+
+Mutations return the item, or an empty item for collection creation; refresh the
+snapshot to read the new collection ID. Stale revisions return `conflict` (409).
+Local deletions are reversible. Google changes use ETags and affect the selected
+instance; invitations are not sent. Google rejects writes to read-only calendars.
+Google IDs begin with `g:` and encode the calendar and optional event IDs.
+
+`POST /calendar/notices` carries `requestId` and returns `{notices}` with
+`{id,title,body}` entries. A private, transactional delivery ledger prevents
+repeat claims by multiple browser tabs. It reports local alerts due in the last
+24 hours; the browser polls once per minute while signed in.
+
+`GET /calendar/google` returns `{configured, connected, name, redirectUri}`.
+`POST /calendar/google` carries `requestId` and one of:
+
+- `configure`: `config: {clientId,clientSecret,redirectUri}` for a Google Web
+  application OAuth client. Configuration changes require disconnecting first.
+- `connect`: returns `{url}` for Google's official authorization-code endpoint.
+- `disconnect`: revokes the grant and retains the client configuration.
+
+Configure/disconnect return `{status}`. Credentials and tokens are never returned.
+The callback validates a one-use, expiring state and exchanges a code with PKCE.
+The gateway keeps normal session cookies Strict. A ten-minute HttpOnly Lax cookie
+restricted to the exact Google callback path carries the authenticated session
+through Google's cross-site return, then is cleared. It cannot authenticate other
+API routes and does not bypass the state check. Logout clears it too.
+
+Pi's optional Calendar & Reminders extension invokes `lumod calendar list|change`
+with a single bounded JSON object on stdin. It shares the same per-user store
+and validation as these endpoints, without a shell or privileged broker operation.

@@ -29,7 +29,7 @@
 .git-tabs button span { margin-left: 8px; font-size: 10px; color: var(--text-muted); }
 .git-list-tools { display: flex; align-items: center; gap: 5px; padding: 12px; }
 .git-list-tools .app-search { flex: 1; width: 0; }
-.git-list { overflow: auto; flex: 1; min-height: 70px; padding: 0 7px 8px; }
+.git-list { overflow: auto; flex: 1; min-height: 70px; padding: 0 7px 8px; padding-inline-end: var(--scroll-content-inset); scrollbar-gutter: stable; }
 .git-file-row { display: flex; align-items: center; gap: 9px; margin: 2px 0; padding: 8px; border-radius: 7px; }
 .git-file-row.selected, .git-commit-row.selected { background: var(--accent-soft); }
 .git-file-row input { margin: 0; accent-color: var(--accent); flex: none; width: 14px; height: 14px; }
@@ -91,7 +91,7 @@
 .git-branches-heading .btn { padding: 5px 8px; gap: 4px; font-size: 11px; white-space: nowrap; flex: none; }
 .git-branch-search { width: 100%; }
 .git-branch-search input { width: 100%; min-width: 0; }
-.git-branch-list { max-height: min(350px, 44dvh); overflow: auto; overscroll-behavior: contain; margin-top: 8px; }
+.git-branch-list { max-height: min(350px, 44dvh); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-inline-end: var(--scroll-content-inset); margin-top: 8px; }
 .git-branch-group + .git-branch-group { margin-top: 12px; }
 .git-branch-group h3 { margin: 10px 8px 6px; font-size: 10px; font-weight: 600; color: var(--text-muted); }
 .git-branch-option { display: flex; align-items: center; gap: 9px; padding: 10px 8px; width: 100%; border-radius: 7px; text-align: left; }

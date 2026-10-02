@@ -18,7 +18,7 @@
 .file-picker-filter .input::-webkit-search-cancel-button { display: none; }
 .file-picker-filter .btn { flex-shrink: 0; }
 .file-picker-filter [aria-pressed='true'] { color: var(--accent); background: var(--accent-soft); }
-.file-picker-list { flex: 1; min-height: 0; overflow: auto; margin: 12px 8px; }
+.file-picker-list { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; padding-inline-end: var(--scroll-content-inset); margin: 12px 8px; }
 .file-picker-list > p, .file-picker-list > div { padding: 24px 16px; color: var(--text-muted); text-align: center; }
 .file-picker-list > button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 8px; text-align: left; }
 .file-picker-list > button:hover { background: var(--surface); }

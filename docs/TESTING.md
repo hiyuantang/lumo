@@ -265,3 +265,31 @@ Playwright's service-worker blocking injection, which cannot access the worker
 API in a sandboxed frame; the preview itself cannot execute scripts.
 `go test ./internal/files` covers bounded binary reads and unchanged text reads;
 `go test ./internal/httpapi -run '^TestFilesEndpoints$'` covers the image query.
+
+## Calendar and Reminders
+
+`npm run test:ui -- tests/ui/calendar.spec.ts` checks event create/edit/delete/undo,
+visibility and search, all four views, overlapping timed events, both themes,
+narrow layouts, protected drafts, nonexistent DST times, local reminder lists,
+completion/flags/priorities, OAuth setup and the independent Pi extension toggle.
+These are simulated browser checks and never contact Google.
+Trackpad checks exercise continuous month rows and day/week columns in both
+themes, fixed date headings and time gutters, dominant-month titles and date
+highlighting, window-sized whole cells, nearest-column and nearest-hour snapping,
+date and time preservation through resizing and animated maximization,
+interruption of settling, range
+extension and real event visibility. They also check year page tracking,
+reversal, cancellation, prompt settling, pinch exclusion, reduced motion and
+boundaries around search, sidebars, details, editors and Reminders.
+
+`server/internal/calendar` tests private user storage, concurrent app/CLI writes,
+optimistic revisions, recurrence across DST and invalid month dates, completion
+successors, repeat limits and deduplicated alerts. Google uses a fake HTTP
+transport for code/state/PKCE, Calendar-only scopes, partial consent rejection,
+ETag writes and grant revocation. Gateway tests retain callback redirects and
+restrict the temporary return cookie. HTTP tests check strict bodies and mutation
+replay. `tests/pi-calendar.test.mjs` checks tool schemas, approval/read-only rules
+and disabled tool activation; it is included in `npm run test:unit`.
+
+Real Google sign-in requires a user-created OAuth client and consent. Offline
+success does not establish a successful live Google account connection.

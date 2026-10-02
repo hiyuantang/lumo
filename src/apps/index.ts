@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { Calendar } from './Calendar';
 import type { ComponentType } from 'react';
 import { Git } from './Git';
 import { Skills } from './Skills';
@@ -15,6 +16,7 @@ import { Websites } from './Websites';
 import { AppLibrary } from './AppLibrary';
 
 export const APP_COMPONENTS: Record<AppId, ComponentType> = {
+  calendar: Calendar,
   git: Git,
   skills: Skills,
   trash: Trash,

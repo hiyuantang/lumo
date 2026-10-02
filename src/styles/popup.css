@@ -6,7 +6,9 @@
   max-width: calc(100vw - 16px);
   max-height: calc(100dvh - 16px);
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 6px;
+  padding-inline-end: var(--scroll-content-inset);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-m);
   background: var(--surface-glass);
@@ -15,6 +17,7 @@
   color: var(--text);
   font-size: 13px;
 }
+.shell-popup:has(.select-options) { scrollbar-gutter: auto; padding-inline-end: 6px; }
 .popup-item {
   --menu-detail-color: var(--text-muted);
   display: flex;
@@ -58,9 +61,10 @@
   line-height: 20px;
 }
 .custom-select > span:first-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.custom-select:focus { outline: none; border-color: var(--border-strong); }
 .custom-select:disabled { opacity: .5; cursor: default; }
 .custom-select[aria-expanded='true'] { border-color: var(--accent); }
-.select-options { max-height: min(300px, 55dvh); overflow-y: auto; overscroll-behavior: contain; outline: none; }
+.select-options { max-height: min(300px, 55dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-inline-end: var(--scroll-content-inset); outline: none; }
 .select-search { width: 100%; margin-bottom: 6px; }
 
 .popup-item.dropdown-menu-item, .select-options .popup-item { justify-content: flex-start; gap: 8px; }

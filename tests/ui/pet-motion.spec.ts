@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { test, expect } from '../offline';
 import { PetMotion, PET_FEET, PET_SIZE, type PetActivity, type PetMovement, type PetTerrain } from '../../src/shell/petMotion';
+import { PET_ACTIVITIES } from '../../src/shell/petActivities';
 import { piPage } from './pi-fixture';
 
 const terrain: PetTerrain = { width: 1440, height: 1000, top: 40, dock: { left: 350, right: 1090, top: 916 } };
@@ -35,7 +36,7 @@ test('Gravity explores both dock edges with continuous walking, running, jumps, 
 
 test('Tricks conjure, perform and disappear without moving a free pet, and interruptions clear props', () => {
   const pet = new PetMotion({ x: 300, y: 300 }, terrain, random(1));
-  for (const activity of ['notes', 'soccer', 'juggle'] as const) {
+  for (const { value: activity } of PET_ACTIVITIES) {
     expect(pet.startActivity(activity)).toBe(true);
     const phases = new Set<string>();
     for (let frame = 0; frame < 600 && pet.movement !== 'rest'; frame++) { phases.add(pet.movement); pet.step(1 / 60); }
@@ -237,8 +238,8 @@ test('Mouse flicks render a throw and rebound, while holding still releases a st
       await page.clock.runFor(16);
       if (await pet.getAttribute('data-motion') === 'bounce') {
         rebound = true; const impact = (await pet.boundingBox())!;
-        await handle.screenshot({ path: `/tmp/lumo-pet-bounce-${colorScheme}.png` });
-        await page.clock.runFor(160); expect((await pet.boundingBox())!.y).toBeLessThan(impact.y - 8); break;
+        await page.clock.runFor(160); expect((await pet.boundingBox())!.y).toBeLessThan(impact.y - 8);
+        await handle.screenshot({ path: `/tmp/lumo-pet-bounce-${colorScheme}.png` }); break;
       }
     }
     expect(rebound).toBe(true);
@@ -322,4 +323,51 @@ test.describe('Magic routines', () => {
     await page.clock.runFor(10000); await expect(pet).toHaveAttribute('data-activity', 'none');
     expect(errors).toEqual([]);
   });
+});
+
+
+test('Golf balls rebound from both desktop edges with energy loss and stable physics at different frame rates', () => {
+  for (const width of [1440, 390]) {
+    const results: { x: number; y: number; bounces: number }[] = [];
+    for (const rate of [30, 60, 120]) {
+      const pet = new PetMotion({ x: width / 2 - 42, y: 350 }, { ...terrain, width, dock: null }, () => .5);
+      pet.startActivity('golf');
+      for (let frame = 0; frame < rate; frame++) pet.step(1 / rate);
+      const edges = new Set<string>();
+      for (let frame = 0; frame < 5 * rate; frame++) {
+        const before = { ...pet.ball! }; pet.step(1 / rate); const ball = pet.ball!;
+        expect(ball.x - ball.radius).toBeGreaterThanOrEqual(8);
+        expect(ball.x + ball.radius).toBeLessThanOrEqual(width - 8);
+        expect(ball.y - ball.radius).toBeGreaterThanOrEqual(terrain.top);
+        expect(ball.y).toBeLessThanOrEqual(ball.ground);
+        if (ball.bounces > before.bounces) {
+          edges.add(ball.vx < 0 ? 'right' : 'left');
+          expect(Math.sign(ball.vx)).toBe(-Math.sign(before.vx));
+          expect(Math.abs(ball.vx)).toBeLessThan(Math.abs(before.vx));
+        }
+      }
+      expect([...edges].sort()).toEqual(['left', 'right']);
+      results.push({ x: pet.ball!.x, y: pet.ball!.y, bounces: pet.ball!.bounces });
+      pet.pick(); expect(pet.ball).toBeNull();
+    }
+    expect(Math.abs(results[0].x - results[2].x)).toBeLessThan(25);
+    expect(results[0].bounces).toBe(results[2].bounces);
+  }
+});
+
+test('Activity choices govern manual and idle play, disabling a running activity clears it and all-off still roams', () => {
+  const pet = new PetMotion({ x: 600, y: 300 }, terrain, random(3));
+  pet.setActivities(['golf']);
+  expect(pet.startActivity('soccer')).toBe(false); expect(pet.startActivity('golf')).toBe(true);
+  pet.setActivities([]); expect(pet.activity).toBe('none'); expect(pet.ball).toBeNull();
+  pet.configure(true, false, false);
+  const moves = new Set<string>();
+  for (let frame = 0; frame < 60 * 90; frame++) { pet.step(1 / 60); moves.add(pet.movement); expect(pet.activity === 'none' || pet.activity === 'pole').toBe(true); }
+  expect([...moves]).toContain('walk');
+  pet.setActivities(['reading']); const seen = new Set<string>();
+  for (let frame = 0; frame < 60 * 180; frame++) { pet.step(1 / 60); if (pet.activity !== 'none' && pet.activity !== 'pole') seen.add(pet.activity); }
+  expect([...seen]).toEqual(['reading']);
+  pet.pick(); pet.configure(false, true, false); pet.drop(); pet.setActivities(['golf']); pet.startActivity('golf');
+  const still = { ...pet.ball! }; pet.step(.04); expect(pet.ball).toEqual(still);
+  pet.setTerrain({ ...terrain, width: 390 }); expect(pet.ball).toBeNull();
 });

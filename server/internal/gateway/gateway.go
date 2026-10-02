@@ -242,11 +242,17 @@ func (g *Gateway) handleAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if r.URL.Path == "/api/v1/calendar/google/callback" {
+		g.calendarOAuthCookie(w, r, "", -1)
+	}
 	g.proxyREST(w, r, sess)
 }
 
 func (g *Gateway) requireSession(r *http.Request) (*sessionInfo, *httpapi.Error) {
 	cookie, err := r.Cookie("lumo_session")
+	if err != nil && r.Method == http.MethodGet && r.URL.Path == "/api/v1/calendar/google/callback" {
+		cookie, err = r.Cookie("lumo_calendar_oauth")
+	}
 	if err != nil || cookie.Value == "" {
 		return nil, httpapi.NewError(httpapi.CodeUnauthorized, "No session.")
 	}
@@ -300,8 +306,12 @@ func (g *Gateway) setSessionCookies(w http.ResponseWriter, r *http.Request, toke
 	})
 }
 
+func (g *Gateway) calendarOAuthCookie(w http.ResponseWriter, r *http.Request, token string, maxAge int) {
+	http.SetCookie(w, &http.Cookie{Name: "lumo_calendar_oauth", Value: token, Path: "/api/v1/calendar/google/callback", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode, MaxAge: maxAge})
+}
 func (g *Gateway) clearSessionCookies(w http.ResponseWriter, r *http.Request) {
 	secure := r.TLS != nil
+	g.calendarOAuthCookie(w, r, "", -1)
 	for _, name := range []string{"lumo_session", "lumo_csrf"} {
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
@@ -358,12 +368,21 @@ func (g *Gateway) proxyREST(w http.ResponseWriter, r *http.Request, sess *sessio
 	req2.RequestURI = ""
 	req2.Header = r.Header.Clone()
 	req2.Header.Set("X-Lumo-Session", sess.Token)
-	resp, err := g.agentClient(sess.AgentSocket).Do(req2)
+	client := g.agentClient(sess.AgentSocket)
+	if r.URL.Path == "/api/v1/calendar/google/callback" {
+		copy := *client
+		copy.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
+		client = &copy
+	}
+	resp, err := client.Do(req2)
 	if err != nil {
 		httpapi.WriteError(w, httpapi.NewError(httpapi.CodeUnavailable, "The session agent is unavailable."))
 		return
 	}
 	defer resp.Body.Close()
+	if r.Method == http.MethodPost && r.URL.Path == "/api/v1/calendar/google" && resp.StatusCode == http.StatusOK {
+		g.calendarOAuthCookie(w, r, sess.Token, 600)
+	}
 	copyHeader(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)

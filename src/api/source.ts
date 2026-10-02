@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { CalendarSnapshot, CalendarChange, CalendarItem, CalendarGoogleStatus, CalendarGoogleConfig, CalendarGoogleAction, CalendarGoogleResult, CalendarNotice } from './calendar';
 import type { DesktopRequest, PiExtensionSettings } from './lumo-use';
 import type { GitSnapshot, GitDiff, GitAction } from './git';
 import type { PiImageSettings, PiTemplate, PiConversationReference, PiCompaction, PiCompactionChange, PiProvider, PiConnection, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiArchivedSession, PiSession, PiCommand, PiReply, PiEvents, PiAnswer, PiPermissionMode, PiStart } from './pi';
@@ -344,6 +345,11 @@ export interface SessionUser {
 export type Unsubscribe = () => void;
 
 export interface DataSource {
+  calendarSnapshot(from: string, to: string, includeGoogle?: boolean): Promise<CalendarSnapshot>;
+  calendarChange(change: CalendarChange): Promise<CalendarItem>;
+  calendarGoogleStatus(): Promise<CalendarGoogleStatus>;
+  calendarGoogle(action: CalendarGoogleAction, config?: CalendarGoogleConfig): Promise<CalendarGoogleResult>;
+  calendarNotices(): Promise<CalendarNotice[]>;
   gitRepository(path: string): Promise<GitSnapshot>;
   gitDiff(path: string, file: string, commit: string, staged: boolean): Promise<GitDiff>;
   gitAction(request: GitAction): Promise<void>;

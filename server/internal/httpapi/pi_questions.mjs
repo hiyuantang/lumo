@@ -60,7 +60,7 @@ export default function (pi) {
   for (const event of ['session_switch', 'session_fork', 'session_tree']) pi.on(event, async (_event, ctx) => {
     responseStarted = undefined; pendingTiming = undefined; publishMetrics(ctx);
   });
-  const readingTools = new Set(['read', 'grep', 'find', 'ls', 'ask_user', 'lumo_observe']);
+  const readingTools = new Set(['read', 'grep', 'find', 'ls', 'ask_user', 'lumo_observe', 'lumo_calendar_list']);
   pi.on('tool_call', async (event, ctx) => {
     if (ctx.signal?.aborted) return { block: true, reason: 'Action interrupted.' };
     if (readingTools.has(event.toolName)) return;
@@ -74,12 +74,13 @@ export default function (pi) {
     if (approved !== true || ctx.signal?.aborted) return { block: true, reason: 'The action was not approved. Do not retry it or use another tool to bypass the decision.' };
   });
   pi.on('session_start', async (_event, ctx) => {
+    const readable = [...readingTools].filter((name) => name !== 'lumo_calendar_list' || pi.getAllTools().some((tool) => tool.name === name));
     if (permissionMode === 'read-only') {
-      pi.setActiveTools([...readingTools]);
+      pi.setActiveTools(readable);
     } else {
       const builtins = new Set(['read', 'bash', 'powershell', 'edit', 'write', 'grep', 'find', 'ls']);
       const extensions = pi.getAllTools().filter((tool) => !builtins.has(tool.name) && (!tool.exposure || tool.exposure === 'direct' || tool.exposure === 'model-only')).map((tool) => tool.name);
-      pi.setActiveTools([...new Set([...pi.getActiveTools(), ...readingTools, ...extensions])]);
+      pi.setActiveTools([...new Set([...pi.getActiveTools(), ...readable, ...extensions])]);
     }
     publishMetrics(ctx);
     ctx.ui.setStatus('lumo-permissions', permissionMode);

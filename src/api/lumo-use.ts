@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 export interface PiOptionalExtension { id: string; name: string; enabled: boolean }
-export interface PiExtensionSettings { lumoUse: boolean; questions?: boolean; revision: string; extensions?: PiOptionalExtension[] }
+export interface PiExtensionSettings {
+  calendar?: boolean; lumoUse: boolean; questions?: boolean; revision: string; extensions?: PiOptionalExtension[] }
 export type DesktopAction = 'observe' | 'click' | 'double_click' | 'fill' | 'press' | 'scroll' | 'drag' | 'resize';
 export interface DesktopRequest { id: string; action: DesktopAction; target?: string; label?: string; text?: string; key?: string; deltaX?: number; deltaY?: number; width?: number; height?: number; expiresAt: number }
 

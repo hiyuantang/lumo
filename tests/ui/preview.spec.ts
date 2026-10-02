@@ -58,15 +58,9 @@ test('TypeScript source and test files open as editable text and retain saved ed
     await page.emulateMedia({ colorScheme });
     const input = page.getByTestId('editor-input');
     await input.focus();
-    const outline = await input.evaluate((element) => {
-      const style = getComputedStyle(element);
-      const input = element.getBoundingClientRect();
-      const container = element.parentElement!.getBoundingClientRect();
-      const reach = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
-      return { gaps: [input.left - container.left, container.right - input.right, input.top - container.top, container.bottom - input.bottom], reach };
-    });
-    expect(outline.reach).toBeGreaterThan(0);
-    expect(Math.min(...outline.gaps)).toBeGreaterThan(outline.reach);
+    await expect(input).toBeFocused();
+    await expect(input).toHaveCSS('outline-style', 'none');
+    await expect(input).toHaveCSS('box-shadow', 'none');
     await page.screenshot({ path: `/tmp/lumo-preview-focus-${colorScheme}.png`, animations: 'disabled' });
   }
   const content = `${await page.getByTestId('editor-input').inputValue()}\nexport const sample = true;\n`;

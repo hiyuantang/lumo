@@ -13,6 +13,7 @@ permissions. Service changes made over SSH also appear in Lumo.
 | Monitor | View server health, per-core CPU, memory, network traffic, running processes, services and searchable logs |
 | Trash | Restore deleted files or permanently remove them |
 | Files | Browse folders and Trash, pin favorite folders, create files, inspect details, upload, download and edit text |
+| Calendar | Plan events in day, week, month and year views; manage local reminders and optionally connect Google Calendar |
 | Pi | Concurrent coding chats, queued messages, conversation references, skills, model selection and configurable compaction |
 | Git | Open, create and clone repositories; review diffs and history, commit changes, manage branches and sync remotes |
 | Preview | View images, read and edit text, and switch Markdown or HTML between rendered and raw views |

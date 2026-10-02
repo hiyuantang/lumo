@@ -2,7 +2,7 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react';
 import { PetMotion, PET_FEET, PET_SIZE, type PetPoint, type PetTerrain, type PetTrick } from './petMotion';
 
-export function usePetMotion(root: RefObject<HTMLDivElement>, options: { active: boolean; gravity: boolean; reduced: boolean; paused: boolean; blocked: boolean; width: number; height: number; saved: PetPoint }) {
+export function usePetMotion(root: RefObject<HTMLDivElement>, options: { active: boolean; gravity: boolean; reduced: boolean; paused: boolean; blocked: boolean; activities: readonly PetTrick[]; width: number; height: number; saved: PetPoint }) {
   const motion = useRef<PetMotion>();
   if (!motion.current) motion.current = new PetMotion(options.saved, { width: options.width, height: options.height, top: 40, dock: null });
   const engine = motion.current;
@@ -33,6 +33,15 @@ export function usePetMotion(root: RefObject<HTMLDivElement>, options: { active:
     node.style.setProperty('--pet-ball-y', `${82 - Math.sin(cycle * Math.PI) * 33}px`);
     node.style.setProperty('--pet-ball-spin', `${cycle * 360}deg`);
     node.style.setProperty('--pet-kick', String(cycle < .18 ? Math.sin(cycle / .18 * Math.PI) : 0));
+    const swing = engine.reduced ? -25 : engine.elapsed < .35 ? -70 * engine.elapsed / .35 : engine.elapsed < .65 ? -70 + 100 * (engine.elapsed - .35) / .3 : 30 * Math.max(0, 1 - (engine.elapsed - .65) / .5);
+    node.style.setProperty('--pet-swing', `${swing}deg`);
+    node.dataset.ballBounces = String(engine.ball?.bounces ?? 0);
+    if (engine.ball) {
+      node.style.setProperty('--pet-play-ball-x', `${engine.ball.x - engine.point.x - engine.ball.radius}px`);
+      node.style.setProperty('--pet-play-ball-y', `${engine.ball.y - engine.point.y - engine.ball.radius}px`);
+      node.style.setProperty('--pet-play-ball-size', `${engine.ball.radius * 2}px`);
+      node.style.setProperty('--pet-play-ball-spin', `${engine.ball.spin}deg`);
+    }
     if (engine.pole) {
       node.style.setProperty('--pet-pole-left', `${engine.pole.x - engine.point.x - 5}px`);
       node.style.setProperty('--pet-pole-top', `${engine.pole.top - engine.point.y}px`);
@@ -86,7 +95,7 @@ export function usePetMotion(root: RefObject<HTMLDivElement>, options: { active:
       const bubble = node.querySelector<HTMLElement>('.pet-bubble'); bubbleSize.current = bubble?.offsetWidth ?? 0; paintRef.current();
     });
     bubbleObserver.observe(node);
-    engine.setTerrain(terrain()); engine.configure(current.current.gravity, current.current.reduced, current.current.paused, current.current.blocked); resume();
+    engine.setTerrain(terrain()); engine.setActivities(current.current.activities); engine.configure(current.current.gravity, current.current.reduced, current.current.paused, current.current.blocked); resume();
     document.addEventListener('visibilitychange', visibility);
     return () => { cancel(); observer.disconnect(); bubbleObserver.disconnect(); document.removeEventListener('visibilitychange', visibility); wake.current = () => {}; };
   }, [options.active, root, engine]);
@@ -95,6 +104,7 @@ export function usePetMotion(root: RefObject<HTMLDivElement>, options: { active:
     const prev = previous.current;
     if (!options.gravity && (options.saved.x !== prev.saved.x || options.saved.y !== prev.saved.y) && Math.hypot(engine.point.x - options.saved.x, engine.point.y - options.saved.y) > .5) engine.place(options.saved);
     previous.current = { saved: options.saved, width: options.width, height: options.height };
+    engine.setActivities(options.activities);
     engine.configure(options.gravity, options.reduced, options.paused, options.blocked);
     if (prev.width !== options.width || prev.height !== options.height) {
       const dock = document.querySelector('.dock-tray')?.getBoundingClientRect();
@@ -102,7 +112,7 @@ export function usePetMotion(root: RefObject<HTMLDivElement>, options: { active:
     }
     const bubble = root.current?.querySelector<HTMLElement>('.pet-bubble'); bubbleSize.current = bubble?.offsetWidth ?? 0;
     paint(); wake.current();
-  }, [options.gravity, options.reduced, options.paused, options.blocked, options.width, options.height, options.saved.x, options.saved.y]);
+  }, [options.gravity, options.reduced, options.paused, options.blocked, options.activities.join(','), options.width, options.height, options.saved.x, options.saved.y]);
   useLayoutEffect(() => {
     const blocked = options.paused || !!document.querySelector('[data-testid="context-menu"]');
     if (engine.paused !== blocked) { engine.configure(options.gravity, options.reduced, blocked, options.blocked); wake.current(); }

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { MockCalendar } from './calendar';
 import { MockGit } from './git';
 import type { GitAction } from '../api/git';
 import { mockPi } from './pi';
@@ -77,6 +78,12 @@ import {
 const TICK_MS = 2000;
 
 export class MockDataSource implements DataSource {
+  private calendar = new MockCalendar();
+  calendarSnapshot = (from: string, to: string) => this.calendar.snapshot(from, to);
+  calendarChange = this.calendar.change;
+  calendarGoogleStatus = this.calendar.googleStatus;
+  calendarGoogle = this.calendar.google;
+  calendarNotices = async () => [];
   private git = new MockGit();
   gitRepository(path: string) { return this.git.repository(path); }
   gitDiff(path: string, file: string, commit: string, staged: boolean) { return this.git.diff(path, file, commit, staged); }
@@ -105,7 +112,7 @@ export class MockDataSource implements DataSource {
   piStart = mockPi.start;
   piCommand = mockPi.command;
   piEvents = mockPi.events;
-  private piExtensionSettings: import('../api/lumo-use').PiExtensionSettings = { lumoUse: true, questions: true, revision: 'initial', extensions: [] };
+  private piExtensionSettings: import('../api/lumo-use').PiExtensionSettings = { lumoUse: true, questions: true, calendar: true, revision: 'initial', extensions: [] };
   piExtensions = async () => this.piExtensionSettings;
   piSaveExtensions = async (value: typeof this.piExtensionSettings) => { this.piExtensionSettings = { ...value, revision: crypto.randomUUID() }; return this.piExtensionSettings; };
   piDesktopClaim = async (): Promise<never> => { throw new Error('Lumo Use needs a live Pi chat.'); };

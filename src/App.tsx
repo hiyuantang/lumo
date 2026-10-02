@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useState, type CSSProperties } from 'react';
+import { CalendarNotifications } from './apps/Calendar';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { ServerClockProvider } from './shell/ServerClockContext';
 import { WindowOverview } from './shell/WindowOverview';
 import { CommandCenter } from './shell/CommandCenter';
@@ -18,6 +19,7 @@ import { NotificationCenter, ShortcutsDialog } from './shell/NotificationCenter'
 import { ReauthProvider } from './shell/ReauthSheet';
 import { ShellProvider, useIsNarrow, useShell } from './shell/ShellContext';
 import { WindowManager } from './shell/WindowManager';
+import { blockPinchZoom } from './shell/pinchZoom';
 import { dockSpace } from './shell/windowGeometry';
 
 function Desktop() {
@@ -39,6 +41,7 @@ function Desktop() {
       {overview && <WindowOverview onClose={() => setOverview(false)}/>}
       <CommandCenter />
       <NotificationCenter />
+      <CalendarNotifications />
       <ShortcutsDialog />
       <DesktopPet />
       <LumoUseCursor />
@@ -59,6 +62,7 @@ function Shell() {
 }
 
 export default function App() {
+  useEffect(() => blockPinchZoom(document), []);
   return (
     <ShellProvider>
       <ContextMenuProvider>

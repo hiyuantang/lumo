@@ -123,6 +123,13 @@ interaction and accessibility requirements.
   glossy gradients, bevels or plastic highlights. App icons are colorful,
   minimalist and original. The desktop menu bar is transparent with no bottom
   separator.
+- **Keep scrollbars at the panel edge, clear of content.** Extend the scroll
+  area to its panel or dialog edge and inset the content inside it. Leave at
+  least 8px between scrollbar
+  tracks and fields, controls or row highlights. Reserve a stable gutter in
+  scrollable forms and compact lists, with an allowance for overlay scrollbar
+  tracks, so scrollbars never cover trailing controls.
+  Preserve larger existing padding and aligned table or calendar columns.
 - **Inset content dividers.** Leave space at both ends of separators between
   content rows, aligned with the card's inner padding (normally 16px). Preserve
   existing inset lines. Keep structural window, toolbar and sidebar borders
@@ -137,7 +144,9 @@ interaction and accessibility requirements.
   without wrapping the whole row in an activating label.
 - **Share input styling.** Search boxes use `app-search`; ordinary text fields
   use `input`. Keep font size, line height, caret spacing and field height
-  consistent, with flat borders and one outer focus outline.
+  consistent, with flat borders. Focused fields use a subtle change to the
+  existing border, without a thick outline or focus shadow. Preserve keyboard
+  focus indicators on buttons, checkboxes and other controls.
 - **Keep window controls small and clear.** Circular coral, amber and green
   controls belong at the top left, with readable, sufficiently bold glyphs.
 - **Keep floating windows reachable.** They may extend left, right or below
@@ -154,6 +163,29 @@ interaction and accessibility requirements.
   A dock thumbnail disappears as its window restores, without lingering as
   a duplicate. Preserve window state and respect reduced motion. Verify UI
   changes in both themes and at normal and narrow window sizes as applicable.
+- **Make gestures directly manipulate content.** During swipes, drags and
+  pinches, content must follow finger movement continuously, including changes
+  of direction. Show adjacent content as it enters the viewport. Decide whether
+  to commit or cancel when gesture input ends, then settle naturally using
+  distance and momentum; short or reversed gestures must return smoothly.
+  Do not turn a gesture into a button-like threshold signal followed by a
+  preset animation. Preserve native scrolling and gesture boundaries. Reduced
+  motion may shorten settling animations, but must retain direct tracking.
+  Preserve native momentum during continuous scrolling. Calendar Month view
+  fits whole week rows to the window and settles to the nearest row after input
+  ends, rather than a whole month. Keep weekday headings fixed; the month
+  occupying the most visible cell area determines the title and highlighting.
+  Apply the same grid rule to Week and Day: scroll continuously through days,
+  snap horizontally to one day column and vertically to one hour row. Size
+  columns and hour rows to fit whole cells in the available window; resize
+  without losing the visible date and time. Keep date headings, all-day events
+  and the time-label gutter fixed while their grid scrolls. Never replace
+  column scrolling with a whole-week page jump. Year grids mark Today only
+  in its own month. Date hover targets stay equally wide and tall, with circular
+  highlights. Put month arrows beside the sidebar mini calendar; do not
+  duplicate them in the main toolbar.
+  Verify intermediate movement, reversal, cancellation and settling, rather
+  than checking only the final destination.
 
 ## Development
 

@@ -47,6 +47,9 @@ system and generated-wallpaper provenance.
    preview updates require no server round trip; explicit file operations
    use the authenticated data-source interface. Preserve local edits when
    a save fails, and warn before discarding unsaved work.
+5. Pinch gestures keep the desktop scale fixed. Image Preview interprets pinches
+   locally, zooming around the gesture position; normal scrolling and browser
+   keyboard or menu zoom remain available.
 
 ## Accessibility
 

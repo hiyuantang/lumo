@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { CalendarSnapshot, CalendarChange, CalendarItem, CalendarGoogleStatus, CalendarGoogleConfig, CalendarGoogleAction, CalendarGoogleResult, CalendarNotice } from './calendar';
 import { desktopClientId, type DesktopRequest, type PiExtensionSettings } from './lumo-use';
 import type { GitSnapshot, GitDiff, GitAction } from './git';
 import type { PiImageSettings, PiTemplate, PiConversationReference, PiCompaction, PiCompactionChange, PiProvider, PiConnection, PiAuthMethod, PiAuthState, PiInstruction, PiInstructionKind, PiArchivedSession, PiSession, PiCommand, PiReply, PiEvents, PiAnswer, PiPermissionMode, PiStart } from './pi';
@@ -159,6 +160,11 @@ function resolveFilePath(homeDir: string, path: string[]): string {
 }
 
 export class LiveDataSource implements DataSource {
+  calendarSnapshot(from: string, to: string, includeGoogle = true): Promise<CalendarSnapshot> { return apiGet(`/calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&google=${includeGoogle ? 1 : 0}`); }
+  calendarChange(change: CalendarChange): Promise<CalendarItem> { return apiPost('/calendar', { requestId: crypto.randomUUID(), ...change }); }
+  calendarGoogleStatus(): Promise<CalendarGoogleStatus> { return apiGet('/calendar/google'); }
+  calendarGoogle(action: CalendarGoogleAction, config?: CalendarGoogleConfig): Promise<CalendarGoogleResult> { return apiPost('/calendar/google', { requestId: crypto.randomUUID(), action, config }); }
+  calendarNotices(): Promise<CalendarNotice[]> { return apiPost<{ notices: CalendarNotice[] }>('/calendar/notices', { requestId: crypto.randomUUID() }).then((value) => value.notices); }
   gitRepository(path: string): Promise<GitSnapshot> { return apiGet('/git/repository', { path }); }
   gitDiff(path: string, file: string, commit: string, staged: boolean): Promise<GitDiff> { return apiGet('/git/diff', { path, file, commit, staged: String(staged) }); }
   async gitAction(request: GitAction): Promise<void> { await apiPost('/git/action', { requestId: crypto.randomUUID(), ...request }); }
@@ -186,7 +192,7 @@ export class LiveDataSource implements DataSource {
   async piStart(project: string, session = '', resume?: string, permissionMode?: PiPermissionMode, rememberPermissionMode = false): Promise<PiStart> { return apiPost('/pi/start', { requestId: crypto.randomUUID(), project, session, resume, permissionMode, rememberPermissionMode, clientId: await desktopClientId() }); }
   piCommand(id: string, command: PiCommand): Promise<PiReply> { return apiPost('/pi/command', { requestId: crypto.randomUUID(), id, command }); }
   piExtensions(): Promise<PiExtensionSettings> { return apiGet('/pi/extensions'); }
-  piSaveExtensions(value: PiExtensionSettings): Promise<PiExtensionSettings> { return apiPost('/pi/extensions', { requestId: crypto.randomUUID(), revision: value.revision, lumoUse: value.lumoUse, questions: value.questions, extensions: value.extensions?.map(({ id, enabled }) => ({ id, enabled })) }); }
+  piSaveExtensions(value: PiExtensionSettings): Promise<PiExtensionSettings> { return apiPost('/pi/extensions', { requestId: crypto.randomUUID(), revision: value.revision, lumoUse: value.lumoUse, questions: value.questions, calendar: value.calendar, extensions: value.extensions?.map(({ id, enabled }) => ({ id, enabled })) }); }
   async piDesktopClaim(id: string, desktopId: string): Promise<DesktopRequest> { return apiPost('/pi/desktop/claim', { requestId: crypto.randomUUID(), id, desktopId, clientId: await desktopClientId() }); }
   async piDesktopResult(id: string, desktopId: string, text: string, error: boolean): Promise<void> { await apiPost('/pi/desktop/result', { requestId: crypto.randomUUID(), id, desktopId, text, error, clientId: await desktopClientId() }); }
   async piAnswer(id: string, answer: PiAnswer, requestId: string): Promise<void> { await apiPost('/pi/answer', { requestId, id, ...answer }); }

@@ -283,3 +283,7 @@ export function IconNewChat(p: IconProps) {
 export function IconPi(p: IconProps) {
   return base(p, <><path d="M4 7h16M8 7v9c0 2-1 3-2 3M16 7v10c0 2 2 2 3 1" strokeWidth={2}/></>);
 }
+
+export const IconCalendar = (p: IconProps) => base(p, <><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4M17 3v4M3 10h18M7 14h2M15 14h2M7 17h2"/></>);
+
+export const IconChevronLeft = (p: IconProps) => base(p, <path d="m14 6-6 6 6 6"/>);

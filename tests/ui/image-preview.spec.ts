@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { clickPreviewTool } from '../preview-tools';
-import { expect, test } from '../offline';
+import { expect, test, type Page } from '../offline';
 
-test('Image Preview zooms on double-click, fits proportionally and remembers Fit or 100%', async ({ page }) => {
+async function openImage(page: Page) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message));
   const requests: string[] = [];
@@ -41,6 +41,11 @@ test('Image Preview zooms on double-click, fits proportionally and remembers Fit
   await page.getByTestId('file-row-landscape.png').dblclick();
   const image = page.getByTestId('preview-image');
   await expect(image).toBeVisible();
+  return { image, requests, errors };
+}
+
+test('Image Preview zooms on double-click, fits proportionally and remembers Fit or 100%', async ({ page }) => {
+  const { image, requests, errors } = await openImage(page);
   await expect(page.getByTestId('preview-image-dimensions')).toHaveText('1600 × 900');
   await expect(page.getByTestId('editor-save')).toHaveCount(0);
   for (const width of [1440, 390]) {
@@ -129,5 +134,87 @@ test('Image Preview zooms on double-click, fits proportionally and remembers Fit
     else { await expect(image).toBeVisible(); await expect(page.getByTestId('preview-image-dimensions')).toHaveText('1600 × 900'); }
   }
   await expect(image).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+
+for (const [width, theme] of [[1440, 'light'], [390, 'dark']] as const) {
+  test(`Pinch zoom stays within Image Preview at ${width}px in ${theme}`, async ({ page }) => {
+    const { image, errors } = await openImage(page);
+    await page.setViewportSize({ width, height: 900 }); await page.emulateMedia({ colorScheme: theme });
+    const surface = page.getByTestId('preview-image-content');
+    const desktop = page.locator('main.desktop');
+    const baseline = await desktop.boundingBox();
+    const browserScale = await page.evaluate(() => visualViewport!.scale);
+    const before = (await image.boundingBox())!;
+    const point = { x: before.x + before.width * .65, y: before.y + before.height / 2 };
+    const dispatchPinch = async (deltaY: number) => surface.evaluate((node, params) => {
+      const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY: params.deltaY, clientX: params.x, clientY: params.y });
+      node.dispatchEvent(event); return event.defaultPrevented;
+    }, { ...point, deltaY });
+    expect(await dispatchPinch(-70)).toBe(true);
+    await expect.poll(async () => (await image.boundingBox())!.width).toBeGreaterThan(before.width * 1.9);
+    const enlarged = (await image.boundingBox())!;
+    expect((point.x - enlarged.x) / enlarged.width).toBeCloseTo(.65, 2);
+    expect((point.y - enlarged.y) / enlarged.height).toBeCloseTo(.5, 2);
+    expect(await dispatchPinch(70)).toBe(true);
+    await expect.poll(async () => (await image.boundingBox())!.width).toBeCloseTo(before.width, 0);
+    const otherWindow = page.getByTestId('window-files');
+    expect(await otherWindow.evaluate((node) => {
+      const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -70 });
+      node.dispatchEvent(event); return event.defaultPrevented;
+    })).toBe(true);
+    expect(await desktop.boundingBox()).toEqual(baseline);
+    expect(await page.evaluate(() => visualViewport!.scale)).toBe(browserScale);
+    await expect.poll(async () => (await image.boundingBox())!.width).toBeCloseTo(before.width, 0);
+    expect(await surface.evaluate((node) => {
+      const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 30 });
+      node.dispatchEvent(event); return event.defaultPrevented;
+    })).toBe(false);
+    await dispatchPinch(-100);
+    await dispatchPinch(-100);
+    const area = (await surface.boundingBox())!;
+    await page.mouse.move(area.x + area.width / 2, area.y + area.height / 2);
+    const top = await surface.evaluate((node) => node.scrollTop);
+    await page.mouse.wheel(0, 100);
+    await expect.poll(() => surface.evaluate((node) => node.scrollTop)).toBeGreaterThan(top);
+    expect(await desktop.boundingBox()).toEqual(baseline);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('Image Preview handles touch pinching, cancellation and WebKit gesture scales', async ({ page, context }) => {
+  const { image, errors } = await openImage(page);
+  const surface = page.getByTestId('preview-image-content');
+  const before = (await image.boundingBox())!;
+  const point = { x: before.x + before.width / 2, y: before.y + before.height / 2 };
+  const session = await context.newCDPSession(page);
+  await session.send('Input.synthesizePinchGesture', { ...point, scaleFactor: 1.5, gestureSourceType: 'mouse' });
+  await expect.poll(async () => (await image.boundingBox())!.width).toBeGreaterThan(before.width * 1.1);
+  expect(await page.evaluate(() => visualViewport!.scale)).toBe(1);
+  await clickPreviewTool(page, 'preview-image-size');
+  await expect.poll(async () => (await image.boundingBox())!.width).toBeCloseTo(before.width, 0);
+  await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x: point.x - 40, y: point.y }, { id: 2, x: point.x + 40, y: point.y }] });
+  await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 1, x: point.x - 80, y: point.y }, { id: 2, x: point.x + 80, y: point.y }] });
+  await expect.poll(async () => (await image.boundingBox())!.width).toBeGreaterThan(before.width * 1.8);
+  await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+  await expect(surface).not.toHaveClass(/is-panning/);
+  const after = (await image.boundingBox())!.width;
+  const left = await surface.evaluate((node) => node.scrollLeft);
+  await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 3, ...point }] });
+  await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 3, x: point.x - 40, y: point.y }] });
+  await expect.poll(() => surface.evaluate((node) => node.scrollLeft)).toBeGreaterThan(left);
+  await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+  await surface.evaluate((node, point) => {
+    for (const [type, scale] of [['gesturestart', 1], ['gesturechange', .75], ['gestureend', .75]] as const) {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(event, { scale, clientX: point.x, clientY: point.y }); node.dispatchEvent(event);
+      if (!event.defaultPrevented) throw new Error('Browser gesture was not canceled.');
+    }
+  }, point);
+  await expect.poll(async () => (await image.boundingBox())!.width).toBeCloseTo(after * .75, 0);
+  await clickPreviewTool(page, 'preview-image-size');
+  await expect.poll(async () => (await image.boundingBox())!.width).toBeCloseTo(before.width, 0);
+  expect(await page.evaluate(() => visualViewport!.scale)).toBe(1);
   expect(errors).toEqual([]);
 });

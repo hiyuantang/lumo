@@ -28,6 +28,8 @@
   --border: rgba(0, 0, 0, 0.12);
   --border-strong: rgba(0, 0, 0, 0.26);
   --divider-inset: 16px;
+  --scroll-content-gap: 8px;
+  --scroll-content-inset: calc(var(--scroll-content-gap) + 10px);
   --button-height: 32px;
   --field-height: 34px;
   --file-grid-icon-size: 64px;

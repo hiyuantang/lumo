@@ -298,10 +298,24 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 			args = append(args, "--extension", desktopExtension)
 		}
 		optionalArgs := piExtensionArgs(settings)
+		if settings.Calendar {
+			calendarExtension, err := writePiCalendarExtension(dir, req.PermissionMode)
+			if err != nil {
+				WriteError(w, err)
+				return
+			}
+			args = append(args, "--extension", calendarExtension)
+		}
 		args = append(args, optionalArgs...)
 		args = append(args, "--extension", extension, "--extension", imagesExtension)
 		if len(optionalArgs) == 0 {
 			tools := piToolsForMode(req.PermissionMode, desktopEnabled)
+			if settings.Calendar {
+				tools += ",lumo_calendar_list"
+				if req.PermissionMode != "read-only" {
+					tools += ",lumo_calendar_change"
+				}
+			}
 			if !settings.Questions {
 				tools = strings.Replace(tools, ",ask_user", "", 1)
 			}

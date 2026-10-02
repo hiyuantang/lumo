@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { PetFur } from './PetFur';
 import { PetMagicPole, PetMagicProps, PetClimbArms } from './PetMagic';
+import { PetPastimes } from './PetPastimes';
 import type { PetCoat, PetKind, PetMood } from './pet';
 import '../styles/pet.css';
 
@@ -35,6 +36,7 @@ export function PetSprite({ kind, coat = 'citrus', mood = 'idle', interactive = 
       </svg>
     </div>
     <PetMagicProps/>
+    <PetPastimes/>
     <svg className="pet-sketch pet-motion-effects" viewBox="0 0 96 96" fill="none" stroke="var(--pet-limb)" strokeWidth="1" strokeLinecap="round"><g className="pet-pickup-effects"><path d="M17 29 L13 25 M79 29 L83 25 M48 9 L48 5"/></g><g className="pet-landing-effects"><path d="M19 88 L12 86 M77 88 L84 86 M22 91 L17 94 M74 91 L79 94"/><ellipse cx="48" cy="89" rx="29" ry="3"/></g></svg>
     </div>
   </div>;
