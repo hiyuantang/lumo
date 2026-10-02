@@ -77,7 +77,7 @@ export const PiSidebar = memo(function PiSidebar({ collapsed, project: projectPa
       {working && <span className="pi-chat-working" role="status" aria-label={`Working on ${item.name}`} data-testid="pi-chat-working"><span/></span>}
       <button type="button" className="pi-chat-options" disabled={navigationDisabled} aria-label={`Chat options for ${item.name}`} title="Chat options" aria-haspopup="menu" data-testid="pi-chat-options" onClick={(event) => menu(event, [
         { label: 'Rename', disabled: disabled || working, run: () => onRename(path, item) },
-        { label: floating.includes(`${path}/${item.id}`) ? 'Return to Pi window' : 'Move to assistant window', disabled, run: () => onAssistant(path, item, !floating.includes(`${path}/${item.id}`)) },
+        { label: floating.includes(`${path}/${item.id}`) ? 'Return to Pi window' : 'Pop out chat', disabled, run: () => onAssistant(path, item, !floating.includes(`${path}/${item.id}`)) },
         { label: 'Archive', disabled: disabled || working, separator: true, run: () => onArchive(path, item) },
       ])}><IconMore size={16}/></button>
     </div>;

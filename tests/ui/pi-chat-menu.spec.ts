@@ -52,7 +52,7 @@ test('Assistant mode keeps the live process and draft, and returns without resta
   await options(page, 'Project notes');
   await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toBeDisabled();
   await expect(page.getByRole('menuitem', { name: 'Archive', exact: true })).toBeDisabled();
-  await page.getByRole('menuitem', { name: 'Move to assistant window', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Pop out chat', exact: true }).click();
   const assistant = page.getByTestId('pi-chat-assistant');
   await expect(assistant).toBeVisible();
   await expect(assistant.getByTestId('pi-compact-prompt')).toHaveValue('Keep this draft');
@@ -109,7 +109,7 @@ test('An idle assistant keeps its position and draft while another chat is selec
   await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-pi').click();
   await expect(page.getByTestId('pi-prompt')).toBeEnabled();
   await page.getByTestId('pi-prompt').fill('A draft in assistant mode');
-  await options(page, 'Project notes'); await page.getByRole('menuitem', { name: 'Move to assistant window' }).click();
+  await options(page, 'Project notes'); await page.getByRole('menuitem', { name: 'Pop out chat' }).click();
   const assistant = page.getByTestId('pi-chat-assistant');
   const handle = (await assistant.getByTestId('pi-assistant-drag-handle').boundingBox())!;
   await page.mouse.move(handle.x + 25, handle.y + 12); await page.mouse.down(); await page.mouse.move(handle.x - 75, handle.y - 68, { steps: 6 }); await page.mouse.up();
@@ -134,7 +134,7 @@ test.describe('Touch chat menus', () => {
     await expect(tree.getByTestId('pi-chat-working')).toBeVisible();
     const trigger = tree.getByRole('button', { name: 'Chat options for Project notes' });
     await expect(trigger).toHaveCSS('opacity', '1'); await trigger.tap();
-    await expect(page.getByRole('menuitem', { name: 'Move to assistant window' })).toBeEnabled();
+    await expect(page.getByRole('menuitem', { name: 'Pop out chat' })).toBeEnabled();
     await expect(page.getByRole('menuitem', { name: 'Archive', exact: true })).toBeDisabled();
   });
 });

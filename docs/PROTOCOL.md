@@ -1451,7 +1451,7 @@ apply. Pi has the Linux account's ordinary filesystem and command permissions.
   shown explicitly. Running sidebar chats display a spinner, replaced by the
   chat menu on hover/focus, with reduced motion respected. Workspace headings
   and chat names share the same text column. Each chat menu offers Rename,
-  Move to assistant window (or Return to Pi window), and Archive. Rename opens
+  Pop out chat (or Return to Pi window), and Archive. Rename opens
   the selected session and uses Pi's documented `set_session_name` command;
   running chats cannot be renamed or archived.
 
