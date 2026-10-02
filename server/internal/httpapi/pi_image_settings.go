@@ -7,12 +7,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"lumo/server/internal/piruntime"
 	"lumo/server/internal/strictjson"
 )
 
@@ -49,14 +49,14 @@ func readPiImageSettings(dir string) (piImageSettings, error) {
 func (s *Server) preparePiImageCodec(ctx context.Context) error {
 	anchor := filepath.Join(s.pi.home, ".local/share/lumo/pi/lib/package.json")
 	check := `const {createRequire}=require('node:module'); const sharp=createRequire(process.argv[1])('sharp'); if(sharp.versions.sharp!==process.argv[2]||!sharp.format.webp.output.buffer) process.exit(1);`
-	node, err := exec.LookPath("node")
+	node, err := piruntime.Lookup(s.pi.home, "node")
 	if err != nil {
 		return NewError(CodeValidationFailed, "Install Node.js with npm on the server to use Quality 90.")
 	}
 	if _, err := s.pi.run(ctx, node, "-e", check, anchor, piImageCodecVersion); err == nil {
 		return nil
 	}
-	npm, err := exec.LookPath("npm")
+	npm, err := piruntime.Lookup(s.pi.home, "npm")
 	if err != nil {
 		return NewError(CodeValidationFailed, "Install npm on the server to use Quality 90.")
 	}

@@ -89,11 +89,11 @@ Files creates separate Preview windows. Right-click Preview’s Dock icon and
 choose **New Window** to open another, or select an existing document from the
 same menu.
 
-To use **Pi**, install it in **App Library → Pi**. Lumo uses the
-[official npm package](https://pi.dev/docs/latest/quickstart), requiring Node.js
-22.19 or newer with npm on the server. Open Pi from the Dock, choose a project
-folder or drag one from Files, and select **Open project**. **Connect provider**
-opens Pi's setup terminal; enter `/login`, follow the prompts, and select Done.
+To use **Pi**, install it in **App Library → Pi**. Lumo automatically installs a
+private Node.js runtime and the [official Pi npm package](https://pi.dev/docs/latest/quickstart)
+for your Linux account, without changing the server’s existing Node.js setup.
+Open Pi from the Dock, choose a project folder or drag one from Files, and select
+**Open project**. **Connect provider** opens Pi's setup terminal; enter `/login`, follow the prompts, and select Done.
 
 The native workspace provides streamed chat and tool output, model and thinking
 selection, saved sessions, rename, context compaction, steering, follow-up, and

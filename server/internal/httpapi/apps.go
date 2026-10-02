@@ -3,11 +3,11 @@ package httpapi
 
 import (
 	"lumo/server/internal/files"
+	"lumo/server/internal/piruntime"
 	"lumo/server/internal/strictjson"
 	"lumo/server/internal/terminal"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"time"
@@ -22,7 +22,7 @@ func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
 		map[string]any{"id": "git", "installed": exists("/usr/bin/git")},
 		map[string]any{"id": "docker", "installed": exists("/usr/bin/dockerd")},
 		map[string]any{"id": "nginx", "installed": exists("/usr/sbin/nginx")},
-		map[string]any{"id": "pi", "installed": terminal.PiPath() != "", "canUninstall": removablePi(terminal.PiPath()), "canInstall": piNPMAvailable(), "canUpdate": removablePi(terminal.PiPath())},
+		map[string]any{"id": "pi", "installed": terminal.PiPath() != "", "canUninstall": removablePi(terminal.PiPath()), "canInstall": piruntime.Supported(), "canUpdate": removablePi(terminal.PiPath())},
 	}})
 }
 
@@ -113,4 +113,3 @@ func piRemovalPaths(binary string) ([]string, error) {
 	}
 	return paths, nil
 }
-func piNPMAvailable() bool { _, err := exec.LookPath("npm"); return err == nil }

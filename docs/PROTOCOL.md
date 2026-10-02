@@ -1305,10 +1305,15 @@ new plan instead of blindly repeating an uncertain installation.
 
 ### Pi installation and updates
 
-The Pi catalog reports `canInstall` when npm is available; installing requires
-Node.js 22.19 or newer. `canUpdate` and `canUninstall` apply only to Lumo-managed
-copies. Externally installed Pi can run in the native app but must be maintained
-with its original package manager.
+The Pi catalog reports `canInstall` on Linux amd64 and arm64, independently of
+system Node.js or npm. Install and update prepare a private Node.js 24.21.0
+runtime under `~/.local/share/lumo/pi/runtime-v24.21.0`, using official
+nodejs.org archives verified against pinned SHA-256 checksums before extraction.
+Downloads and extraction are bounded, staged and validated before activation.
+RPC sessions, provider setup and image compression use this runtime. Uninstall
+moves it to Trash together with the managed Pi installation. `canUpdate` and
+`canUninstall` apply only to Lumo-managed copies. Externally installed Pi can run
+in the native app but must be maintained with its original package manager.
 
 `POST /api/v1/apps/pi/plan` accepts `{requestId, operation}` (`install` or
 `update`). It reads the installed version and official

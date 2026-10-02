@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"lumo/server/internal/broker"
+	"lumo/server/internal/piruntime"
 	"lumo/server/internal/updates"
 )
 
@@ -28,7 +29,10 @@ type piFixture struct {
 func piTestWorker(t *testing.T, version string) (*piWorker, *piFixture) {
 	t.Helper()
 	home := t.TempDir()
-	bin := t.TempDir()
+	bin := piruntime.Bin(home)
+	if err := os.MkdirAll(bin, 0700); err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{"node", "npm"} {
 		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
 			t.Fatal(err)
@@ -46,7 +50,7 @@ func piTestWorker(t *testing.T, version string) (*piWorker, *piFixture) {
 		defer fixture.mu.Unlock()
 		fixture.calls = append(fixture.calls, append([]string{name}, args...))
 		if filepath.Base(name) == "node" {
-			return "v22.19.0", nil
+			return "v" + piruntime.Version, nil
 		}
 		if len(args) > 0 && args[0] == "--version" {
 			return fixture.version, nil
@@ -278,4 +282,55 @@ func TestPiOperationKeepsAgentActiveAndExcludesAnotherMutation(t *testing.T) {
 	if err := restored.start("pi_active", plan.ID); err != nil {
 		t.Fatal("saved completed request was not replayed", err)
 	}
+}
+
+func TestPiInstallDoesNotRequireSystemNodeOrNPM(t *testing.T) {
+	worker, fixture := piTestWorker(t, "")
+	t.Setenv("PATH", t.TempDir())
+	plan, err := worker.plan(context.Background(), "install")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.start("pi_private_runtime", plan.ID); err != nil {
+		t.Fatal(err)
+	}
+	if progress := waitPi(t, worker, "pi_private_runtime"); !progress.Success {
+		t.Fatalf("progress: %+v", progress)
+	}
+	fixture.mu.Lock()
+	defer fixture.mu.Unlock()
+	if fixture.calls[1][0] != filepath.Join(piruntime.Bin(worker.home), "npm") {
+		t.Fatal("did not use private npm")
+	}
+	output, err := worker.command(context.Background(), "/bin/sh", "-c", `printf '%s' "$PATH"`)
+	if err != nil || !strings.HasPrefix(output, piruntime.Bin(worker.home)+":") {
+		t.Fatalf("private PATH: %s %v", output, err)
+	}
+}
+
+func TestPiCatalogInstallationIgnoresMissingNPM(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	server := NewServer(Deps{})
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, httptest.NewRequest("GET", "/api/v1/apps", nil))
+	var payload struct {
+		Data struct {
+			Apps []struct {
+				ID         string `json:"id"`
+				CanInstall bool   `json:"canInstall"`
+			} `json:"apps"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, app := range payload.Data.Apps {
+		if app.ID == "pi" {
+			if app.CanInstall != piruntime.Supported() {
+				t.Fatalf("catalog: %s", response.Body.String())
+			}
+			return
+		}
+	}
+	t.Fatal("Pi missing from catalog")
 }

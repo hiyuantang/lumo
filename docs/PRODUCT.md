@@ -248,8 +248,9 @@ The menu-bar clock and Settings clock use the server's reported time and time
 zone. Saving the time zone changes the Ubuntu setting and updates both clocks.
 UTC is displayed as “UTC” while the server identifier remains `Etc/UTC`.
 
-App Library installs Pi with npm for the signed-in Linux account. Installation
-requires Node.js 22.19 or newer. Versioned updates participate in Updates and Update all,
+App Library installs Pi and a private Node.js runtime for the signed-in Linux
+account with one Install button. No existing Node.js or npm installation is
+required. Versioned updates participate in Updates and Update all,
 with progress and account-specific installed update history. Running operations
 continue when App Library closes and prevent the user agent's idle shutdown.
 

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"lumo/server/internal/piruntime"
 )
 
 const (
@@ -266,7 +267,7 @@ func (m *Manager) Open(opts OpenOptions) (*Session, error) {
 	if opts.Program == "pi" {
 		for index, value := range cmd.Env {
 			if len(value) > 5 && value[:5] == "PATH=" {
-				cmd.Env[index] = "PATH=" + filepath.Join(homeDir(), ".local/share/lumo/pi/bin") + ":" + filepath.Join(homeDir(), ".local/bin") + ":" + value[5:]
+				cmd.Env[index] = "PATH=" + piruntime.Bin(homeDir()) + ":" + filepath.Join(homeDir(), ".local/share/lumo/pi/bin") + ":" + filepath.Join(homeDir(), ".local/bin") + ":" + value[5:]
 			}
 		}
 	}

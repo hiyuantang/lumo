@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"lumo/server/internal/broker"
+	"lumo/server/internal/piruntime"
 	"lumo/server/internal/strictjson"
 	"lumo/server/internal/terminal"
 	"lumo/server/internal/updates"
@@ -148,7 +149,7 @@ func (b *limitedCommandOutput) Write(data []byte) (int, error) {
 func (o *piWorker) command(ctx context.Context, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = o.home
-	cmd.Env = append(os.Environ(), "HOME="+o.home, "PATH="+filepath.Join(o.home, ".local/share/lumo/pi/bin")+":"+filepath.Join(o.home, ".local/bin")+":/usr/local/bin:/usr/bin:/bin", "CI=1", "NO_COLOR=1")
+	cmd.Env = append(os.Environ(), "HOME="+o.home, "PATH="+piruntime.Bin(o.home)+":"+filepath.Join(o.home, ".local/share/lumo/pi/bin")+":"+filepath.Join(o.home, ".local/bin")+":/usr/local/bin:/usr/bin:/bin", "CI=1", "NO_COLOR=1")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 2 * time.Second
@@ -317,17 +318,10 @@ func (o *piWorker) execute(id string, plan piPlan) {
 		if len(plan.Packages) == 0 {
 			return from, nil
 		}
-		npm, err := exec.LookPath("npm")
+		o.stage(id, "Preparing Pi's runtime…", 10)
+		npm, err := piruntime.Ensure(ctx, o.home, o.run)
 		if err != nil {
-			return "", errors.New("Install Node.js 22.19 or newer with npm on the server first.")
-		}
-		node, err := exec.LookPath("node")
-		if err != nil {
-			return "", errors.New("Node.js is unavailable.")
-		}
-		version, err := o.run(ctx, node, "--version")
-		if err != nil || !supportedPiNode(version) {
-			return "", errors.New("Pi requires Node.js 22.19 or newer.")
+			return "", err
 		}
 		o.stage(id, "Installing Pi for your account…", 30)
 		output, err := o.run(ctx, npm, "install", "--global", "--ignore-scripts", "--no-audit", "--no-fund", "--prefix", filepath.Join(o.home, ".local/share/lumo/pi"), "@earendil-works/pi-coding-agent@"+plan.Packages[0].ToVersion)
@@ -442,14 +436,4 @@ func (s *Server) ActiveOperations() int {
 		}
 	}
 	return count
-}
-
-func supportedPiNode(value string) bool {
-	parts := strings.Split(strings.TrimPrefix(strings.TrimSpace(value), "v"), ".")
-	if len(parts) != 3 {
-		return false
-	}
-	major, e1 := strconv.Atoi(parts[0])
-	minor, e2 := strconv.Atoi(parts[1])
-	return e1 == nil && e2 == nil && (major > 22 || major == 22 && minor >= 19)
 }

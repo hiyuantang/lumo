@@ -76,7 +76,10 @@ test('Pi stop clears queued work and closing a running task needs confirmation',
   await page.getByTestId('window-close-pi').click(); await expect(page.getByTestId('app-pi')).toHaveCount(0);
 });
 
-test('App Library installs Pi directly and updates it without APT', async ({ page }) => {
+for (const appearance of [{ theme: 'light', width: 1440, height: 900 }, { theme: 'dark', width: 800, height: 650 }]) {
+test(`App Library installs Pi directly and updates it without APT (${appearance.theme})`, async ({ page }) => {
+  await page.setViewportSize({ width: appearance.width, height: appearance.height });
+  await page.emulateMedia({ colorScheme: appearance.theme as 'light' | 'dark' });
   let version = '';
   let operation = 'install';
   let polls = 0;
@@ -107,6 +110,10 @@ test('App Library installs Pi directly and updates it without APT', async ({ pag
   await page.goto('http://localhost:5200');
   await page.getByTestId('dock-app-library').click();
   await page.getByTestId('library-pi').click();
+  await expect(page.getByTestId('library-primary')).toBeEnabled();
+  await expect(page.getByText('Pi and its runtime', { exact: true })).toBeVisible();
+  await expect(page.getByText('Installs Pi and everything it needs for your Linux account.', { exact: true })).toBeVisible();
+  await page.screenshot({ path: `/tmp/lumo-pi-install-${appearance.theme}.png` });
   await page.getByTestId('library-primary').click();
   await expect(page.getByTestId('library-progress')).toHaveAttribute('aria-valuenow', '20');
   await expect(page.getByTestId('server-app-confirm')).toHaveCount(0);
@@ -126,6 +133,7 @@ test('App Library installs Pi directly and updates it without APT', async ({ pag
   await page.screenshot({ animations: 'disabled', path: '/tmp/lumo-pi-update-history.png' });
   expect(commands).toEqual(['install', 'update']);
 });
+}
 
 
 test('Pi native provider settings connect with an API key and resume the same chat', async ({ page }) => {

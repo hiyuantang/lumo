@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"lumo/server/internal/piruntime"
 )
 
 func TestPiRPCFixtureProcess(t *testing.T) {
@@ -235,13 +237,6 @@ func TestPiEventsDetectGapAndIsolateProcessIDs(t *testing.T) {
 		}
 	}
 }
-func TestPiNodeVersionRequirement(t *testing.T) {
-	for value, want := range map[string]bool{"v22.19.0": true, "v24.0.0": true, "v22.18.0": false, "v20.19.0": false, "invalid": false} {
-		if supportedPiNode(value) != want {
-			t.Fatalf("wrong support for %s", value)
-		}
-	}
-}
 
 func TestPiForkValidationAndEventBoundary(t *testing.T) {
 	for _, body := range []string{`{"type":"fork"}`, `{"type":"fork","entryId":""}`, `{"type":"fork","entryId":"../session"}`, `{"type":"fork","entryId":false}`, `{"type":"fork","entryId":"abc","sessionPath":"/tmp/other"}`, `{"type":"get_fork_messages","path":"/tmp/other"}`} {
@@ -427,4 +422,39 @@ func TestPiSavedStateOmitsUnwrittenSessionPaths(t *testing.T) {
 	if strings.Contains(string(piSavedState(raw)), "sessionFile") {
 		t.Fatal("directory accepted as saved session")
 	}
+}
+
+func TestPiRPCUsesPrivateRuntimeWithoutSystemNode(t *testing.T) {
+	home := t.TempDir()
+	bin := piruntime.Bin(home)
+	if err := os.MkdirAll(bin, 0700); err != nil {
+		t.Fatal(err)
+	}
+	node := "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"runtime_ready\"}'\n"
+	if err := os.WriteFile(filepath.Join(bin, "node"), []byte(node), 0700); err != nil {
+		t.Fatal(err)
+	}
+	pi := filepath.Join(home, "pi")
+	if err := os.WriteFile(pi, []byte("#!/usr/bin/env node\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", t.TempDir())
+	process, err := startPiProcess(pi, nil, home, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer process.cancel()
+	select {
+	case <-process.done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Pi failed to exit")
+	}
+	process.mu.Lock()
+	defer process.mu.Unlock()
+	for _, event := range process.events {
+		if strings.Contains(string(event), "runtime_ready") {
+			return
+		}
+	}
+	t.Fatalf("private runtime did not run: %s", process.events)
 }

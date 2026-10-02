@@ -22,7 +22,7 @@ const CATALOG = [
   { id: 'git' as const, name: APPS.git.title, appId: 'git' as const, description: 'Review changes and manage repositories.', overview: 'Browse changes and commit history, stage files, create branches and sync repositories using your Linux account’s Git configuration.', packages: 'Git' },
   { id: 'docker' as const, name: APPS.containers.title, appId: 'containers' as const, description: 'Run apps in isolated containers.', overview: 'Docker runs applications in isolated containers. Manage containers, view logs and connect persistent storage.', packages: 'Docker Engine · Compose' },
   { id: 'nginx' as const, name: APPS.websites.title, appId: 'websites' as const, description: 'Serve websites and route web traffic.', overview: 'Nginx serves websites and directs web traffic to your apps. Manage domains, static sites and reverse proxies.', packages: 'Nginx' },
-  { id: 'pi' as const, name: APPS.pi.title, appId: 'pi' as const, description: 'A coding agent with a native workspace.', overview: 'Work with Pi in a native conversation. Follow file edits and commands, choose a model, and return to saved project sessions.', packages: 'Pi · Requires Node.js 22.19+ and npm' },
+  { id: 'pi' as const, name: APPS.pi.title, appId: 'pi' as const, description: 'A coding agent with a native workspace.', overview: 'Work with Pi in a native conversation. Follow file edits and commands, choose a model, and return to saved project sessions.', packages: 'Pi and its runtime' },
 ];
 const JOB_KEY = 'lumo-app-install';
 type LibraryPage = 'Discovery' | 'Updates' | LibraryAppID;
@@ -254,7 +254,7 @@ export function AppLibrary() {
             </header>
             <p className="library-description" data-testid="library-description">{app.overview}</p>
             <div className="library-information"><span>Includes</span><strong>{app.packages}</strong></div>
-            {app.id === 'pi' && (!installed || !canManage) && <p className="server-app-muted">{installed ? 'This installation is managed outside Lumo. Use the package manager that installed it to uninstall.' : 'Installs Pi for your Linux account using npm. Node.js 22.19 or newer is required.'}</p>}
+            {app.id === 'pi' && (!installed || !canManage) && <p className="server-app-muted">{installed ? 'This installation is managed outside Lumo. Use the package manager that installed it to uninstall.' : 'Installs Pi and everything it needs for your Linux account.'}</p>}
           </section>}
         {page === 'Updates' && <section className="library-update-section" aria-label="Available updates">
           <div className="library-update-heading"><h2>Available updates</h2><button type="button" className="btn" data-testid="library-update-all" disabled={locked || !updateCount || !canCheckUpdates} onClick={() => startUpdates(Object.values(checks).flatMap((check) => check.plan?.packages.length ? [check.plan] : []))}>{updating ? 'Updating…' : 'Update all'}</button></div>

@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"lumo/server/internal/piruntime"
 	"lumo/server/internal/strictjson"
 )
 
@@ -396,7 +397,7 @@ func startPiProcess(binary string, args []string, project, home string) (*piProc
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = project
-	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+filepath.Join(home, ".local/share/lumo/pi/bin")+":"+filepath.Join(home, ".local/bin")+":"+os.Getenv("PATH"), "NO_COLOR=1")
+	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+piruntime.Bin(home)+":"+filepath.Join(home, ".local/share/lumo/pi/bin")+":"+filepath.Join(home, ".local/bin")+":"+os.Getenv("PATH"), "NO_COLOR=1")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 2 * time.Second
