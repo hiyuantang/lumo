@@ -1,5 +1,27 @@
 # Lumo — Agent Guide
 
+## Complete, commit and push
+
+- Treat one coherent feature, bug fix, refactor, or documentation update as a
+  unit of work. Include the implementation, relevant tests and documentation
+  needed to make that unit usable and reviewable. For larger requests, use
+  independently usable milestones; do not commit unfinished fragments.
+- After completing a unit, review its diff, run the required checks appropriate
+  to the change, fix failures caused by the change, then commit and push it to
+  `origin/main` before reporting completion. This is standing authorization;
+  do not ask again for routine commits or pushes.
+- Stage only files or hunks belonging to that unit. Preserve unrelated local
+  edits and do not publish unrelated unpushed commits. Report existing failures
+  or unavailable checks accurately; never claim that a failed check passed or
+  bypass a required check to publish.
+- Fetch the latest `origin/main` before publishing and integrate remote changes
+  without losing local work. Use a normal push, never a force push. If a conflict,
+  branch protection or another blocker prevents safe publication, preserve the
+  work and explain the blocker instead of reporting it as pushed.
+- Report the commit, push result and verification performed. An explicit user
+  request for read-only work, no commit, no push, or another target takes
+  precedence over this workflow.
+
 ## License (IMPORTANT — read before editing)
 
 Lumo is licensed under the **GNU Affero General Public License v3 only**
