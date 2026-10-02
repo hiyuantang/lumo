@@ -93,6 +93,13 @@ test('Chat menus are compact, aligned and keyboard accessible in both themes and
     expect((await chat.locator('span').boundingBox())!.x).toBe(heading.x);
     expect((await chat.boundingBox())!.height).toBeLessThanOrEqual(30);
     const trigger = group.getByRole('button', { name: 'Chat options for Project notes' });
+    const archive = group.getByRole('button', { name: 'Archive Project notes', exact: true });
+    await page.keyboard.press('Tab'); await archive.focus();
+    await expect(archive).toHaveCSS('opacity', '1');
+    const archiveBox = (await archive.boundingBox())!;
+    const menuBox = (await trigger.boundingBox())!;
+    expect(archiveBox.x + archiveBox.width).toBeLessThanOrEqual(menuBox.x);
+    await page.screenshot({ path: `/tmp/lumo-direct-archive-${width}-${colorScheme}.png`, animations: 'disabled' });
     await trigger.focus(); await page.keyboard.press('Enter');
     await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toBeFocused();
     await expect(page.getByRole('menuitem', { name: 'Archive', exact: true })).toBeVisible();
@@ -133,6 +140,10 @@ test.describe('Touch chat menus', () => {
     const tree = page.getByRole('navigation', { name: 'Pi projects', exact: true });
     await expect(tree.getByTestId('pi-chat-working')).toBeVisible();
     const trigger = tree.getByRole('button', { name: 'Chat options for Project notes' });
+    const archive = tree.getByRole('button', { name: 'Archive Project notes', exact: true });
+    await expect(archive).toBeDisabled();
+    const workingBox = (await tree.getByTestId('pi-chat-working').boundingBox())!;
+    expect(workingBox.x + workingBox.width).toBeLessThanOrEqual((await archive.boundingBox())!.x);
     await expect(trigger).toHaveCSS('opacity', '1'); await trigger.tap();
     await expect(page.getByRole('menuitem', { name: 'Pop out chat' })).toBeEnabled();
     await expect(page.getByRole('menuitem', { name: 'Archive', exact: true })).toBeDisabled();

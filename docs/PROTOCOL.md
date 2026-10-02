@@ -1449,8 +1449,9 @@ apply. Pi has the Linux account's ordinary filesystem and command permissions.
   Pi's reported current usage; its hover/focus tooltip contains percentage,
   token usage, maximum model context and conversation cost. Unknown usage is
   shown explicitly. Running sidebar chats display a spinner, replaced by the
-  chat menu on hover/focus, with reduced motion respected. Workspace headings
-  and chat names share the same text column. Each chat menu offers Rename,
+  chat actions on hover/focus, with reduced motion respected. Each chat row
+  has a direct Archive button beside its menu; both are always shown on touch.
+  Workspace headings and chat names share the same text column. Each chat menu offers Rename,
   Pop out chat (or Return to Pi window), and Archive. Rename opens
   the selected session and uses Pi's documented `set_session_name` command;
   running chats cannot be renamed or archived.
