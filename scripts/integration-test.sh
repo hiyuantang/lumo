@@ -26,6 +26,11 @@ for dependency in lumo-test-build:deps lumo-test-runtime:deps; do
         echo "Prepare dependencies explicitly with npm run test:docker:prepare when network access is appropriate."
         exit 1
     }
+    docker run --rm --network none --entrypoint node "$dependency" --version >/dev/null 2>&1 || {
+        echo "Missing cached Node.js in $dependency. No download was attempted."
+        echo "Prepare dependencies explicitly with npm run test:docker:prepare."
+        exit 1
+    }
 done
 IMAGE="lumo-integration:test"
 BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/lumo-docker.XXXXXX")"

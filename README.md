@@ -149,6 +149,10 @@ preview, visual and interaction tests, real Ubuntu Docker checks and the
 remaining VM checks. Contributors should also read [AGENTS.md](AGENTS.md)
 and the [clean-room rules](docs/CLEAN_ROOM.md).
 
+The [app platform guide](docs/APP_PLATFORM.md) explains how Pi can create,
+preview, install and update local JavaScript/CSS desktop apps inside Lumo.
+The initial API supports read-only CPU and memory access.
+
 ## License
 
 Lumo is licensed under the GNU Affero General Public License,

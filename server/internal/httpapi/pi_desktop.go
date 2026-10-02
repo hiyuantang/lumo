@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"lumo/server/internal/desktopapps"
 	"lumo/server/internal/strictjson"
 )
 
@@ -46,6 +47,8 @@ func validDesktopRequest(req piDesktopRequest) bool {
 		return false
 	}
 	switch req.Action {
+	case "app_preview":
+		return desktopapps.ValidDigest(req.Target) && req.Label != "" && req.Text == "" && req.Key == "" && req.DeltaX == 0 && req.DeltaY == 0
 	case "observe":
 		return req.Target == "" && req.Label == "" && req.Text == "" && req.Key == "" && req.DeltaX == 0 && req.DeltaY == 0
 	case "click", "double_click", "fill", "press", "scroll", "drag":

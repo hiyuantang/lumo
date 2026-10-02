@@ -24,14 +24,14 @@ func validPiPermissionMode(mode string) bool {
 }
 
 func piToolsForMode(mode string, desktop ...bool) string {
-	tools := "read,grep,find,ls,ask_user"
+	tools := "read,grep,find,ls,ask_user,lumo_app_api,lumo_app_list,lumo_app_status"
 	if mode != "read-only" {
-		tools += ",bash,edit,write"
+		tools += ",bash,edit,write,lumo_app_create,lumo_app_build,lumo_app_install,lumo_app_restore"
 	}
 	if len(desktop) > 0 && desktop[0] {
 		tools += ",lumo_observe"
 		if mode != "read-only" {
-			tools += ",lumo_act"
+			tools += ",lumo_act,lumo_app_preview"
 		}
 	}
 	return tools

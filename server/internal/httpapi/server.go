@@ -42,6 +42,7 @@ type Deps struct {
 }
 
 type Server struct {
+	desktopApps desktopAppRuntime
 	gitMu       sync.Mutex
 	folderMoves atomic.Int64
 	deps        Deps
@@ -61,12 +62,19 @@ func NewServer(deps Deps) *Server {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
- mux.HandleFunc("GET /api/v1/calendar",s.handleCalendar)
- mux.HandleFunc("POST /api/v1/calendar",s.handleCalendar)
- mux.HandleFunc("POST /api/v1/calendar/notices",s.handleCalendarNotices)
- mux.HandleFunc("GET /api/v1/calendar/google",s.handleCalendarGoogle)
- mux.HandleFunc("POST /api/v1/calendar/google",s.handleCalendarGoogle)
- mux.HandleFunc("GET /api/v1/calendar/google/callback",s.handleCalendarGoogleCallback)
+	mux.HandleFunc("GET /api/v1/desktop-apps", s.handleDesktopApps)
+	mux.HandleFunc("POST /api/v1/desktop-apps/action", s.handleDesktopApps)
+	mux.HandleFunc("POST /api/v1/desktop-apps/launch", s.handleDesktopLaunch)
+	mux.HandleFunc("GET /api/v1/desktop-apps/frame", s.handleDesktopFrame)
+	mux.HandleFunc("POST /api/v1/desktop-apps/call", s.handleDesktopCall)
+	mux.HandleFunc("POST /api/v1/desktop-apps/report", s.handleDesktopCall)
+	mux.HandleFunc("POST /api/v1/desktop-apps/close", s.handleDesktopCall)
+	mux.HandleFunc("GET /api/v1/calendar", s.handleCalendar)
+	mux.HandleFunc("POST /api/v1/calendar", s.handleCalendar)
+	mux.HandleFunc("POST /api/v1/calendar/notices", s.handleCalendarNotices)
+	mux.HandleFunc("GET /api/v1/calendar/google", s.handleCalendarGoogle)
+	mux.HandleFunc("POST /api/v1/calendar/google", s.handleCalendarGoogle)
+	mux.HandleFunc("GET /api/v1/calendar/google/callback", s.handleCalendarGoogleCallback)
 	mux.HandleFunc("GET /api/v1/git/repository", s.handleGit)
 	mux.HandleFunc("GET /api/v1/git/diff", s.handleGit)
 	mux.HandleFunc("POST /api/v1/git/action", s.handleGit)

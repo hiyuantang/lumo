@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { DesktopAppsProvider } from './platform/catalog';
 import { CalendarNotifications } from './apps/Calendar';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ServerClockProvider } from './shell/ServerClockContext';
@@ -58,7 +59,7 @@ function Shell() {
       </div>
     );
   }
-  return state.user ? <AppCatalogProvider><ServerClockProvider><PiConversationWindowsProvider><Desktop /></PiConversationWindowsProvider></ServerClockProvider></AppCatalogProvider> : <LoginScreen />;
+  return state.user ? <AppCatalogProvider><DesktopAppsProvider><ServerClockProvider><PiConversationWindowsProvider><Desktop /></PiConversationWindowsProvider></ServerClockProvider></DesktopAppsProvider></AppCatalogProvider> : <LoginScreen />;
 }
 
 export default function App() {

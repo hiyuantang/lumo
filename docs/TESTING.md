@@ -293,3 +293,30 @@ and disabled tool activation; it is included in `npm run test:unit`.
 
 Real Google sign-in requires a user-created OAuth client and consent. Offline
 success does not establish a successful live Google account connection.
+
+Desktop app checks (`tests/ui/desktop-apps.spec.ts`) cover preview, install,
+update, rollback, disable, enable, uninstall and browser restoration, with
+light/dark and narrow layouts. Build the production frontend first. The final
+case starts a local Go gateway with real package storage and app documents;
+only session authentication is stubbed. It checks opaque frame isolation,
+declared metrics access and production headers. On macOS the Linux metrics
+sampler has no real `/proc` values; these checks establish transport, not
+Ubuntu measurement accuracy.
+
+These tests permit service workers in Playwright's context configuration because
+its injected blocking script probes `navigator.serviceWorker`, which throws in
+an opaque sandbox frame. App documents explicitly forbid workers and external
+requests; `tests/offline.ts` still rejects external browser traffic. No test
+registers a service worker.
+
+The `desktopapps` Go tests cover validation, syntax checking, path boundaries,
+artifact integrity, concurrent/replayed changes, restart persistence and Trash
+retention. HTTP tests cover session binding, capabilities and revocation.
+`tests/pi-apps.test.mjs` checks tool registration, exact preview inputs and
+permission enforcement. These fixtures do not call a live model provider.
+
+The Ubuntu desktop-app browser test uses the same `lumod desktop-app` adapter
+as Pi, under the authenticated test account. It builds local source, reads
+real Linux metrics, reloads, updates, restores and uninstalls an app. Cached
+build and runtime images need Node.js; the Docker preflight fails clearly if
+it is absent. Explicit dependency preparation includes Node.js.

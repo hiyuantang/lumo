@@ -96,6 +96,10 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
+		if r.URL.Path == "/api/v1/desktop-apps/frame" {
+			w.Header().Set("Content-Security-Policy", "sandbox allow-scripts; frame-ancestors 'self'; base-uri 'none'")
+			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		}
 		w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Cache-Control", "no-store")

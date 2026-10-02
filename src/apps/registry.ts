@@ -2,7 +2,8 @@
 import type { ComponentType, SVGProps } from 'react';
 import { IconCalendar, IconBranch, IconSkills, IconTrash, IconCode, IconEye, IconBoxes, IconFolder, IconGear, IconGlobe, IconGrid, IconMonitor, IconTerminal } from '../shell/icons';
 
-export type AppId = 'calendar' | 'git' | 'skills' | 'trash' | 'pi' | 'preview' | 'home' | 'files' | 'terminal' | 'settings' | 'containers' | 'websites' | 'library';
+export type BuiltinAppId = 'calendar' | 'git' | 'skills' | 'trash' | 'pi' | 'preview' | 'home' | 'files' | 'terminal' | 'settings' | 'containers' | 'websites' | 'library';
+export type AppId = BuiltinAppId | `app:${string}`;
 export type SettingsSection = 'system' | 'folders' | 'time' | 'network' | 'appearance' | 'updates' | 'about';
 
 export interface AppMeta {
@@ -16,7 +17,7 @@ export interface AppMeta {
 
 export const APP_ORDER: AppId[] = ['home', 'files', 'preview', 'terminal', 'git', 'pi', 'calendar', 'containers', 'websites', 'library', 'skills', 'settings', 'trash'];
 
-export const APPS: Record<AppId, AppMeta> = {
+const builtinApps: Record<BuiltinAppId, AppMeta> = {
   calendar: { id: 'calendar', title: 'Calendar', icon: IconCalendar, defaultSize: { w: 1100, h: 720 }, minSize: { w: 390, h: 380 } },
   git: { id: 'git', requiredPackage: 'git', title: 'Git', icon: IconBranch, defaultSize: { w: 1060, h: 680 }, minSize: { w: 390, h: 400 } },
   skills: { id: 'skills', title: 'Skills', icon: IconSkills, defaultSize: { w: 960, h: 650 }, minSize: { w: 390, h: 380 } },
@@ -55,5 +56,12 @@ export const APPS: Record<AppId, AppMeta> = {
     minSize: { w: 440, h: 340 },
   },
 };
+
+export const APPS = new Proxy(builtinApps as Record<AppId, AppMeta>, {
+  get(target, key) {
+    if (typeof key === 'string' && key.startsWith('app:') && !target[key as AppId]) return { id: key, title: 'Desktop app', icon: IconGrid, defaultSize: { w: 720, h: 480 }, minSize: { w: 390, h: 320 } };
+    return Reflect.get(target, key);
+  },
+});
 
 export const CORE_APP_COUNT = APP_ORDER.filter((id) => !APPS[id].requiredPackage).length;

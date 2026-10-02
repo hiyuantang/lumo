@@ -16,6 +16,9 @@ var version = "0.4.0"
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "desktop-app":
+			runDesktopApps(os.Args[2:])
+			return
 		case "calendar":
 			runCalendar(os.Args[2:])
 			return
@@ -42,6 +45,6 @@ func main() {
 			return
 		}
 	}
-	fmt.Fprintln(os.Stderr, "Usage: lumod {gateway|sessiond|agent|broker|pi-history|calendar|version}")
+	fmt.Fprintln(os.Stderr, "Usage: lumod {gateway|sessiond|agent|broker|pi-history|calendar|desktop-app|version}")
 	os.Exit(2)
 }

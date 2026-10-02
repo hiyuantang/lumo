@@ -149,7 +149,7 @@ export async function piPage(page: Page) {
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
   await page.route('**/api/v1/**', (route) => {
     const path = new URL(route.request().url()).pathname;
-    const data = path.endsWith('/auth/session') ? { user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/user' } } : path.endsWith('/apps') ? { canInstall: false, apps: [{ id: 'pi', installed: true }] } : {};
+    const data = path.endsWith('/desktop-apps') ? { apps: [], builds: [] } : path.endsWith('/auth/session') ? { user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/user' } } : path.endsWith('/apps') ? { canInstall: false, apps: [{ id: 'pi', installed: true }] } : {};
     return route.fulfill({ json: { ok: true, data } });
   });
   return piFixture(page);

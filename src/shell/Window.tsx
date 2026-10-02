@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { APP_COMPONENTS } from '../apps';
 import { WindowContext, windowTitle } from './WindowContext';
-import { APPS } from '../apps/registry';
+import { DesktopAppWindow } from '../platform/DesktopAppWindow';
+import { APPS, type BuiltinAppId } from '../apps/registry';
 import { IconMinus, IconX, IconZoom } from './icons';
 import { useShell, type WindowState } from './ShellContext';
 import { useWindowPlacement } from './useWindowPlacement';
@@ -16,7 +17,7 @@ const SNAP_LABELS: Record<SnapTarget, string> = { left: 'Tile left', right: 'Til
 export function Window({ win }: { win: WindowState }) {
   const { state, actions, reducedMotion } = useShell();
   const meta = APPS[win.appId];
-  const Body = APP_COMPONENTS[win.appId];
+  const Body = win.appId.startsWith('app:') ? DesktopAppWindow : APP_COMPONENTS[win.appId as BuiltinAppId];
   const focused = state.focused === win.id;
   const minimize = useWindowMinimize(win, state.viewport, reducedMotion);
   const [interacting, setInteracting] = useState<'drag' | 'resize' | null>(null);

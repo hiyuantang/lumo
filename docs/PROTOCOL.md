@@ -2271,3 +2271,44 @@ API routes and does not bypass the state check. Logout clears it too.
 Pi's optional Calendar & Reminders extension invokes `lumod calendar list|change`
 with a single bounded JSON object on stdin. It shares the same per-user store
 and validation as these endpoints, without a shell or privileged broker operation.
+
+## Desktop app packages
+
+Desktop apps use `/api/v1/desktop-apps`, independently of server software in
+`/apps`. Requests retain gateway authentication and CSRF checks. The per-user
+agent and `lumod desktop-app` share an account-local package store and file lock.
+
+- `GET /desktop-apps` returns `{apps, builds}`. Entries contain a validated
+  manifest and digest; installed entries also have revision, enabled, previous,
+  and history. Builds are staged, immutable snapshots.
+- `POST /desktop-apps/action` accepts `{requestId, action, id, digest?, revision,
+  clean?}`. Actions are install, restore, disable, enable and uninstall. Install
+  grants only the declared API v1 read-only metrics capability. The trusted UI
+  presents this access before installation. Replay keys bind to the complete
+  request; stale revisions and conflicting reuse fail.
+- `POST /desktop-apps/launch` accepts `{digest, preview}` and returns `{token,
+  handshake, url}`. Installed launches require an enabled current version; preview launches
+  require a staged build. Tokens stay in the trusted shell, expire after one
+  hour, and are scoped to the gateway session and exact artifact.
+- `GET /desktop-apps/frame?frame=...` serves the generated app document with a
+  route-specific CSP, `sandbox allow-scripts`, and `frame-ancestors 'self'`.
+  Two script/style policies combine a per-document nonce with an inline-only
+  restriction, so learning the nonce does not permit external script URLs.
+  The frame identifier is separate from the capability token and is session
+  scoped. It only loads the document. The parent checks the sending frame and
+  fresh handshake before establishing the capability message channel.
+- `POST /desktop-apps/call` accepts `{token, method}`; only
+  `system.metrics.read` is allowed when declared and granted. It returns CPU
+  percentage, memory usage, memory capacity, and sample time. Revocation and
+  activation changes invalidate existing launches.
+- `POST /desktop-apps/report` accepts `{token, status, message}` for bounded
+  ready/error diagnostics. `POST /desktop-apps/close` revokes a launch.
+
+The initial fixed offline build supports self-contained JavaScript and CSS;
+there are no package lifecycle hooks, external imports, or custom build scripts.
+The SDK supplies `lumo.call`, theme updates, and TypeScript declarations. Compiled
+TypeScript/React packaging is a follow-on extension of the build contract.
+`lumod desktop-app api|create|build|list|install|restore|status` reads one JSON
+object on stdin and writes one JSON result. Pi uses this adapter with its
+existing permission enforcement. Preview uses the client-owned Lumo desktop
+request transport with `{action:"app_preview", target:<digest>, label:<name>}`.

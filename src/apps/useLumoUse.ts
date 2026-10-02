@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { registerDesktopBuild } from '../platform/catalog';
 import { useEffect, useRef } from 'react';
 import type { DesktopRequest } from '../api/lumo-use';
 import { getDataSource } from '../api/source';
@@ -49,7 +50,14 @@ export function useLumoUse(connection: string | null, active: boolean, enabled: 
         try {
           const current = info.current;
           if (signal.aborted || current.connection !== id || !current.active || !current.enabled || current.shell.state.windows[current.win.id]?.minimized || document.visibilityState !== 'visible') throw new Error('Lumo Use needs its active chat in a visible, connected tab.');
-          text = await desktop.current!.execute(claimed, signal);
+          if (claimed.action === 'app_preview') {
+            const catalog = await source.desktopApps();
+            const build = catalog.builds.find((item) => item.digest === claimed.target);
+            if (!build) throw new Error('Build unavailable. Build the app before previewing.');
+            if (signal.aborted) throw new Error('Preview interrupted.');
+            current.shell.actions.openApp(registerDesktopBuild(build, true));
+            text = 'Preview window opened. Use lumo_app_status for runtime diagnostics; opening is not visual verification.';
+          } else text = await desktop.current!.execute(claimed, signal);
         } catch (err) { error = true; text = err instanceof Error ? err.message : 'Lumo Use failed. Observe again.'; }
         await source.piDesktopResult(id, request.id, text, error).catch(() => {});
       });

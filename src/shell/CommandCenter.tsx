@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useDesktopApps } from '../platform/catalog';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { describeError, getDataSource, isReauthRequired, type ServiceUnit } from '../api/source';
 import { APP_ORDER, APPS } from '../apps/registry';
@@ -35,6 +36,7 @@ export function CommandCenter() {
   const requireReauth = useReauth();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
+  const desktopApps = useDesktopApps();
   const [services, setServices] = useState<ServiceUnit[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -120,7 +122,7 @@ export function CommandCenter() {
       },
     );
     return list;
-  }, [actions, services, source]);
+  }, [actions, services, source, desktopApps.catalog]);
 
   const results = useMemo(() => {
     return allActions

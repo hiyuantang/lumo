@@ -297,6 +297,12 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 			}
 			args = append(args, "--extension", desktopExtension)
 		}
+		appsExtension, err := writePiAppsExtension(dir, req.PermissionMode, desktopEnabled)
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		args = append(args, "--extension", appsExtension)
 		optionalArgs := piExtensionArgs(settings)
 		if settings.Calendar {
 			calendarExtension, err := writePiCalendarExtension(dir, req.PermissionMode)

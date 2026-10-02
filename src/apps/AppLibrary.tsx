@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { DesktopAppLibrary } from '../platform/DesktopAppLibrary';
+import { useDesktopApps } from '../platform/catalog';
 import { useAppMenus } from '../shell/appMenus';
 import { useAppPreference, useAppState } from '../shell/useAppState';
 import { useAppUpdates } from './useAppUpdates';
@@ -33,6 +35,7 @@ const size = (bytes: number) => bytes > 0 ? `${(bytes / 1024 / 1024).toFixed(1)}
 
 export function AppLibrary() {
   const source = getDataSource();
+  const desktopApps = useDesktopApps();
   const [sidebarCollapsed, setSidebarCollapsed] = useAppPreference<boolean>('library', 'sidebar-collapsed', false);
   const { actions, state } = useShell();
   const reauth = useReauth();
@@ -220,7 +223,7 @@ export function AppLibrary() {
   const percent = progress ? Math.min(100, Math.max(0, progress.percent)) : undefined;
   const locked = busy !== null || Boolean(job || pending) || updating;
   function startUpdates(plans: UpdatePlan[]) { setError(null); setProgress(null); updates.queue.start(plans); }
-  function refreshApps() { setError(null); setRefresh((value) => value + 1); }
+  function refreshApps() { void desktopApps.refresh().catch(() => {}); setError(null); setRefresh((value) => value + 1); }
   useAppMenus({ app: [{ id: 'check-updates', label: 'Check for Updates…', disabled: locked || !canCheckUpdates, run: () => { void checkUpdates(); } }], view: [{ id: 'back', label: 'Back', disabled: !canBack, run: () => travel(-1) }, { id: 'forward', label: 'Forward', disabled: !canForward, run: () => travel(1) }, { id: 'refresh', label: 'Refresh', disabled: locked, run: refreshApps }, { id: 'sidebar', label: 'Show Sidebar', checked: !sidebarCollapsed, run: () => setSidebarCollapsed(!sidebarCollapsed) }] });
 
   return <div className="app app-library" data-testid="app-library">
@@ -233,11 +236,13 @@ export function AppLibrary() {
       <main ref={content} className="app-library-detail">
         <header className="library-page-heading"><nav className="app-history" aria-label="Page history"><button type="button" className="app-history-back" aria-label="Back" title="Back" data-testid="library-back" disabled={!canBack} onClick={() => travel(-1)}><IconChevronRight size={18}/></button><button type="button" aria-label="Forward" title="Forward" data-testid="library-forward" disabled={!canForward} onClick={() => travel(1)}><IconChevronRight size={18}/></button></nav>{!isDetail && <div><h1>{section}</h1><p>{section === 'Discovery' ? 'Find apps for your server.' : 'Keep your installed apps current.'}</p></div>}</header>
         {page === 'Discovery' && <>
+          <DesktopAppLibrary />
           <div className="library-discovery-grid">{CATALOG.map((item) => {
             const ready = catalog?.apps.find((entry) => entry.id === item.id)?.installed;
             return <button type="button" key={item.id} data-testid={`library-${item.id}`} className="library-item" onClick={() => { navigate(item.id); setError(null); }}><span className="library-icon"><AppIcon appId={item.appId}/></span><span className="library-card-name"><strong>{item.name}</strong><small>{ready ? 'Installed' : catalog ? 'Available' : 'Checking…'}</small></span><span className="library-card-description">{item.description}</span></button>;
           })}</div>
         </>}
+        {page === 'Updates' && <DesktopAppLibrary updates />}
         {isDetail && <section className="library-app-overview" aria-label={`${app.name} details`}>
             <header className="library-hero"><span className="library-icon library-hero-icon"><AppIcon appId={app.appId}/></span><div><h1>{app.name}</h1><p>{app.description}</p></div>
               <div className="library-action">

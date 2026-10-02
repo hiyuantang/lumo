@@ -36,6 +36,9 @@ normal Linux permissions.
 
 - Build focused web interfaces for selected Linux capabilities: Files,
   Terminal, Markdown editing and the system-management tools below.
+- Local desktop apps can be created by Pi, previewed in isolated windows and
+  installed without rebuilding Lumo. The first SDK supports JavaScript/CSS
+  and optional read-only CPU and memory access.
 - Command-line applications remain usable through Terminal without a
   custom interface for each program.
 - Software with its own web interface can be accessed separately through
@@ -84,9 +87,15 @@ confirms the exact package changes and download size before applying the saved
 plan. Completed updates leave the pending list and refresh installed versions.
 
 App Library installs the server software needed by Docker and Nginx and
-opens those same applications. It is a curated two-entry catalog, with no
+opens those same applications. Its server-software catalog is curated, with no
 third-party plugin upload or arbitrary installation scripts. Packages already
 installed outside Lumo are detected. See [server applications](SERVER_APPS.md).
+
+App Library also manages local desktop app builds created through Pi. Discovery
+provides preview and installation; Updates provides version changes and history.
+Installed apps join the dock and search, retain previous versions for rollback,
+and support disable and recoverable uninstall. See [App Platform](APP_PLATFORM.md)
+for the package format, permission limits and recovery workflow.
 
 ## Menus
 

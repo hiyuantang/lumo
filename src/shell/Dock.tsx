@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useDesktopApps } from '../platform/catalog';
 import { useFileDrop } from './fileDrag';
 import { useEffect, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import overviewIcon from '../assets/lumo-overview.png';
@@ -28,7 +29,9 @@ export function Dock({ onOverview }: { onOverview: () => void }) {
     return () => window.clearTimeout(timer);
   }, [state.windows, reducedMotion]);
   const { catalog } = useAppCatalog();
+  const desktop = useDesktopApps();
   const [order, setOrder] = useState(loadDockOrder);
+  useEffect(() => { setOrder((previous) => { const installed = desktop.catalog.apps.filter((a) => a.enabled).map((a) => `app:${a.manifest.id}` as const); return [...new Set([...previous.filter((id) => !id.startsWith('app:') || installed.includes(id as `app:${string}`)), ...installed])]; }); }, [desktop.catalog]);
   const reorder = useReorder(order, setOrder, (id) => id, 'horizontal');
   const installed = new Set(catalog?.apps?.filter((app) => app.installed).map((app) => app.id));
   const visible = order.filter((id) => id !== 'trash' && (!APPS[id].requiredPackage || installed.has(APPS[id].requiredPackage!)));
@@ -82,6 +85,7 @@ export function Dock({ onOverview }: { onOverview: () => void }) {
               {...reorder.bind(appId)}
               onContextMenu={(event) => openContextMenu(event, !running && appId !== 'pi' && appId !== 'preview' ? [] : [
                 { label: minimized ? 'Restore' : running ? 'Show Window' : 'Open', run: () => onAppClick(appId) },
+                ...(appId.startsWith('app:') ? [{ label: 'New Window', run: () => actions.newDesktopAppWindow(appId) }] : []),
                 ...(appId === 'pi' ? [{ label: 'New Window', run: actions.newPiWindow }, ...appWindows.map((item) => ({ label: windowTitle(item), run: () => actions.focusApp(item.id) }))] : []),
                 ...(appId === 'preview' ? [{ label: 'New Window', run: actions.newPreviewWindow }, ...appWindows.map((item, index) => ({ label: `${windowTitle(item)}${item.filePath ? '' : ` ${index + 1}`}`, run: () => actions.focusApp(item.id) }))] : []),
                 ...(running ? [

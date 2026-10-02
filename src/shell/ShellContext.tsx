@@ -89,6 +89,7 @@ type Action =
   | { type: 'open-app'; appId: AppId }
   | { type: 'empty-trash' }
   | { type: 'pi-project'; id: WindowId; path: string | null }
+  | { type: 'new-desktop-app'; appId: AppId }
   | { type: 'new-preview' }
   | { type: 'open-pi'; path: string }
   | { type: 'open-pi-settings'; section: 'pet' }
@@ -201,6 +202,8 @@ function reducer(state: ShellState, action: Action): ShellState {
       return { ...state, authReady: true };
     case 'files-changed':
       return { ...state, fileRevision: state.fileRevision + 1 };
+    case 'new-desktop-app':
+      return createWindow(state, action.appId, `${action.appId}:${state.zTop + 1}` as WindowId);
     case 'new-pi':
       return createWindow(state, 'pi', state.windows.pi ? `pi:${state.zTop + 1}` : 'pi');
     case 'new-preview':
@@ -445,8 +448,9 @@ function initState(account?: string): ShellState {
   const windows: Partial<Record<WindowId, WindowState>> = {};
   if (stored?.windows) {
     for (const [id, win] of Object.entries(stored.windows)) {
-      const appId = (id === 'network' || id === 'updates') ? 'settings' : (id === 'logs' || id === 'services') ? 'home' : id.startsWith('preview:') ? 'preview' : id.startsWith('pi:') ? 'pi' : id as AppId;
+      const appId = id.startsWith('app:') && win?.appId?.startsWith('app:') ? win.appId : (id === 'network' || id === 'updates') ? 'settings' : (id === 'logs' || id === 'services') ? 'home' : id.startsWith('preview:') ? 'preview' : id.startsWith('pi:') ? 'pi' : id as AppId;
       const windowId = ((id === 'network' || id === 'updates') ? 'settings' : (id === 'logs' || id === 'services') ? 'home' : id) as WindowId;
+      if (id.startsWith('app:') && new URLSearchParams(location.search).get('recovery') === '1') continue;
       if (!win || !APPS[appId] || ((id === 'network' || id === 'updates') && stored.windows.settings) || ((id === 'logs' || id === 'services') && stored.windows.home)) continue;
       windows[windowId] = fitWindow({ ...restorePreviewMode(win), id: windowId, appId }, viewport);
     }
@@ -489,6 +493,7 @@ export interface ShellActions {
   openPreview(path: string[], edit?: boolean, windowId?: WindowId): void;
   newPreviewWindow(): void;
   newPiWindow(): void;
+  newDesktopAppWindow(appId: AppId): void;
   setPreviewMode(id: WindowId, mode: 'rendered' | 'raw'): void;
   filesChanged(): void;
   registerWindowGuard(appId: WindowId, guard: (proceed: () => void) => void): () => void;
@@ -663,6 +668,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       filesChanged: () => dispatch({ type: 'files-changed' }),
       newPreviewWindow: () => dispatch({ type: 'new-preview' }),
       newPiWindow: () => dispatch({ type: 'new-pi' }),
+      newDesktopAppWindow: (appId) => dispatch({ type: 'new-desktop-app', appId }),
       setPreviewMode: (id, mode) => dispatch({ type: 'preview-mode', id, mode }),
       emptyTrash: () => dispatch({ type: 'empty-trash' }),
       setPiProject: (id, path) => dispatch({ type: 'pi-project', id, path }),
