@@ -57,6 +57,8 @@ async function fixture(page: Page, installApp: 'docker' | 'nginx' | null = null)
       site = { ...site, definition: body.definition, revision: `sha256:${'b'.repeat(64)}` };
       return data({ site, reloaded: true, rollbackRef: 'backup-test' });
     }
+    if (path === '/api/v1/apps/update-history') return data({ entries: [] });
+    if (path === '/api/v1/desktop-apps') return data({ apps: [], builds: [] });
     if (path === '/api/v1/apps') return data({ canInstall: true, apps: ['docker', 'nginx'].map((id) => ({ id, installed: id === installApp ? installed : true })) });
     if (path === '/api/v1/apps/plan') {
       return data({ plan: { id: 'pln_test', appId: installApp, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 600000).toISOString(), packages: [{ name: installApp === 'docker' ? 'docker.io' : 'nginx', fromVersion: '', toVersion: '1.24.0', security: false, downloadBytes: 200000, installedDeltaBytes: 300000 }], securityCount: 0, downloadBytes: 200000, installedDeltaBytes: 300000, rebootRequired: false } });
@@ -183,4 +185,24 @@ test('Website validation failures and SSH edits preserve the draft', async ({ pa
   await expect(page.getByLabel('Application port')).toHaveValue('4000');
   await page.getByRole('button', { name: 'Discard draft' }).click();
   await expect(page.getByLabel('Application port')).toHaveValue('8080');
+});
+
+test('All Apps hides an empty Custom Apps section and keeps catalog errors visible', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await fixture(page);
+  await page.getByTestId('dock-app-library').click();
+  await expect(page.getByRole('heading', { name: 'All Apps', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Lumo Apps', exact: true })).toBeVisible();
+  await expect(page.getByTestId('desktop-app-library')).toHaveCount(0);
+  await page.getByTestId('library-updates').click();
+  await expect(page.getByTestId('desktop-app-updates')).toHaveCount(0);
+  await page.getByTestId('library-discovery').click();
+  await page.route('**/api/v1/desktop-apps', (route) => route.fulfill({ status: 503, json: { ok: false, error: { code: 'unavailable', message: 'Custom apps could not be loaded.' } } }));
+  await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Refresh', exact: true }).click();
+  await expect(page.getByTestId('app-library').getByRole('alert').filter({ hasText: 'Custom apps could not be loaded.' })).toBeVisible();
+  await expect(page.getByTestId('desktop-app-library')).toHaveCount(0);
+  await expect(page.getByTestId('library-calendar')).toBeVisible();
+  expect(errors).toEqual([]);
 });

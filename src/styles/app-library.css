@@ -16,6 +16,9 @@
 .library-page-heading { display: flex; align-items: flex-start; gap: 16px; }
 .library-page-heading h1 { margin: 0 0 7px; font-size: 26px; font-weight: 650; letter-spacing: -.6px; }
 .library-page-heading p { color: var(--text-muted); font-size: 12px; line-height: 1.6; margin: 0; }
+.library-app-group { display: grid; gap: 12px; }
+.library-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.library-section-heading h2 { font-size: 16px; margin: 0; }
 .library-discovery-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,220px),1fr)); gap: 10px; }
 .library-item { display: grid; grid-template-columns: 36px minmax(0,1fr); align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: 10px; padding: 13px; text-align: left; background: var(--surface); }
 .library-item:hover { background: var(--surface-raised); }

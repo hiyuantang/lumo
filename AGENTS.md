@@ -127,7 +127,7 @@ interaction and accessibility requirements.
   keyboard focus, and only that input mode may paint a row background.
   Clicking outside a menu, including inside another app, dismisses it and
   performs the clicked action.
-- **Use direct update flows.** App Library has Discovery and Updates. Offer
+- **Use direct update flows.** App Library has All Apps and Updates. Offer
   Update per app and Update all. Completed updates move to installed history,
   showing old version → new version without an extra disclosure step.
 - **Keep installation direct.** Install starts from one button, which becomes

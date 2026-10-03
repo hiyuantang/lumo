@@ -43,8 +43,10 @@ Do not install unreviewed generated code as a trusted shipped plugin.
 
 ## App Library
 
-Discovery lists all six shipped apps alongside Pi and locally created apps.
-Each app has one entry and a details page with its active app version and Open.
+All Apps groups the six shipped apps and Pi under Lumo Apps. Locally created
+apps appear under Custom Apps. Empty groups are hidden, and core built-in apps
+such as Files, Terminal and Settings are not listed.
+Each shipped app has one entry and a details page with its active app version and Open.
 Calendar, Skills and Monitor are included with Lumo. Git, Docker and Nginx retain
 their existing Ubuntu package installation controls; Open is available when
 the required package is installed. Their app version comes from the deployed

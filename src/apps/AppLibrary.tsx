@@ -33,7 +33,7 @@ const INCLUDED_APPS = [
   { id: 'monitor' as const, appId: 'home' as const, name: APPS.home.title, description: 'Inspect server resources, services and logs.' },
 ];
 const DISCOVERY = [...INCLUDED_APPS, ...CATALOG];
-type LibraryPage = 'Discovery' | 'Updates' | LibraryAppID | typeof INCLUDED_APPS[number]['id'];
+type LibraryPage = 'All Apps' | 'Updates' | LibraryAppID | typeof INCLUDED_APPS[number]['id'];
 const managedPage = (page: LibraryPage): page is LibraryAppID => CATALOG.some((app) => app.id === page);
 type Job = { app: LibraryAppID; requestId: string; operation?: AppOperation };
 type Review = { app: LibraryAppID; operation: AppOperation; plan: UpdatePlan };
@@ -54,13 +54,13 @@ export function AppLibrary() {
   const [selected, setSelected] = useAppState<LibraryAppID>('library', 'selection', () => state.navigation?.target === 'library' ? state.navigation.appId : readJob()?.app ?? 'docker', ['docker', 'nginx', 'pi', 'git']);
   const [navigation, setNavigation] = useState<{ pages: LibraryPage[]; index: number }>(() => {
     const job = readJob();
-    const page: LibraryPage = updating ? 'Updates' : job ? job.operation === 'update' ? 'Updates' : job.app : 'Discovery';
-    return { pages: page === 'Discovery' ? [page] : ['Discovery', page], index: page === 'Discovery' ? 0 : 1 };
+    const page: LibraryPage = updating ? 'Updates' : job ? job.operation === 'update' ? 'Updates' : job.app : 'All Apps';
+    return { pages: page === 'All Apps' ? [page] : ['All Apps', page], index: page === 'All Apps' ? 0 : 1 };
   });
   const page = navigation.pages[navigation.index];
-  const isDetail = page !== 'Discovery' && page !== 'Updates';
+  const isDetail = page !== 'All Apps' && page !== 'Updates';
   const includedApp = INCLUDED_APPS.find((item) => item.id === page);
-  const section = page === 'Updates' ? 'Updates' : 'Discovery';
+  const section = page === 'Updates' ? 'Updates' : 'All Apps';
   const canBack = navigation.index > 0;
   const canForward = navigation.index < navigation.pages.length - 1;
   const content = useRef<HTMLElement | null>(null);
@@ -241,19 +241,20 @@ export function AppLibrary() {
     <div className={`app-library-body${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       <aside className="app-library-sidebar" aria-label="App Library sections" data-testid="library-sidebar">
         <div className="library-sidebar-heading"><strong>Apps</strong><button type="button" className="btn library-sidebar-toggle" data-testid="library-sidebar-toggle" aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!sidebarCollapsed} onClick={() => setSidebarCollapsed(!sidebarCollapsed)}><IconSidebar size={18}/></button></div>
-        <nav className="library-navigation" aria-label="App Library"><button type="button" data-testid="library-discovery" aria-label="Discovery" title="Discovery" aria-current={section === 'Discovery' ? 'page' : undefined} onClick={() => navigate('Discovery')}><IconGrid size={18}/><span className="library-sidebar-label">Discovery</span></button><button type="button" data-testid="library-updates" aria-label="Updates" title="Updates" aria-current={section === 'Updates' ? 'page' : undefined} onClick={() => { navigate('Updates'); if (!checkedAt && canCheckUpdates) void checkUpdates(); }}><IconDownload size={18}/><span className="library-sidebar-label">Updates</span>{updateCount > 0 && <span className="library-count">{updateCount}</span>}</button></nav>
+        <nav className="library-navigation" aria-label="App Library"><button type="button" data-testid="library-discovery" aria-label="All Apps" title="All Apps" aria-current={section === 'All Apps' ? 'page' : undefined} onClick={() => navigate('All Apps')}><IconGrid size={18}/><span className="library-sidebar-label">All Apps</span></button><button type="button" data-testid="library-updates" aria-label="Updates" title="Updates" aria-current={section === 'Updates' ? 'page' : undefined} onClick={() => { navigate('Updates'); if (!checkedAt && canCheckUpdates) void checkUpdates(); }}><IconDownload size={18}/><span className="library-sidebar-label">Updates</span>{updateCount > 0 && <span className="library-count">{updateCount}</span>}</button></nav>
         <div className="library-sidebar-footer"><button className="library-check" type="button" data-testid="library-check-updates" aria-label={busy === 'refresh' ? 'Checking for updates' : 'Check for updates'} title="Check for updates" disabled={locked || !canCheckUpdates} onClick={() => void checkUpdates()}>{sidebarCollapsed ? <IconRefresh size={18}/> : busy === 'refresh' ? 'Checking…' : 'Check for updates'}</button><small>{checkedAt ? `Last checked ${new Date(checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'Not checked yet'}</small></div>
       </aside>
       <main ref={content} className="app-library-detail">
-        <header className="library-page-heading"><nav className="app-history" aria-label="Page history"><button type="button" className="app-history-back" aria-label="Back" title="Back" data-testid="library-back" disabled={!canBack} onClick={() => travel(-1)}><IconChevronRight size={18}/></button><button type="button" aria-label="Forward" title="Forward" data-testid="library-forward" disabled={!canForward} onClick={() => travel(1)}><IconChevronRight size={18}/></button></nav>{!isDetail && <div><h1>{section}</h1><p>{section === 'Discovery' ? 'Find apps for your server.' : 'Keep your installed apps current.'}</p></div>}</header>
-        {page === 'Discovery' && <>
-          <DesktopAppLibrary />
+        <header className="library-page-heading"><nav className="app-history" aria-label="Page history"><button type="button" className="app-history-back" aria-label="Back" title="Back" data-testid="library-back" disabled={!canBack} onClick={() => travel(-1)}><IconChevronRight size={18}/></button><button type="button" aria-label="Forward" title="Forward" data-testid="library-forward" disabled={!canForward} onClick={() => travel(1)}><IconChevronRight size={18}/></button></nav>{!isDetail && <div><h1>{section}</h1><p>{section === 'All Apps' ? 'Find apps for your server.' : 'Keep your installed apps current.'}</p></div>}</header>
+        {page === 'All Apps' && <>
+          <section className="library-app-group" aria-label="Lumo Apps" data-testid="library-lumo-apps"><div className="library-section-heading"><h2>Lumo Apps</h2></div>
           <div className="library-discovery-grid">{DISCOVERY.map((item) => {
             const plugin = item.appId in pluginPackages ? plugins[item.appId as PluginId] : undefined;
             const included = INCLUDED_APPS.some((app) => app.id === item.id);
             const ready = catalog?.apps.find((entry) => entry.id === item.id)?.installed;
             return <button type="button" key={item.id} data-testid={`library-${item.id}`} className="library-item" onClick={() => { navigate(item.id); setError(null); }}><span className="library-icon"><AppIcon appId={item.appId}/></span><span className="library-card-name"><strong>{item.name}</strong><small>{plugin?.error ? 'App unavailable' : included ? plugin?.version ? `Installed · ${plugin.version}` : 'Checking…' : ready ? plugin?.version ? `Installed · ${plugin.version}` : 'Installed' : catalog ? 'Available' : 'Checking…'}</small></span><span className="library-card-description">{item.description}</span></button>;
-          })}</div>
+          })}</div></section>
+          <DesktopAppLibrary />
         </>}
         {page === 'Updates' && <DesktopAppLibrary updates />}
         {includedApp && <section className="library-app-overview" aria-label={`${includedApp.name} details`}>

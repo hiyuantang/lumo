@@ -8,8 +8,10 @@ async function open(page: Page) {
   await page.getByTestId('dock-app-library').click();
 }
 
-test('Discovery uses adaptive cards and keeps details separate from launch', async ({ page }) => {
+test('All Apps uses adaptive cards and keeps details separate from launch', async ({ page }) => {
   await open(page);
+  await expect(page.getByRole('heading', { name: 'Lumo Apps', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Custom Apps', exact: true })).toBeVisible();
   const cards = page.locator('.library-discovery-grid');
   await expect(cards.getByRole('button')).toHaveCount(7);
   const columns = () => cards.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);
@@ -81,7 +83,7 @@ test('App details have independent back and forward history', async ({ page }) =
   await expect(page.getByRole('region', { name: 'Docker details' })).toBeVisible();
   await expect(page.locator('.library-discovery-grid')).toHaveCount(0);
   await page.getByTestId('library-back').click();
-  await expect(page.getByRole('heading', { name: 'Discovery', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'All Apps', exact: true })).toBeVisible();
   await page.getByTestId('library-forward').click();
   await expect(page.getByRole('region', { name: 'Docker details' })).toBeVisible();
   await page.getByTestId('library-discovery').click();
