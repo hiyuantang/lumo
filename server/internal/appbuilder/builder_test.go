@@ -3,6 +3,7 @@ package appbuilder
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"lumo/server/internal/appplugins"
 	"os"
@@ -188,5 +189,31 @@ func TestNativeValidationDoesNotExecuteAppCode(t *testing.T) {
 	requireOK(t, Build(context.Background(), home, project, false))
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatal("validation executed app code", err)
+	}
+}
+
+func TestBuilderBundlesAndRejectsIcon(t *testing.T) {
+	home, project := fixture(t, false, false)
+	raw, err := os.ReadFile(filepath.Join(project, "lumo.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m appplugins.Manifest
+	json.Unmarshal(raw, &m)
+	m.IconImage = "assets/icon.png"
+	m.Permissions = append(m.Permissions, "notifications.send")
+	raw, _ = json.Marshal(m)
+	os.WriteFile(filepath.Join(project, "lumo.plugin.json"), raw, 0600)
+	os.MkdirAll(filepath.Join(project, "assets"), 0700)
+	data, _ := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAL0lEQVR4nO3OIQEAAAgDMKIRjWg0gxg3E/Ornr2kEhAQEBAQEBAQEBAQEBAQSAcejZH8iJt+oVIAAAAASUVORK5CYII=")
+	os.WriteFile(filepath.Join(project, "assets/icon.png"), data, 0600)
+	report := Build(context.Background(), home, project, true)
+	requireOK(t, report)
+	if report.Release.Manifest.IconImage != "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAL0lEQVR4nO3OIQEAAAgDMKIRjWg0gxg3E/Ornr2kEhAQEBAQEBAQEBAQEBAQSAcejZH8iJt+oVIAAAAASUVORK5CYII=" {
+		t.Fatal("icon not embedded")
+	}
+	os.WriteFile(filepath.Join(project, "assets/icon.png"), []byte("not an image"), 0600)
+	if Build(context.Background(), home, project, true).OK {
+		t.Fatal("invalid icon passed validation")
 	}
 }

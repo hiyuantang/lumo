@@ -4,6 +4,7 @@ import type { Route } from '../offline';
 
 export async function nativeAppRoute(route: Route): Promise<boolean> {
   const pathname = new URL(route.request().url()).pathname;
+  if (pathname === '/api/v1/notifications') { await route.fulfill({ json: { ok: true, data: [] } }); return true; }
   if (pathname === '/api/v1/app-plugins') {
     const names = await readdir('public/plugins');
     const apps = await Promise.all(names.map(async (name) => {

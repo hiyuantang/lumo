@@ -11,9 +11,10 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"lumo/server/internal/appicons"
 	"lumo/server/internal/appplugins"
-	"lumo/server/internal/desktopapps"
 	"lumo/server/internal/appruntime"
+	"lumo/server/internal/desktopapps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -44,7 +45,7 @@ func failure(file, code string, err error, fix string) Report {
 }
 func API() any {
 	guide, _ := resources.ReadFile("GUIDE.md")
-	return map[string]any{"apiVersion": 1, "kind": "native", "guide": string(guide), "frontendImports": []string{"react", "react/jsx-runtime", "@lumo/sdk/api/plugins", "@lumo/sdk/shell/ShellContext", "@lumo/sdk/shell/WindowContext"}, "backendRuntime": "node", "platform": runtime.GOOS + "/" + runtime.GOARCH, "validation": "Static checks do not execute app code and do not replace runtime or visual tests."}
+	return map[string]any{"apiVersion": 1, "kind": "native", "guide": string(guide), "frontendImports": []string{"react", "react/jsx-runtime", "@lumo/sdk/api/plugins", "@lumo/sdk/api/notifications", "@lumo/sdk/shell/ShellContext", "@lumo/sdk/shell/WindowContext"}, "backendRuntime": "node", "platform": runtime.GOOS + "/" + runtime.GOARCH, "validation": "Static checks do not execute app code and do not replace runtime or visual tests."}
 }
 func Create(project, name, title string, backend, extension bool) (any, error) {
 	if !filepath.IsAbs(project) || !appplugins.ValidName(name) || appplugins.AppID(name) != "plugin:"+name || strings.TrimSpace(title) == "" || len(title) > 80 || extension && !backend {
@@ -152,6 +153,10 @@ func projectInput(project string) (appplugins.Manifest, map[string]string, error
 	}
 	if decoder.Decode(new(any)) != io.EOF {
 		return m, nil, errors.New("Manifest must contain one JSON object")
+	}
+	m.IconImage, err = appicons.Resolve(m.IconImage, func(path string, limit int64) ([]byte, error) { return read(root, path, limit) })
+	if err != nil {
+		return m, nil, err
 	}
 	name := strings.TrimPrefix(m.ID, "plugin:")
 	if m.ID != "plugin:"+name || appplugins.AppID(name) != m.ID || !appplugins.ValidName(name) {

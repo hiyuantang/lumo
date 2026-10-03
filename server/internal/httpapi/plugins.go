@@ -126,7 +126,8 @@ func (s *Server) handlePlugin(w http.ResponseWriter, r *http.Request, name strin
 		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 		cmd.WaitDelay = time.Second
 		cmd.Stdin = &input
-		cmd.Env = append(os.Environ(), "HOME="+s.home, "LUMO_APP_DATA="+appplugins.DataDirectory(s.home, name))
+		executable, _ := os.Executable()
+		cmd.Env = append(os.Environ(), "HOME="+s.home, "LUMO_APP_DATA="+appplugins.DataDirectory(s.home, name), "LUMO_APP_NAME="+name, "LUMO_HOST_EXECUTABLE="+executable)
 		output := &pluginOutput{limit: 32 << 20}
 		diagnostic := &pluginOutput{limit: 64 << 10}
 		cmd.Stdout = output

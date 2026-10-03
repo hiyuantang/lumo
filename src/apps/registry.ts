@@ -11,6 +11,7 @@ export type SettingsSection = 'system' | 'folders' | 'time' | 'network' | 'appea
 export interface AppMeta {
   id: AppId;
   requiredPackage?: 'git' | 'docker' | 'nginx' | 'pi';
+  iconImage?: string;
   title: string;
   icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
   defaultSize: { w: number; h: number };

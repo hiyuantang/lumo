@@ -357,3 +357,5 @@ The installer checks the full required-app distribution before activation.
 Pi chat, permission and builder workflows with offline fixtures. UI tests for
 plugins, Pi assistant/conversation location, Files, Terminal, Settings and App
 Library exercise loading through the host SDK and shared React instance.
+
+App services: `tests/ui/app-notifications.spec.ts` checks background inbox display, read/dismiss persistence and themes/sizes. `tests/docker/app-services.spec.ts` builds a real account plugin, sends through its frontend SDK and backend after window close, checks packaged PNG icons, reload and account isolation. Go tests cover notification locks, limits, duplicate IDs, launch revocation, permissions and icon validation at build/import.

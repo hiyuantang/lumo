@@ -79,7 +79,7 @@ func (s *Server) resident(ctx context.Context, pkg *appplugins.Package) (*reside
 		return nil, err
 	}
 	roots := appplugins.Roots()
-	command.Env = append(os.Environ(), "LUMO_PLUGIN_DIR="+roots[0], "LUMO_PLUGIN_BUNDLED_DIR="+roots[1], "HOME="+s.home, "LUMO_HOST_EXECUTABLE="+executable, "LUMO_APP_DATA="+appplugins.DataDirectory(s.home, pkg.Name))
+	command.Env = append(os.Environ(), "LUMO_PLUGIN_DIR="+roots[0], "LUMO_PLUGIN_BUNDLED_DIR="+roots[1], "HOME="+s.home, "LUMO_APP_NAME="+pkg.Name, "LUMO_HOST_EXECUTABLE="+executable, "LUMO_APP_DATA="+appplugins.DataDirectory(s.home, pkg.Name))
 	command.ExtraFiles = []*os.File{descriptor}
 	command.Stderr = os.Stderr
 	input, err := command.StdinPipe()

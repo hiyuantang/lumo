@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { AppNotification } from '../api/notifications';
 import {
   createContext,
   useContext,
@@ -40,6 +41,9 @@ function windowLayout({ x, y, w, h, maximized, snapped, restore }: WindowLayout)
 export type PiOutcome = 'done' | 'stopped' | 'error';
 
 export interface ShellNotification {
+  remoteId?: string;
+  appId?: AppId;
+  appName?: string;
   id: number;
   title: string;
   body: string;
@@ -110,6 +114,7 @@ type Action =
   | { type: 'cancel-window-gesture'; appId: WindowId; previous: WindowState }
   | { type: 'update-rect'; appId: WindowId; rect: Rect }
   | { type: 'cycle-window'; dir: 1 | -1 }
+  | { type: 'sync-notifications'; items: AppNotification[] }
   | { type: 'notify'; title: string; body: string; piOutcome?: PiOutcome; silent?: boolean }
   | { type: 'dismiss-notification'; id: number }
   | { type: 'pi-activity'; key: string; running: boolean }
@@ -182,12 +187,14 @@ function reducer(state: ShellState, action: Action): ShellState {
     case 'login': {
       if (state.user === action.user) return state;
       const saved = initState(action.user);
-      return { ...state, user: action.user, windows: saved.windows, remembered: saved.remembered, zTop: saved.zTop, focused: saved.focused, navigation: saved.navigation, piActivity: {} };
+      return { ...state, user: action.user, windows: saved.windows, remembered: saved.remembered, zTop: saved.zTop, focused: saved.focused, navigation: saved.navigation, piActivity: {}, notifications: [], unread: 0, piOutcomeNotice: null };
     }
     case 'logout':
       return {
         ...state,
         user: null,
+        notifications: [],
+        unread: 0,
         piActivity: {},
         piOutcomeNotice: null,
         windows: {},
@@ -370,9 +377,15 @@ function reducer(state: ShellState, action: Action): ShellState {
       if (action.running) piActivity[action.key] = true; else delete piActivity[action.key];
       return { ...state, piActivity };
     }
+    case 'sync-notifications': {
+      const saved = new Map(state.notifications.filter((item) => item.remoteId).map((item) => [item.remoteId, item]));
+      const remote = action.items.map((item): ShellNotification => ({ id: saved.get(item.id)?.id ?? notificationId++, remoteId: item.id, appId: item.appId as AppId, appName: item.appName, title: item.title, body: item.body, ts: item.createdAt, read: item.read || state.notifOpen }));
+      const notifications = [...state.notifications.filter((item) => !item.remoteId), ...remote].sort((a, b) => b.ts - a.ts);
+      return { ...state, notifications, unread: notifications.filter((item) => !item.read).length };
+    }
     case 'notify': {
       const notification = { id: notificationId++, title: action.title, body: action.body, ts: Date.now(), read: state.notifOpen, piOutcome: action.piOutcome };
-      const notifications = action.silent ? state.notifications : [notification, ...state.notifications].slice(0, 50);
+      const notifications = action.silent ? state.notifications : [...[notification, ...state.notifications.filter((item) => !item.remoteId)].slice(0, 50), ...state.notifications.filter((item) => item.remoteId)].sort((a, b) => b.ts - a.ts);
       return {
         ...state,
         piOutcomeNotice: action.piOutcome ? notification : state.piOutcomeNotice,
@@ -539,6 +552,43 @@ export function ShellProvider({ children }: { children: ReactNode }) {
 
   const currentState = useRef(state);
   currentState.current = state;
+  const notificationMutations = useRef<Promise<unknown>>(Promise.resolve());
+  const notificationVersion = useRef(0);
+  const changeNotifications = useCallback((action: 'read' | 'dismiss', ids: string[]) => {
+    if (!ids.length) return;
+    notificationVersion.current++;
+    const user = currentState.current.user;
+    let saved = false;
+    notificationMutations.current = notificationMutations.current.catch(() => {}).then(async () => {
+      if (currentState.current.user !== user) return;
+      await getDataSource().changeNotifications(action, ids);
+      saved = true;
+    }).catch(() => {
+      if (currentState.current.user === user) dispatch({ type: 'notify', title: 'Notifications', body: 'Could not save this change. Your inbox will refresh when the server is available.' });
+    }).finally(() => { notificationVersion.current++; if (saved) window.dispatchEvent(new Event('lumo:notifications-changed')); });
+  }, []);
+  useEffect(() => {
+    if (!state.user) return;
+    let alive = true;
+    let loading = false;
+    const refresh = async () => {
+      if (loading || document.hidden) return;
+      loading = true;
+      await notificationMutations.current;
+      const version = notificationVersion.current;
+      try {
+        const items = await getDataSource().listNotifications();
+        if (!alive || version !== notificationVersion.current || !Array.isArray(items)) return;
+        dispatch({ type: 'sync-notifications', items });
+        if (currentState.current.notifOpen) changeNotifications('read', items.filter((item) => !item.read).map((item) => item.id));
+      } catch {}
+      finally { loading = false; }
+    };
+    const load = () => { void refresh(); };
+    load(); const timer = window.setInterval(load, 10000);
+    window.addEventListener('focus', load); window.addEventListener('lumo:notifications-changed', load); document.addEventListener('visibilitychange', load);
+    return () => { alive = false; clearInterval(timer); window.removeEventListener('focus', load); window.removeEventListener('lumo:notifications-changed', load); document.removeEventListener('visibilitychange', load); };
+  }, [state.user, changeNotifications]);
   const windowGuards = useRef(new Map<WindowId, (proceed: () => void) => void>());
   const requestWindowAction = useCallback((appId: WindowId, proceed: () => void) => {
     const guard = windowGuards.current.get(appId);
@@ -716,15 +766,15 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       cancelWindowGesture: (appId, previous) => dispatch({ type: 'cancel-window-gesture', appId, previous }),
       updateRect: (appId, rect) => dispatch({ type: 'update-rect', appId, rect }),
       notify: (title, body, piOutcome, silent) => dispatch({ type: 'notify', title, body, piOutcome, silent }),
-      dismissNotification: (id) => dispatch({ type: 'dismiss-notification', id }),
+      dismissNotification: (id) => { const remoteId = currentState.current.notifications.find((item) => item.id === id)?.remoteId; changeNotifications('dismiss', remoteId ? [remoteId] : []); dispatch({ type: 'dismiss-notification', id }); },
       setPiActivity: (key, running) => dispatch({ type: 'pi-activity', key, running }),
-      clearNotifications: () => dispatch({ type: 'clear-notifications' }),
+      clearNotifications: () => { changeNotifications('dismiss', currentState.current.notifications.flatMap((item) => item.remoteId ? [item.remoteId] : [])); dispatch({ type: 'clear-notifications' }); },
       toggleTheme: () => dispatch({ type: 'toggle-theme' }),
       toggleMotion: () => dispatch({ type: 'toggle-motion' }),
       setTheme: (theme) => dispatch({ type: 'set-theme', theme }),
       setMotion: (motion) => dispatch({ type: 'set-motion', motion }),
       setPalette: (open) => dispatch({ type: 'set-palette', open }),
-      setNotifOpen: (open) => dispatch({ type: 'set-notif-open', open }),
+      setNotifOpen: (open) => { if (open) changeNotifications('read', currentState.current.notifications.flatMap((item) => item.remoteId && !item.read ? [item.remoteId] : [])); dispatch({ type: 'set-notif-open', open }); },
       setShortcutsOpen: (open) => dispatch({ type: 'set-shortcuts-open', open }),
     }),
     [],

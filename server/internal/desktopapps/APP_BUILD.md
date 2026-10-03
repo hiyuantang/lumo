@@ -108,3 +108,30 @@ needs to return to the previous version. Rollback changes code only.
 Report the app name, source location, version, whether it is staged or installed,
 the checks actually performed, and any remaining limits. Never describe a
 preview-only build as installed or a sandbox app as a complete native plugin.
+
+## Notifications and icons
+
+Declare `{ "name": "notifications.send" }` in capabilities, then call:
+
+```js
+await lumo.call('notifications.send', {
+  requestId: crypto.randomUUID(), title: 'Task complete', body: 'Your result is ready.'
+});
+```
+
+Use a stable requestId for retries of the same event (8–128 characters). Titles
+allow 120 characters, bodies 2000, plain text only. The host supplies the app
+identity. Ten new messages per app per minute are allowed. Preview validates the
+message and returns `{preview:true}` without delivery. Installed messages remain
+in the account's Lumo notification center after the window closes or the desktop
+reloads. Read and dismissed state persist. Lumo keeps the newest 500 records,
+including duplicate-request receipts. The frame stops running when closed; use
+a complete native plugin for backend work that must notify without a window.
+Lumo notifications do not request browser/OS push permission.
+
+Set `icon` to a Lumo glyph such as `IconBell`, `IconCalendar`, `IconFolder`,
+`IconCode` or `IconGrid`. For original artwork, include `assets/icon.png` and set
+`iconImage` to that path. Use a PNG of 16–256 pixels on each side, at most 32 KiB.
+Build validates and embeds it into the manifest. Embedded `data:image/png;base64,`
+values also work. Remote URLs and SVG are unsupported. The embedded icon takes
+precedence over the glyph. Check its appearance in the dock and App Library.

@@ -3,6 +3,7 @@ package desktopapps
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
@@ -254,5 +255,35 @@ func TestUninstallCanRecoverDamagedAppWithoutReadingOtherApps(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(home, ".local/share/Trash/files", entries[0].Name(), b.Digest+".json"))
 	if err != nil || string(raw) != "damaged" {
 		t.Fatal("damaged artifact not recoverable", err)
+	}
+}
+
+func TestIconBuildEmbedsAndImportValidates(t *testing.T) {
+	home := t.TempDir()
+	project := filepath.Join(t.TempDir(), "icons")
+	Create(project, "local.icons", "Icons")
+	raw, _ := os.ReadFile(filepath.Join(project, "lumo.app.json"))
+	var m Manifest
+	json.Unmarshal(raw, &m)
+	m.IconImage = "assets/icon.png"
+	m.Capabilities = append(m.Capabilities, Capability{Name: "notifications.send"})
+	raw, _ = json.Marshal(m)
+	os.WriteFile(filepath.Join(project, "lumo.app.json"), raw, 0600)
+	os.MkdirAll(filepath.Join(project, "assets"), 0700)
+	data, _ := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAL0lEQVR4nO3OIQEAAAgDMKIRjWg0gxg3E/Ornr2kEhAQEBAQEBAQEBAQEBAQSAcejZH8iJt+oVIAAAAASUVORK5CYII=")
+	os.WriteFile(filepath.Join(project, "assets/icon.png"), data, 0600)
+	store := New(home)
+	built, err := store.Build(context.Background(), project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if built.Manifest.IconImage != "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAL0lEQVR4nO3OIQEAAAgDMKIRjWg0gxg3E/Ornr2kEhAQEBAQEBAQEBAQEBAQSAcejZH8iJt+oVIAAAAASUVORK5CYII=" {
+		t.Fatal("icon missing")
+	}
+	built.Manifest.IconImage = "https://example.test/icon.png"
+	built.Manifest.Version = "1.0.1"
+	built.Digest = ""
+	if _, err = store.Stage(built); err == nil {
+		t.Fatal("external icon accepted")
 	}
 }

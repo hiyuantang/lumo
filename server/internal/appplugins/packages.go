@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"lumo/server/internal/appicons"
 	"lumo/server/internal/appruntime"
 	"os"
 	"os/exec"
@@ -39,6 +40,7 @@ type Manifest struct {
 	Assistant       bool       `json:"assistant,omitempty"`
 	Name            string     `json:"name"`
 	Description     string     `json:"description,omitempty"`
+	IconImage       string     `json:"iconImage,omitempty"`
 	Icon            string     `json:"icon"`
 	Window          Window     `json:"window"`
 	Entry           string     `json:"entry"`
@@ -184,8 +186,11 @@ func Parse(name, directory string, raw []byte) (*Package, error) {
 			}
 		}
 	}
+	if err := appicons.Validate(m.IconImage); err != nil {
+		return nil, err
+	}
 	for _, permission := range m.Permissions {
-		if permission != "account" && (!strings.HasPrefix(permission, "broker.") || !supportedBroker[strings.TrimPrefix(permission, "broker.")]) {
+		if permission != "account" && permission != "notifications.send" && (!strings.HasPrefix(permission, "broker.") || !supportedBroker[strings.TrimPrefix(permission, "broker.")]) {
 			return nil, errors.New("unsupported app permission")
 		}
 	}

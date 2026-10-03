@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"lumo/server/internal/appicons"
 	"lumo/server/internal/files"
 	"os"
 	"path/filepath"
@@ -45,6 +46,8 @@ type Window struct {
 	MinHeight int `json:"minHeight"`
 }
 type Manifest struct {
+	Icon          string       `json:"icon,omitempty"`
+	IconImage     string       `json:"iconImage,omitempty"`
 	SchemaVersion int          `json:"schemaVersion"`
 	ID            string       `json:"id"`
 	Name          string       `json:"name"`
@@ -182,18 +185,21 @@ func (s *Store) locked(fn func(*state) error) error {
 	return fn(&st)
 }
 func validate(m Manifest) error {
+	if err := appicons.Validate(m.IconImage); err != nil {
+		return err
+	}
 	if len(m.Version) > 32 || m.SchemaVersion != 1 || m.APIVersion != 1 || !idPattern.MatchString(m.ID) || !versionPattern.MatchString(m.Version) || len(m.Name) < 1 || len(m.Name) > 80 || len(m.Description) > 500 || m.License != "AGPL-3.0-only" || (m.Entry != "src/main.js" && m.Entry != "src/main.tsx") || m.Styles != "src/style.css" {
 		return ErrInvalid
 	}
 	if strings.ContainsAny(m.Name, "\x00\r\n") || m.Window.MinWidth < 320 || m.Window.MinWidth > 1600 || m.Window.MinHeight < 240 || m.Window.MinHeight > 1200 || m.Window.Width < m.Window.MinWidth || m.Window.Width > 2400 || m.Window.Height < m.Window.MinHeight || m.Window.Height > 1600 {
 		return ErrInvalid
 	}
-	if len(m.Capabilities) > 2 {
+	if len(m.Capabilities) > 3 {
 		return ErrInvalid
 	}
 	seen := map[string]bool{}
 	for _, c := range m.Capabilities {
-		if (c.Name != "system.metrics.read" && c.Name != "app.storage") || seen[c.Name] {
+		if (c.Name != "system.metrics.read" && c.Name != "app.storage" && c.Name != "notifications.send") || seen[c.Name] {
 			return ErrInvalid
 		}
 		seen[c.Name] = true
@@ -464,5 +470,5 @@ func (s *Store) Status(digest string) (json.RawMessage, error) {
 	return b, e
 }
 func API() any {
-	return map[string]any{"apiVersion": 1, "builderGuide": builderGuide, "capabilities": []string{"system.metrics.read", "app.storage"}, "entry": "src/main.js", "entries": []string{"src/main.js", "src/main.tsx"}, "reactSDK": map[string]string{"react": "18.3.1", "typescript": "5.7.3", "controls": "Button, Field (text input), Panel, Status from @lumo/ui"}, "styles": "src/style.css", "sdk": "await lumo.call('system.metrics.read') returns {cpuPercent,memoryUsedBytes,memoryTotalBytes,at}. Declare app.storage to use lumo.call('app.storage.get') returning {revision,value}, initially {revision:'',value:null}. Save with lumo.call('app.storage.set',{revision,value}) using the last revision; returns a new snapshot. Values are JSON up to 65536 UTF-8 bytes. Errors expose code, including conflict; reload before retrying. Preview storage is empty per launch and discarded on close; installed storage survives updates and normal uninstall, while clean uninstall moves it to Trash. Rollback changes code only; keep data backward compatible. lumo_app_create accepts template 'counter' or 'notes' for saved-data examples. Call lumo.setDirty(true) immediately when edits differ from saved data; clear it only after a successful save or explicit discard. Lumo then guards close, quit, logout and reload. Activation changes preserve dirty frames but revoke their old capabilities; let users copy their work before reloading. Browser unload prompts are best effort, not crash recovery. lumo.ready() reports successful rendering. document.documentElement.dataset.theme follows Lumo. JavaScript apps use src/main.js. React apps use src/main.tsx and template 'react'; import only react, react-dom/client, react/jsx-runtime and @lumo/ui. Pinned React 18.3.1 and TypeScript 5.7.3 compile offline inside lumod with syntax diagnostics, not full type checking. No local module imports, package scripts, tsconfig, node_modules, or downloads. Controls: Button, Field with a label prop (text only), Panel with title, Status with live text. Increase manifest.version for every changed build. lumo_app_status is diagnostic evidence, not independent visual verification."}
+	return map[string]any{"apiVersion": 1, "builderGuide": builderGuide, "capabilities": []string{"system.metrics.read", "app.storage", "notifications.send"}, "entry": "src/main.js", "entries": []string{"src/main.js", "src/main.tsx"}, "reactSDK": map[string]string{"react": "18.3.1", "typescript": "5.7.3", "controls": "Button, Field (text input), Panel, Status from @lumo/ui"}, "styles": "src/style.css", "sdk": "Declare notifications.send to call lumo.call('notifications.send',{requestId,title,body}); see builderGuide for delivery, limits and icons. await lumo.call('system.metrics.read') returns {cpuPercent,memoryUsedBytes,memoryTotalBytes,at}. Declare app.storage to use lumo.call('app.storage.get') returning {revision,value}, initially {revision:'',value:null}. Save with lumo.call('app.storage.set',{revision,value}) using the last revision; returns a new snapshot. Values are JSON up to 65536 UTF-8 bytes. Errors expose code, including conflict; reload before retrying. Preview storage is empty per launch and discarded on close; installed storage survives updates and normal uninstall, while clean uninstall moves it to Trash. Rollback changes code only; keep data backward compatible. lumo_app_create accepts template 'counter' or 'notes' for saved-data examples. Call lumo.setDirty(true) immediately when edits differ from saved data; clear it only after a successful save or explicit discard. Lumo then guards close, quit, logout and reload. Activation changes preserve dirty frames but revoke their old capabilities; let users copy their work before reloading. Browser unload prompts are best effort, not crash recovery. lumo.ready() reports successful rendering. document.documentElement.dataset.theme follows Lumo. JavaScript apps use src/main.js. React apps use src/main.tsx and template 'react'; import only react, react-dom/client, react/jsx-runtime and @lumo/ui. Pinned React 18.3.1 and TypeScript 5.7.3 compile offline inside lumod with syntax diagnostics, not full type checking. No local module imports, package scripts, tsconfig, node_modules, or downloads. Controls: Button, Field with a label prop (text only), Panel with title, Status with live text. Increase manifest.version for every changed build. lumo_app_status is diagnostic evidence, not independent visual verification."}
 }

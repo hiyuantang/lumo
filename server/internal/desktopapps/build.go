@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"lumo/server/internal/appicons"
 	"lumo/server/internal/appruntime"
 	"os"
 	"os/exec"
@@ -37,7 +38,7 @@ const SDKTypes = `// SPDX-License-Identifier: AGPL-3.0-only
 interface LumoMetrics { cpuPercent: number; memoryUsedBytes: number; memoryTotalBytes: number; at: number }
 type LumoJSON = null | boolean | number | string | LumoJSON[] | { [key: string]: LumoJSON };
 interface LumoData { revision: string; value: LumoJSON }
-declare const lumo: { call(method: 'system.metrics.read'): Promise<LumoMetrics>; call(method: 'app.storage.get'): Promise<LumoData>; call(method: 'app.storage.set', params: LumoData): Promise<LumoData>; setDirty(value: boolean): void; ready(): void };
+declare const lumo: { call(method: 'system.metrics.read'): Promise<LumoMetrics>; call(method: 'notifications.send', params: {requestId: string; title: string; body: string}): Promise<unknown>; call(method: 'app.storage.get'): Promise<LumoData>; call(method: 'app.storage.set', params: LumoData): Promise<LumoData>; setDirty(value: boolean): void; ready(): void };
 `
 
 func Create(project, id, name string, template ...string) (any, error) {
@@ -131,13 +132,20 @@ func (s *Store) Build(ctx context.Context, project string) (Bundle, error) {
 		}
 		return b, e
 	}
-	raw, e := read("lumo.app.json", 16384)
+	raw, e := read("lumo.app.json", 65536)
 	if e != nil {
 		return Bundle{}, e
 	}
 	var m Manifest
-	if strict(raw, &m) != nil || validate(m) != nil {
+	if strict(raw, &m) != nil {
 		return Bundle{}, ErrInvalid
+	}
+	m.IconImage, e = appicons.Resolve(m.IconImage, read)
+	if e != nil {
+		return Bundle{}, e
+	}
+	if e = validate(m); e != nil {
+		return Bundle{}, e
 	}
 	js, e := read(m.Entry, 1<<20)
 	if e != nil {

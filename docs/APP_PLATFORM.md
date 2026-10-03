@@ -354,3 +354,5 @@ An explicitly authorized architectural review examined DeepSeek Harness commit
 `639ed015397290b3745d163aafe02ffee4aa3f84`. It motivated runtime API discovery and
 agent-authored packages. No implementation was copied or translated. This
 review does not amend Lumo's general clean-room rules.
+
+Account notifications and packaged app icons are described in [App services](APP_SERVICES.md). Both sandboxed and complete plugins declare notification access in their manifests.

@@ -2,9 +2,12 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"lumo/server/internal/desktopapps"
+	"lumo/server/internal/notifications"
 	"lumo/server/internal/strictjson"
 	"net/http"
 	"os"
@@ -211,7 +214,7 @@ func (s *Server) handleDesktopCall(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(req.Method, "app.storage.") {
 		capability = "app.storage"
 	}
-	if (req.Method != "system.metrics.read" && req.Method != "app.storage.get" && req.Method != "app.storage.set") || !desktopapps.HasCapability(b.Manifest, capability) {
+	if (req.Method != "system.metrics.read" && req.Method != "app.storage.get" && req.Method != "app.storage.set" && req.Method != "notifications.send") || !desktopapps.HasCapability(b.Manifest, capability) {
 		appError(w, desktopapps.ErrCapability)
 		return
 	}
@@ -222,6 +225,26 @@ func (s *Server) handleDesktopCall(w http.ResponseWriter, r *http.Request) {
 	launch.Calls++
 	if launch.Calls > 30 || (req.Method == "system.metrics.read" && time.Since(launch.LastCall) < 250*time.Millisecond) {
 		WriteError(w, NewError(CodeBusy, "Too many app requests."))
+		return
+	}
+	if capability == "notifications.send" {
+		var message notifications.Message
+		decoder := json.NewDecoder(bytes.NewReader(req.Params))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&message) != nil || decoder.Decode(new(any)) != io.EOF || notifications.Validate(message) != nil {
+			appError(w, desktopapps.ErrInvalid)
+			return
+		}
+		if launch.Preview {
+			WriteData(w, map[string]bool{"preview": true})
+			return
+		}
+		item, err := (notifications.Store{Home: s.home}).Send("app:"+b.Manifest.ID, b.Manifest.Name, message)
+		if err != nil {
+			WriteError(w, NewError(CodeValidationFailed, err.Error()))
+			return
+		}
+		WriteData(w, item)
 		return
 	}
 	if capability == "app.storage" {

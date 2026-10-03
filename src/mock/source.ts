@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { AppNotification, AppNotificationMessage } from '../api/notifications';
 import type { NativeBundle, NativeChange } from '../api/app-plugins';
 import * as nativePlugins from './app-plugins';
 import { mockDesktopApps } from './desktop-apps';
@@ -82,6 +83,9 @@ import {
 const TICK_MS = 2000;
 
 export class MockDataSource implements DataSource {
+  async listNotifications(): Promise<AppNotification[]> { return []; }
+  async changeNotifications(_action: 'read' | 'dismiss', _ids: string[]): Promise<void> {}
+  sendNotification(_app: string, _message: AppNotificationMessage): Promise<AppNotification> { return Promise.reject(new Error('App notifications require a live server.')); }
   pluginRequest(): Promise<unknown> { return Promise.reject(new Error('Native app backends require a live server.')); }
   nativeApps() { return nativePlugins.nativeApps(); }
   importNativeApp(bundle: NativeBundle) { return nativePlugins.importNativeApp(bundle); }

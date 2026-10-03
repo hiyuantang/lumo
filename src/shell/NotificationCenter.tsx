@@ -3,10 +3,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { IconX } from './icons';
 import { useShell, type ShellNotification } from './ShellContext';
 import '../styles/notification-center.css';
+import { AppIcon } from './AppIcon';
 
 function NotificationCard({ notification, banner = false, leaving = false, onDismiss, onPause }: { notification: ShellNotification; banner?: boolean; leaving?: boolean; onDismiss: () => void; onPause?: (paused: boolean) => void }) {
   return <article className={`notification${banner ? ' notification-banner' : ''}${leaving ? ' is-leaving' : ''}`} data-testid={banner ? 'notification-banner' : 'notification-item'} onPointerEnter={() => onPause?.(true)} onPointerLeave={(event) => onPause?.(event.currentTarget.contains(document.activeElement))} onFocusCapture={() => onPause?.(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onPause?.(event.currentTarget.matches(':hover')); }}>
     <button type="button" className="notification-close" data-testid="notification-close" aria-label={`Dismiss ${notification.title}`} onClick={onDismiss}><IconX size={14} strokeWidth={2}/></button>
+    {notification.appId && <div className="notification-source"><AppIcon appId={notification.appId}/><span>{notification.appName}</span></div>}
     <header><strong>{notification.title}</strong><time dateTime={new Date(notification.ts).toISOString()}>{new Date(notification.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></header>
     {notification.body && <p>{notification.body}</p>}
   </article>;
@@ -32,12 +34,12 @@ function NotificationBanner({ notification, onExit }: { notification: ShellNotif
 export function NotificationCenter() {
   const { state, actions } = useShell();
   const center = useRef<HTMLElement>(null);
-  const lastSeen = useRef(state.notifications[0]?.id ?? 0);
+  const lastSeen = useRef(0);
   const [banners, setBanners] = useState<ShellNotification[]>([]);
   const exitBanner = useCallback((id: number) => setBanners((items) => items.filter((item) => item.id !== id)), []);
   useEffect(() => {
-    const incoming = state.notifications.filter((item) => item.id > lastSeen.current);
-    lastSeen.current = Math.max(lastSeen.current, state.notifications[0]?.id ?? 0);
+    const incoming = state.notifications.filter((item) => item.id > lastSeen.current && !item.read);
+    lastSeen.current = Math.max(lastSeen.current, ...state.notifications.map((item) => item.id));
     setBanners((items) => state.notifOpen ? [] : [...incoming, ...items].filter((item) => state.notifications.some((saved) => saved.id === item.id)).slice(0, 3));
   }, [state.notifications, state.notifOpen]);
   useEffect(() => {

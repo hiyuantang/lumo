@@ -22,7 +22,7 @@ export function NativeImport({ onSelect }: { onSelect(name: string): void }) {
     catch (err) { setError(err instanceof Error ? err.message : 'Could not import this app.'); } finally { setBusy(false); }
   }}/>{error && <p className="server-app-error" role="alert">{error}</p>}</div>;
 }
-const permissionLabels: Record<string,string> = { account: 'Use your files, network connections and Lumo account.', 'broker.containers.start': 'Start containers.', 'broker.containers.stop': 'Stop containers.', 'broker.containers.restart': 'Restart containers.', 'broker.docker.resource': 'Manage Docker resources.', 'broker.websites.save': 'Change website settings.' };
+const permissionLabels: Record<string,string> = { 'notifications.send': 'Send notifications to your Lumo inbox, including from background work.', account: 'Use your files, network connections and Lumo account.', 'broker.containers.start': 'Start containers.', 'broker.containers.stop': 'Stop containers.', 'broker.containers.restart': 'Restart containers.', 'broker.docker.resource': 'Manage Docker resources.', 'broker.websites.save': 'Change website settings.' };
 export function NativeAppDetails({ app, description, status }: { app: NativeApp; description?: string; status?: PluginStatus }) {
   const native = useNativeApps();
   const { actions, state } = useShell();

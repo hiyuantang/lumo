@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 export interface NativeManifest {
   required?: boolean; provider?: boolean; assistant?: boolean; schemaVersion: number; hostApiVersion: number; id: string; name: string; description?: string; version: string; license: string;
-  icon: string; window: { width: number; height: number; minWidth: number; minHeight: number };
+  iconImage?: string; icon: string; window: { width: number; height: number; minWidth: number; minHeight: number };
   entry: string; styles?: string; background?: string; requiredPackage?: 'git' | 'docker' | 'nginx'; permissions?: string[];
   backend?: { resident?: boolean; contributions?: ('software' | 'history')[]; maxBodyBytes?: number; runtime?: 'node'; entry: string; platform: string; protocolVersion: number; routes: string[] };
   pi?: { entry: string; setting: string; readTools: string[]; writeTools: string[] };

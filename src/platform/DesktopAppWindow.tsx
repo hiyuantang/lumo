@@ -71,12 +71,13 @@ export function DesktopAppWindow() {
         lastID = data.id;
         if (++calls > 30 || pending >= 4) { stop('The app sent too many requests.'); return; }
         pending++;
-        const writes = data.method === 'app.storage.set';
+        const writes = data.method === 'app.storage.set' || data.method === 'notifications.send';
         if (writes) { saving.current++; setIsSaving(true); }
         try {
-          if (!['system.metrics.read', 'app.storage.get', 'app.storage.set'].includes(data.method)) throw new Error('This app capability is unavailable.');
+          if (!['system.metrics.read', 'app.storage.get', 'app.storage.set', 'notifications.send'].includes(data.method)) throw new Error('This app capability is unavailable.');
           if (data.params !== undefined && new TextEncoder().encode(JSON.stringify(data.params)).length > 64 * 1024 + 1024) throw new Error('App data is too large.');
           const value = await source.desktopAppCall(launch.token, data.method, data.params);
+          if (data.method === 'notifications.send') window.dispatchEvent(new Event('lumo:notifications-changed'));
           if (active) ports.port1.postMessage({ id: data.id, value });
         } catch (e) { if (active) ports.port1.postMessage({ id: data.id, error: e instanceof Error ? e.message : 'App request failed.', code: e instanceof ApiError ? e.code : (e as { code?: string })?.code }); }
         finally { pending--; if (writes) { saving.current--; setIsSaving(saving.current > 0); } }

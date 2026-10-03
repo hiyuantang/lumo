@@ -16,6 +16,9 @@ var version = "0.4.0"
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "app-notify":
+			runAppNotify()
+			return
 		case "native-app":
 			runNativeApps(os.Args[2:])
 			return

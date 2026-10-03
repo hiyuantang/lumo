@@ -25,7 +25,8 @@ func runPlugin(args []string) {
 		fmt.Fprintln(os.Stderr, "App backend unavailable.")
 		os.Exit(1)
 	}
-	command.Env = append(os.Environ(), "LUMO_APP_DATA="+appplugins.DataDirectory(home, args[0]))
+	executable, _ := os.Executable()
+	command.Env = append(os.Environ(), "LUMO_APP_DATA="+appplugins.DataDirectory(home, args[0]), "LUMO_APP_NAME="+args[0], "LUMO_HOST_EXECUTABLE="+executable)
 	command.Stdin = os.Stdin
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { AppIcon } from './AppIcon';
 import { Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useNativeApps } from '../platform/nativeCatalog';
 import { AppBoundary, PluginApp } from '../platform/PluginApp';
@@ -234,7 +235,7 @@ export function Window({ win }: { win: WindowState }) {
             </button>
           </div>
           <span className="window-title">
-            <Icon size={13} />
+            {meta.iconImage ? <span style={{ width: 13, height: 13, flex: 'none' }}><AppIcon appId={win.appId}/></span> : <Icon size={13} />}
             {windowTitle(win)}
           </span>
         </header>

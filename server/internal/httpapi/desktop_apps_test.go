@@ -66,7 +66,7 @@ func TestDesktopAppLaunchCapabilityAndRevocation(t *testing.T) {
 	for _, tc := range []struct {
 		session, method string
 		code            int
-	}{{"two", "system.metrics.read", 404}, {"one", "files.read", 403}, {"one", "system.metrics.read", 200}} {
+	}{{"two", "system.metrics.read", 404}, {"one", "files.read", 403}, {"one", "notifications.send", 403}, {"one", "system.metrics.read", 200}} {
 		w = call("POST", "/api/v1/desktop-apps/call", tc.session, map[string]string{"token": launch.Data.Token, "method": tc.method})
 		if w.Code != tc.code {
 			t.Fatal(tc, w.Code, w.Body.String())

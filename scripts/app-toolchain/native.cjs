@@ -9,7 +9,7 @@ const problem = (file, code, message, fix, node, source) => {
   const pos = node && source ? source.getLineAndCharacterOfPosition(node.getStart(source)) : null;
   diagnostics.push({file, code, message, fix, ...(pos ? {line:pos.line+1,column:pos.character+1} : {})});
 };
-const host = new Set(['react', 'react/jsx-runtime', '@lumo/sdk/api/plugins', '@lumo/sdk/shell/ShellContext', '@lumo/sdk/shell/WindowContext']);
+const host = new Set(['react', 'react/jsx-runtime', '@lumo/sdk/api/plugins', '@lumo/sdk/api/notifications', '@lumo/sdk/shell/ShellContext', '@lumo/sdk/shell/WindowContext']);
 const builtin = new Set(builtinModules.map(name => name.replace(/^node:/,'')));
 const options = {target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true,isolatedModules:true};
 try {

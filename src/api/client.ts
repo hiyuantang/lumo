@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { AppNotification, AppNotificationMessage } from './notifications';
 import type { NativeApp, NativeBundle, NativeChange } from './app-plugins';
 import type { DesktopCatalog, DesktopChange, DesktopApp, DesktopLaunch } from './desktop-apps';
 import type { CalendarSnapshot, CalendarChange, CalendarItem, CalendarGoogleStatus, CalendarGoogleConfig, CalendarGoogleAction, CalendarGoogleResult, CalendarNotice } from './calendar';
@@ -162,6 +163,9 @@ function resolveFilePath(homeDir: string, path: string[]): string {
 }
 
 export class LiveDataSource implements DataSource {
+  listNotifications() { return apiGet<AppNotification[]>('/notifications'); }
+  changeNotifications(action: 'read' | 'dismiss', ids: string[]) { return apiPost<void>('/notifications/action', { action, ids }); }
+  sendNotification(app: string, message: AppNotificationMessage) { return apiPost<AppNotification>('/notifications/send', { app, ...message }); }
   pluginRequest(name: string, body?: Record<string, unknown>): Promise<unknown> { const path = `/plugins/${encodeURIComponent(name)}`; return body ? apiPost(path, { ...body, requestId: crypto.randomUUID() }) : apiGet(path); }
   nativeApps() { return apiGet<NativeApp[]>('/app-plugins'); }
   importNativeApp(bundle: NativeBundle) { return apiPost<NativeApp[]>('/app-plugins/import', {requestId:crypto.randomUUID(),bundle}); }

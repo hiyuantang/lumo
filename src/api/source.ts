@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { AppNotification, AppNotificationMessage } from './notifications';
 import type { NativeApp, NativeBundle, NativeChange } from './app-plugins';
 import type { DesktopCatalog, DesktopChange, DesktopApp, DesktopLaunch } from './desktop-apps';
 import type { CalendarSnapshot, CalendarChange, CalendarItem, CalendarGoogleStatus, CalendarGoogleConfig, CalendarGoogleAction, CalendarGoogleResult, CalendarNotice } from './calendar';
@@ -347,6 +348,9 @@ export interface SessionUser {
 export type Unsubscribe = () => void;
 
 export interface DataSource {
+  listNotifications(): Promise<AppNotification[]>;
+  changeNotifications(action: 'read' | 'dismiss', ids: string[]): Promise<void>;
+  sendNotification(app: string, message: AppNotificationMessage): Promise<AppNotification>;
   pluginRequest(name: string, body?: Record<string, unknown>): Promise<unknown>;
   nativeApps(): Promise<NativeApp[]>;
   importNativeApp(bundle: NativeBundle): Promise<NativeApp[]>;
