@@ -45,7 +45,10 @@ Do not install unreviewed generated code as a trusted shipped plugin.
 
 All Apps groups the six shipped apps and Pi under Lumo Apps. Locally created
 apps appear under Custom Apps. Empty groups are hidden, and core built-in apps
-such as Files, Terminal and Settings are not listed.
+such as Files, Terminal and Settings are not listed. Both groups use the same
+compact cards. Selecting a card opens its details in App Library; custom app
+preview, installation, version selection and management controls live there.
+Updates retains direct per-app and bulk update actions.
 Each shipped app has one entry and a details page with its active app version and Open.
 Calendar, Skills and Monitor are included with Lumo. Git, Docker and Nginx retain
 their existing Ubuntu package installation controls; Open is available when

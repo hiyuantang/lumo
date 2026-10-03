@@ -12,7 +12,7 @@ test('All Apps uses adaptive cards and keeps details separate from launch', asyn
   await open(page);
   await expect(page.getByRole('heading', { name: 'Lumo Apps', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Custom Apps', exact: true })).toBeVisible();
-  const cards = page.locator('.library-discovery-grid');
+  const cards = page.getByTestId('library-lumo-apps').locator('.library-discovery-grid');
   await expect(cards.getByRole('button')).toHaveCount(7);
   const columns = () => cards.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);
   expect(await columns()).toBe(2);

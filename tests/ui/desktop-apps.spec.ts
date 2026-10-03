@@ -8,9 +8,14 @@ async function login(page: Page) {
   await page.goto('/'); await page.getByTestId('login-username').fill('demo'); await page.getByTestId('login-password').fill('demo'); await page.getByTestId('login-submit').click();
   await page.getByTestId('dock-app-library').click();
 }
+async function details(page: Page, id = 'local.server-pulse') {
+  await page.getByTestId('library-discovery').click();
+  await page.getByTestId(`desktop-card-${id}`).click();
+  return page.getByTestId(`desktop-detail-${id}`);
+}
 test('Desktop app preview, install, update, rollback and removal', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message));
-  await login(page); const card = page.getByTestId('desktop-card-local.server-pulse');
+  await login(page); const card = await details(page);
   await card.getByRole('combobox').selectOption('1'.repeat(64));
   await card.getByRole('button', { name: 'Preview', exact: true }).click();
   const preview = page.getByTestId(`window-app:preview.${'1'.repeat(64)}`);
@@ -23,7 +28,7 @@ test('Desktop app preview, install, update, rollback and removal', async ({ page
   await card.getByRole('button', { name: 'Open', exact: true }).click();
   const app = page.getByTestId('window-app:local.server-pulse'); await expect(app.frameLocator('iframe').locator('#cpu')).toHaveText('21.5%');
   await page.reload(); await expect(app.frameLocator('iframe').locator('#cpu')).toHaveText('21.5%');
-  await page.getByTestId('dock-app-library').click(); await card.getByRole('combobox').selectOption('2'.repeat(64)); await card.getByRole('button', { name: 'Update', exact: true }).click();
+  await page.getByTestId('dock-app-library').click(); await details(page); await card.getByRole('combobox').selectOption('2'.repeat(64)); await card.getByRole('button', { name: 'Update', exact: true }).click();
   await expect(card).toContainText('0.2.0 · Installed'); await card.getByRole('button', { name: 'Open', exact: true }).click(); await expect(app.frameLocator('iframe').getByRole('heading', { name: 'History' })).toBeVisible();
   await page.getByTestId('dock-app-library').click(); await card.getByRole('button', { name: 'Restore previous version', exact: true }).click(); await expect(card).toContainText('0.1.0 · Installed');
   await card.getByRole('button', { name: 'Disable', exact: true }).click(); await expect(page.getByTestId('dock-app-app:local.server-pulse')).toHaveCount(0);
@@ -35,7 +40,7 @@ test('Desktop app preview, install, update, rollback and removal', async ({ page
 });
 test('Desktop apps render in both themes and narrow windows', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message));
-  await login(page); const card = page.getByTestId('desktop-card-local.server-pulse'); await card.getByRole('button', { name: 'Install', exact: true }).click();
+  await login(page); const card = await details(page); await card.getByRole('button', { name: 'Install', exact: true }).click();
   for (const colorScheme of ['light', 'dark'] as const) for (const width of [1440, 390]) {
     await page.emulateMedia({ colorScheme }); await page.setViewportSize({ width, height: 900 });
     await page.getByTestId('dock-app-library').click();
@@ -52,7 +57,7 @@ test('Desktop apps render in both themes and narrow windows', async ({ page }) =
 
 test('Installed apps support app search, independent windows and recovery startup', async ({ page }) => {
   await login(page);
-  const card = page.getByTestId('desktop-card-local.server-pulse');
+  const card = await details(page);
   await card.getByRole('button', { name: 'Install', exact: true }).click();
   await page.keyboard.press('ControlOrMeta+k');
   const search = page.getByTestId('command-center');
@@ -69,6 +74,7 @@ test('Installed apps support app search, independent windows and recovery startu
   await expect(page.getByTestId('dock-app-app:local.server-pulse')).toBeVisible();
   await expect(page.getByTestId('desktop-app-frame')).toHaveCount(0);
   await page.getByTestId('dock-app-library').click();
+  await details(page);
   await card.getByRole('button', { name: 'Disable', exact: true }).click();
   await expect(page.getByTestId('dock-app-app:local.server-pulse')).toHaveCount(0);
 });
@@ -84,7 +90,7 @@ test('Production gateway hosts real app artifacts with isolated metrics access',
     const errors: string[] = []; page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(url); await expect(page).toHaveTitle(/Lumo/i);
     await page.getByTestId('login-username').fill('demo'); await page.getByTestId('login-password').fill('demo'); await page.getByTestId('login-submit').click();
-    await page.getByTestId('dock-app-library').click(); const card = page.getByTestId('desktop-card-local.server-pulse');
+    await page.getByTestId('dock-app-library').click(); const card = await details(page);
     await card.getByRole('button', { name: 'Preview', exact: true }).click();
     const iframe = page.getByTestId('desktop-app-frame'); const content = iframe.contentFrame();
     await expect(content.locator('#cpu')).toHaveText(/\d+\.\d%/); await expect(content.locator('#status')).toContainText('Updated');
@@ -106,7 +112,7 @@ test('Production gateway hosts real app artifacts with isolated metrics access',
     await expect(page.getByTestId('window-app:local.server-pulse').frameLocator('iframe').locator('#cpu')).toHaveText(/\d+\.\d%/);
     await page.reload(); await expect(page.getByTestId('window-app:local.server-pulse').frameLocator('iframe').locator('#cpu')).toHaveText(/\d+\.\d%/);
     await page.getByTestId('dock-app-library').click();
-    const counterCard = page.getByTestId('desktop-card-local.counter');
+    const counterCard = await details(page, 'local.counter');
     await expect(counterCard).toContainText('save this app’s data');
     await counterCard.getByRole('button', { name: 'Preview', exact: true }).click();
     const counterFrames = page.getByTestId('desktop-app-frame');
@@ -143,7 +149,7 @@ test('Production gateway hosts real app artifacts with isolated metrics access',
     }
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByTestId('dock-app-library').click();
-    const notesCard = page.getByTestId('desktop-card-local.notes');
+    const notesCard = await details(page, 'local.notes');
     await notesCard.getByRole('button', { name: 'Install', exact: true }).click();
     await notesCard.getByRole('button', { name: 'Open', exact: true }).click();
     const notes = page.getByTestId('window-app:local.notes');
@@ -205,7 +211,7 @@ test('Production gateway hosts real app artifacts with isolated metrics access',
     await expect(notes.getByText('This app is disabled, removed, or still loading.')).toBeVisible();
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByTestId('dock-app-library').click();
-    const reactCard = page.getByTestId('desktop-card-local.react');
+    const reactCard = await details(page, 'local.react');
     await reactCard.getByRole('button', { name: 'Install', exact: true }).click();
     await reactCard.getByRole('button', { name: 'Open', exact: true }).click();
     const reactWindow = page.getByTestId('window-app:local.react');
@@ -229,4 +235,42 @@ test('Production gateway hosts real app artifacts with isolated metrics access',
     if (home) { await writeFile(path.join(home.trim(), 'finish'), '').catch(() => {}); await new Promise<void>((resolve) => { const timer = setTimeout(resolve, 2500); child.once('exit', () => { clearTimeout(timer); resolve(); }); }); }
     if (child.pid && child.exitCode === null) { try { process.kill(-child.pid, 'SIGTERM'); } catch {} }
   }
+});
+
+
+test('custom apps share compact cards, open details with history and keep direct updates', async ({ page }) => {
+  await login(page);
+  const custom = page.getByTestId('desktop-card-local.server-pulse');
+  const included = page.getByTestId('library-calendar');
+  await expect(custom).toHaveRole('button');
+  await expect(custom.getByRole('button')).toHaveCount(0);
+  await expect(custom).not.toContainText('Access:');
+  for (const width of [1440, 390]) for (const colorScheme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.emulateMedia({ colorScheme });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme);
+    const first = await included.boundingBox();
+    const second = await custom.boundingBox();
+    expect(Math.abs(first!.width - second!.width)).toBeLessThan(1);
+    expect(Math.abs(first!.height - second!.height)).toBeLessThan(1);
+    await custom.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/lumo-matching-cards-${width}-${colorScheme}.png`, animations: 'disabled' });
+  }
+  await custom.focus();
+  await page.keyboard.press('Enter');
+  const detail = page.getByTestId('desktop-detail-local.server-pulse');
+  await expect(detail.getByRole('heading', { name: 'Server Pulse', exact: true })).toBeVisible();
+  await expect(page.getByTestId('desktop-app-frame')).toHaveCount(0);
+  await page.getByTestId('library-back').click();
+  await expect(custom).toBeVisible();
+  await page.getByTestId('library-forward').click();
+  await expect(detail).toBeVisible();
+  await detail.getByRole('combobox').selectOption('1'.repeat(64));
+  await detail.getByRole('button', { name: 'Install', exact: true }).click();
+  await page.getByTestId('library-updates').click();
+  const update = page.getByTestId('desktop-update-local.server-pulse');
+  await expect(update).toContainText('0.1.0 → 0.2.0');
+  await update.getByRole('button', { name: 'Update', exact: true }).click();
+  await expect(update).toHaveCount(0);
+  await expect(page.getByTestId('desktop-app-updates')).toContainText('0.1.0 → 0.2.0');
 });

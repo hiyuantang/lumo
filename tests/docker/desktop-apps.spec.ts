@@ -40,7 +40,8 @@ test('A same-account app builds offline and survives activation, update and roll
   const catalog = appCommand<DesktopCatalog>('list', {});
   expect(catalog.apps.find((entry) => entry.manifest.id === first.manifest.id)?.digest).toBe(first.digest);
   await page.getByTestId('dock-app-library').click();
-  await page.getByTestId('desktop-card-local.docker-pulse').getByRole('button', { name: 'Uninstall', exact: true }).click();
+  await page.getByTestId('desktop-card-local.docker-pulse').click();
+  await page.getByTestId('desktop-detail-local.docker-pulse').getByRole('button', { name: 'Uninstall', exact: true }).click();
   await page.getByTestId('server-app-confirm-ok').click();
   await expect(page.getByTestId('dock-app-app:local.docker-pulse')).toHaveCount(0);
   execFileSync('docker', ['exec', '-u', 'alice', container, 'test', '-f', project + '/src/main.js']);
@@ -72,7 +73,8 @@ test('App-owned data survives Ubuntu app updates and normal reinstall', async ({
   await expect(frame.locator('#count')).toHaveText('1');
   for (const clean of [false, true]) {
     await page.getByTestId('dock-app-library').click();
-    await page.getByTestId(`desktop-card-${id}`).getByRole('button', { name: 'Uninstall', exact: true }).click();
+    await page.getByTestId(`desktop-card-${id}`).click();
+    await page.getByTestId(`desktop-detail-${id}`).getByRole('button', { name: 'Uninstall', exact: true }).click();
     if (clean) await page.getByRole('checkbox', { name: 'Clean uninstall' }).check();
     await page.getByTestId('server-app-confirm-ok').click();
     await expect(page.getByTestId(`dock-app-app:${id}`)).toHaveCount(0);
