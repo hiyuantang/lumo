@@ -70,16 +70,16 @@ func TestPiAppBuilderPreferencePreservesOtherSettingsAndOlderClients(t *testing.
 func TestPiAppBuilderToolsRespectAvailabilityAndPermissionMode(t *testing.T) {
 	for _, mode := range []string{"ask", "auto", "read-only"} {
 		for _, desktop := range []bool{false, true} {
-			if tools := piToolsForMode(mode, desktop, false); strings.Contains(tools, "lumo_app_") {
+			if tools := piToolsForMode(mode, desktop, false); strings.Contains(tools, "lumo_app_") || strings.Contains(tools, "lumo_plugin_") {
 				t.Fatal("disabled app tools exposed", tools)
 			}
 			tools := piToolsForMode(mode, desktop, true)
-			for _, name := range []string{"lumo_app_api", "lumo_app_list", "lumo_app_status"} {
+			for _, name := range []string{"lumo_app_api", "lumo_app_list", "lumo_app_status", "lumo_plugin_api", "lumo_plugin_list", "lumo_plugin_validate"} {
 				if !strings.Contains(tools, name) {
 					t.Fatal("missing read tool", tools)
 				}
 			}
-			for _, name := range []string{"lumo_app_create", "lumo_app_build", "lumo_app_install", "lumo_app_restore"} {
+			for _, name := range []string{"lumo_app_create", "lumo_app_build", "lumo_app_install", "lumo_app_restore", "lumo_plugin_create", "lumo_plugin_build", "lumo_plugin_install", "lumo_plugin_restore"} {
 				if strings.Contains(tools, name) != (mode != "read-only") {
 					t.Fatal("incorrect mutation availability", tools)
 				}

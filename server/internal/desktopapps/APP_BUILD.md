@@ -24,8 +24,10 @@ cannot add arbitrary privileged operations to Lumo's broker.
 If a required feature exceeds the sandbox API, state the missing capability
 and explain the native option and its broader access. Follow the user's chosen
 scope; do not bypass the sandbox or silently replace the request with a demo.
-Native package authoring uses the separate complete-plugin contract, documented
-in Lumo's `docs/SHIPPED_APP_PLUGINS.md`. Do not feed a native manifest to these
+Use `lumo_plugin_api` for the complete-plugin guide and `lumo_plugin_create`,
+`lumo_plugin_validate`, `lumo_plugin_build` and `lumo_plugin_install` for that
+workflow. Native package authoring uses the separate complete-plugin contract,
+documented in Lumo's `docs/SHIPPED_APP_PLUGINS.md`. Do not feed a native manifest to these
 sandbox build tools or claim that these tools installed a native plugin.
 
 ## 2. Discover and define success

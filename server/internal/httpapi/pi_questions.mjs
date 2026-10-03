@@ -61,7 +61,7 @@ export default function (pi) {
   for (const event of ['session_switch', 'session_fork', 'session_tree']) pi.on(event, async (_event, ctx) => {
     responseStarted = undefined; pendingTiming = undefined; publishMetrics(ctx);
   });
-  const readingTools = new Set(['read', 'grep', 'find', 'ls', 'ask_user', 'lumo_observe', ...pluginReadTools, 'lumo_app_api', 'lumo_app_list', 'lumo_app_status']);
+  const readingTools = new Set(['read', 'grep', 'find', 'ls', 'ask_user', 'lumo_observe', ...pluginReadTools, 'lumo_app_api', 'lumo_app_list', 'lumo_app_status', 'lumo_plugin_api', 'lumo_plugin_list', 'lumo_plugin_validate']);
   pi.on('tool_call', async (event, ctx) => {
     if (ctx.signal?.aborted) return { block: true, reason: 'Action interrupted.' };
     if (readingTools.has(event.toolName)) return;
@@ -75,7 +75,7 @@ export default function (pi) {
     if (approved !== true || ctx.signal?.aborted) return { block: true, reason: 'The action was not approved. Do not retry it or use another tool to bypass the decision.' };
   });
   pi.on('session_start', async (_event, ctx) => {
-    const readable = [...readingTools].filter((name) => ![...pluginReadTools, 'lumo_app_api', 'lumo_app_list', 'lumo_app_status'].includes(name) || pi.getAllTools().some((tool) => tool.name === name));
+    const readable = [...readingTools].filter((name) => ![...pluginReadTools, 'lumo_app_api', 'lumo_app_list', 'lumo_app_status', 'lumo_plugin_api', 'lumo_plugin_list', 'lumo_plugin_validate'].includes(name) || pi.getAllTools().some((tool) => tool.name === name));
     if (permissionMode === 'read-only') {
       pi.setActiveTools(readable);
     } else {

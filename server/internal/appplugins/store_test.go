@@ -96,7 +96,7 @@ func TestAccountPackageLifecycleAndIsolation(t *testing.T) {
 }
 func TestPackageImportRejectsCoreCollisionCorruptionAndPermissions(t *testing.T) {
 	home := t.TempDir()
-	for _, name := range []string{"pi", "../notes", "files"} {
+	for _, name := range []string{"pi", "app", "plugin", "../notes", "files"} {
 		if _, err := Import(home, testBundle(t, name, "1.0.0")); err == nil {
 			t.Fatal("core name accepted", name)
 		}
@@ -152,5 +152,48 @@ func TestSharedDiscoveryAndPerAccountRemoval(t *testing.T) {
 	}
 	if len(NamesFor(alice)) != 0 || len(NamesFor(bob)) != 1 {
 		t.Fatal("shared package was removed for another account")
+	}
+}
+
+func TestConcurrentNativeChangesAndDurableReplay(t *testing.T) {
+	t.Setenv("LUMO_PLUGIN_DIR", t.TempDir())
+	t.Setenv("LUMO_PLUGIN_BUNDLED_DIR", t.TempDir())
+	home := t.TempDir()
+	release, err := Import(home, testBundle(t, "notes", "1.0.0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	install := Change{Name: "notes", Action: "install", Digest: release.Digest, Trust: true, RequestID: "install"}
+	if err = Apply(home, install); err != nil {
+		t.Fatal(err)
+	}
+	before := Catalog(home)[0]
+	if err = Apply(home, install); err != nil || Catalog(home)[0].Revision != before.Revision {
+		t.Fatal("replay changed selection", err)
+	}
+	altered := install
+	altered.Clean = true
+	if err = Apply(home, altered); err == nil {
+		t.Fatal("request ID reused for different content")
+	}
+	results := make(chan error, 2)
+	for _, id := range []string{"first", "second"} {
+		go func(id string) {
+			results <- Apply(home, Change{Name: "notes", Action: "uninstall", Revision: before.Revision, RequestID: id})
+		}(id)
+	}
+	successes, conflicts := 0, 0
+	for range 2 {
+		err := <-results
+		if err == nil {
+			successes++
+		} else if err == ErrConflict {
+			conflicts++
+		} else {
+			t.Fatal(err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatal("concurrent changes lost revision check", successes, conflicts)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -20,6 +21,7 @@ type Bundle struct {
 	Files    map[string][]byte `json:"files"`
 }
 type Selection struct {
+	Receipts  []Receipt `json:"receipts,omitempty"`
 	Installed bool      `json:"installed"`
 	Digest    string    `json:"digest"`
 	Previous  string    `json:"previous,omitempty"`
@@ -46,12 +48,13 @@ type CatalogEntry struct {
 	Error     string    `json:"error,omitempty"`
 }
 type Change struct {
-	Name     string `json:"name"`
-	Action   string `json:"action"`
-	Digest   string `json:"digest"`
-	Revision string `json:"revision"`
-	Trust    bool   `json:"trust"`
-	Clean    bool   `json:"clean"`
+	RequestID string `json:"requestId,omitempty"`
+	Name      string `json:"name"`
+	Action    string `json:"action"`
+	Digest    string `json:"digest"`
+	Revision  string `json:"revision"`
+	Trust     bool   `json:"trust"`
+	Clean     bool   `json:"clean"`
 }
 
 var ErrConflict = errors.New("app selection changed; refresh and try again")
@@ -129,7 +132,11 @@ func describe(p *Package) (Release, error) {
 	raw, err := os.ReadFile(filepath.Join(p.Directory, "manifest.json"))
 	return Release{Digest: manifestDigest(raw), Manifest: p.Manifest}, err
 }
-func Import(home string, b Bundle) (Release, error) {
+func Import(home string, b Bundle) (result Release, err error) {
+	err = locked(home, func() error { var e error; result, e = importBundle(home, b); return e })
+	return
+}
+func importBundle(home string, b Bundle) (Release, error) {
 	if !ValidName(b.Name) || len(b.Files) > 16 || len(b.Manifest) > 65536 {
 		return Release{}, errors.New("invalid app package")
 	}
@@ -279,20 +286,34 @@ func capture(home, name, digest string) (*Package, error) {
 			}
 			b.Files[file] = bytes
 		}
-		if _, err = Import(home, b); err != nil {
+		if _, err = importBundle(home, b); err != nil {
 			return nil, err
 		}
 		return release(home, name, digest)
 	}
 	return nil, errors.New("app release unavailable; import its package")
 }
-func Apply(home string, c Change) error {
+func Apply(home string, c Change) error { return locked(home, func() error { return apply(home, c) }) }
+func apply(home string, c Change) error {
 	if !ValidName(c.Name) {
 		return errors.New("invalid app name")
 	}
 	s, _, err := selection(home, c.Name)
 	if err != nil {
 		return err
+	}
+	if len(c.RequestID) > 128 || strings.ContainsAny(c.RequestID, "\r\n\t ") {
+		return errors.New("invalid request ID")
+	}
+	rawChange, _ := json.Marshal(c)
+	changeHash := fmt.Sprintf("%x", sha256.Sum256(rawChange))
+	for _, receipt := range s.Receipts {
+		if c.RequestID != "" && receipt.ID == c.RequestID {
+			if receipt.Hash != changeHash {
+				return errors.New("request ID was used with different content")
+			}
+			return nil
+		}
 	}
 	if s.Revision != c.Revision {
 		return ErrConflict
@@ -346,6 +367,12 @@ func Apply(home string, c Change) error {
 	}
 	if len(s.History) > 50 {
 		s.History = s.History[len(s.History)-50:]
+	}
+	if c.RequestID != "" {
+		s.Receipts = append(s.Receipts, Receipt{ID: c.RequestID, Hash: changeHash})
+		if len(s.Receipts) > 64 {
+			s.Receipts = s.Receipts[len(s.Receipts)-64:]
+		}
 	}
 	s.Revision = fmt.Sprintf("%d", time.Now().UnixNano())
 	directory := filepath.Join(StoreRoot(home), "selections")
@@ -404,4 +431,47 @@ func manifestDigest(raw []byte) string {
 		return ""
 	}
 	return fmt.Sprintf("%x", sha256.Sum256(canonical))
+}
+
+type Receipt struct {
+	ID   string `json:"id"`
+	Hash string `json:"hash"`
+}
+
+func locked(home string, run func() error) error {
+	if err := os.MkdirAll(StoreRoot(home), 0700); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(filepath.Join(StoreRoot(home), ".lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+	return run()
+}
+func Staged(home, name, digest string) (*Package, error) { return release(home, name, digest) }
+
+func Replay(home string, c Change) (bool, error) {
+	if !ValidName(c.Name) {
+		return false, errors.New("invalid app name")
+	}
+	s, _, err := selection(home, c.Name)
+	if err != nil {
+		return false, err
+	}
+	raw, _ := json.Marshal(c)
+	hash := fmt.Sprintf("%x", sha256.Sum256(raw))
+	for _, receipt := range s.Receipts {
+		if c.RequestID != "" && receipt.ID == c.RequestID {
+			if receipt.Hash != hash {
+				return false, errors.New("request ID was used with different content")
+			}
+			return true, nil
+		}
+	}
+	return false, nil
 }

@@ -8,7 +8,6 @@ import (
 	"lumo/server/internal/strictjson"
 	"net/http"
 	"strings"
-	"sync"
 )
 
 const maxPluginBody = 90 << 20
@@ -40,21 +39,16 @@ func (s *Server) handlePluginChange(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, NewError(CodeValidationFailed, "Invalid app change."))
 		return
 	}
-	value, _ := s.pluginLocks.LoadOrStore("@catalog", &sync.Mutex{})
-	mu := value.(*sync.Mutex)
-	mu.Lock()
-	defer mu.Unlock()
-	s.mutate(w, "native-apps:"+request.RequestID, func(w http.ResponseWriter) {
-		if err := appplugins.Apply(s.pi.home, request.Change); err != nil {
-			code := CodeValidationFailed
-			if errors.Is(err, appplugins.ErrConflict) {
-				code = CodeConflict
-			}
-			WriteError(w, NewError(code, err.Error()))
-			return
+	request.Change.RequestID = request.RequestID
+	if err := appplugins.Apply(s.pi.home, request.Change); err != nil {
+		code := CodeValidationFailed
+		if errors.Is(err, appplugins.ErrConflict) {
+			code = CodeConflict
 		}
-		WriteData(w, appplugins.Catalog(s.pi.home))
-	})
+		WriteError(w, NewError(code, err.Error()))
+		return
+	}
+	WriteData(w, appplugins.Catalog(s.pi.home))
 }
 func (s *Server) handlePluginAsset(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.PathValue("asset"), "/")

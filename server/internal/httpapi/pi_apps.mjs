@@ -4,18 +4,28 @@ import { desktopRequest } from './.lumo-use.mjs';
 const executable = 'lumod';
 const permissionMode = 'ask';
 const desktopEnabled = true;
-export function appRequest(operation, params, signal) {
- if (permissionMode === 'read-only' && !['api','list','status'].includes(operation)) throw new Error('App changes are unavailable in read only mode.');
+export function appRequest(operation, params, signal, kind = 'desktop-app') {
+ if (permissionMode === 'read-only' && !['api','list','status','validate'].includes(operation)) throw new Error('App changes are unavailable in read only mode.');
  if (signal?.aborted) throw new Error('App action interrupted.');
  return new Promise((resolve,reject) => {
-  const child=execFile(executable,['desktop-app',operation],{signal,timeout:30000,maxBuffer:2*1024*1024},(error,stdout,stderr)=>{
-   if(error){reject(new Error(stderr.trim()||'App action failed.'));return;}
-   try {resolve(JSON.parse(stdout));}catch{reject(new Error('Invalid app response.'));}
+  const child=execFile(executable,[kind,operation],{signal,timeout:30000,maxBuffer:2*1024*1024},(error,stdout,stderr)=>{
+   try {const value=JSON.parse(stdout);if(error && value.ok !== false) throw error;resolve(value);}catch{reject(new Error(stderr.trim()||'App action failed.'));}
   });
   child.stdin.end(JSON.stringify(params));
  });
 }
 export default function(pi) {
+ const nativeTools=[
+  ['api','Read the complete-plugin guide first. Covers UI, Node.js backend, Pi tools, validation and repair. Trusted account code; use lumo_app_api for sandboxed apps.',{}],
+  ['list','List per-account native app versions, staged releases and revisions before install or restore.',{}],
+  ['create','Create a complete plugin project and validator script in a new absolute path. Backend and Pi tools default on; set both false for UI only.',{project:{type:'string'},name:{type:'string'},title:{type:'string'},backend:{type:'boolean'},pi:{type:'boolean'}}],
+  ['validate','Run enforced static source/manifest validation without executing app code or installing. Fix every returned file/code/message/fix diagnostic and repeat.',{project:{type:'string'}}],
+  ['build','Validate and stage all plugin parts as one immutable package. Invalid builds are blocked. Returns release.digest. Increase version for changed source.',{project:{type:'string'}}],
+  ['install','Install the exact staged digest for this account after revalidation. This grants trusted UI and backend account access. Requires trust:true and current revision. Close app windows and finish active Pi operations first.',{name:{type:'string'},digest:{type:'string'},revision:{type:'string'},requestId:{type:'string'},trust:{type:'boolean',const:true}}],
+  ['restore','Restore previous native app code; data is preserved. Use current revision, unique requestId and trust:true. Close app windows and finish active Pi operations first.',{name:{type:'string'},revision:{type:'string'},requestId:{type:'string'},trust:{type:'boolean',const:true}}]
+ ];
+ for(const [operation,description,properties] of nativeTools)pi.registerTool({name:'lumo_plugin_'+operation,label:'Lumo Plugins · '+operation,description,parameters:{type:'object',properties,required:Object.keys(properties).filter(key=>!['backend','pi'].includes(key)),additionalProperties:false},execute:async(_id,params,signal)=>{const value=await appRequest(operation,params,signal,'native-app');return {isError:value.ok===false,content:[{type:'text',text:JSON.stringify(value)}]};}});
+
  const tools=[
   ['api','Call this first for every app build or update. Read builderGuide for app-type selection, project structure, implementation, verification and release. Returns the current sandbox APIs and SDK; these tools do not build native backend or Pi-extension packages.',{}],
   ['list','List installed apps and staged builds. Read current revisions before changing installed apps.',{}],

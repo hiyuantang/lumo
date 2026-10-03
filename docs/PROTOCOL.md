@@ -2409,3 +2409,26 @@ code until closed, and existing Pi processes retain their loaded extensions
 until they exit. New Pi chats discover installed tools from the manifests.
 Native code is administrator/user-trusted account code, not a sandbox. Custom
 iframe apps retain their separate isolated runtime and capability protocol.
+
+
+### Native app authoring CLI
+
+`lumod native-app api|create|validate|build|list|install|restore` accepts one JSON
+object on stdin and returns one JSON value on stdout. It runs as the current
+account and uses the same native app store as App Library. No broker is involved.
+
+- `create`: `{project,name,title,backend?,pi?}`; absolute new path, optional parts
+  default true. The Pi template requires the backend.
+- `validate`, `build`: `{project}`. Return `{ok,diagnostics,release?}`. Diagnostics
+  contain `file,code,message,fix` and optional `line,column`. A failed check exits
+  nonzero and cannot stage a release. Only build stages a release/digest.
+- `install`: `{name,digest,revision,requestId,trust:true}`; validates staged assets
+  and syntax again before selecting them.
+- `restore`: `{name,revision,requestId,trust:true}`; revalidates previous code and
+  uses the catalog's previous digest.
+- `api`, `list`: `{}`; guide/capabilities or the per-account native catalog.
+
+Pi exposes the same operations as `lumo_plugin_*`. Read-only mode permits api,
+list and static validate; create/build/install/restore follow mutation approval.
+Validation does not execute project code. Successful validation does not establish
+visual quality, full TypeScript correctness, safe behavior or working business logic.

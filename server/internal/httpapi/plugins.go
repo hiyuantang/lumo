@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"syscall"
 	"time"
 
@@ -96,13 +95,13 @@ func (s *Server) handlePlugin(w http.ResponseWriter, r *http.Request, name strin
 		}
 	}
 	execute := func(target http.ResponseWriter) {
-		executable, err := loaded.Executable()
+		ctx, cancel := context.WithTimeout(r.Context(), 75*time.Second)
+		defer cancel()
+		cmd, err := loaded.Command(ctx, s.pi.home, "serve")
 		if err != nil {
 			WriteError(target, NewError(CodeUnavailable, "The app backend is missing or damaged."))
 			return
 		}
-		ctx, cancel := context.WithTimeout(r.Context(), 75*time.Second)
-		defer cancel()
 		request := r.Clone(ctx)
 		request.Body = io.NopCloser(bytes.NewReader(body))
 		request.ContentLength = int64(len(body))
@@ -114,7 +113,6 @@ func (s *Server) handlePlugin(w http.ResponseWriter, r *http.Request, name strin
 			WriteError(target, err)
 			return
 		}
-		cmd := exec.CommandContext(ctx, executable, "serve")
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 		cmd.WaitDelay = time.Second

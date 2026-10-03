@@ -2,12 +2,15 @@
 package appplugins
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"lumo/server/internal/piruntime"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -45,6 +48,7 @@ type Manifest struct {
 	Pi              *Extension `json:"pi,omitempty"`
 }
 type Backend struct {
+	Runtime         string   `json:"runtime,omitempty"`
 	Privileged      bool     `json:"privileged,omitempty"`
 	ProtocolVersion int      `json:"protocolVersion"`
 	Entry           string   `json:"entry"`
@@ -69,7 +73,7 @@ var assetName = regexp.MustCompile(`^[a-f0-9]{64}\.(bin|mjs|js|css)$`)
 var packageName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,47}$`)
 
 func ValidName(name string) bool {
-	return packageName.MatchString(name) && !map[string]bool{"pi": true, "files": true, "preview": true, "terminal": true, "settings": true, "library": true, "trash": true, "home": true, "containers": true, "websites": true}[name]
+	return packageName.MatchString(name) && !map[string]bool{"app": true, "plugin": true, "pi": true, "files": true, "preview": true, "terminal": true, "settings": true, "library": true, "trash": true, "home": true, "containers": true, "websites": true}[name]
 }
 func AppID(name string) string {
 	if id, ok := legacyIDs[name]; ok {
@@ -123,7 +127,7 @@ func Parse(name, directory string, raw []byte) (*Package, error) {
 		return nil, errors.New("incompatible app plugin")
 	}
 	if b := m.Backend; b != nil {
-		if b.ProtocolVersion != 1 || b.Platform != runtime.GOOS+"/"+runtime.GOARCH || !assetName.MatchString(b.Entry) || !strings.HasSuffix(b.Entry, ".bin") {
+		if (b.Runtime != "" && b.Runtime != "node") || b.ProtocolVersion != 1 || b.Platform != runtime.GOOS+"/"+runtime.GOARCH || !assetName.MatchString(b.Entry) || !strings.HasSuffix(b.Entry, ".bin") {
 			return nil, errors.New("incompatible app backend")
 		}
 		for _, route := range b.Routes {
@@ -314,4 +318,20 @@ func AuthForPath(path string, callback bool) *Package {
 		return nil
 	}
 	return app
+}
+
+func (p *Package) Command(ctx context.Context, home string, args ...string) (*exec.Cmd, error) {
+	executable, err := p.Executable()
+	if err != nil {
+		return nil, err
+	}
+	if p.Manifest.Backend.Runtime == "node" {
+		node, err := piruntime.Lookup(home, "node")
+		if err != nil {
+			return nil, fmt.Errorf("Node.js is unavailable; set up Pi's runtime: %w", err)
+		}
+		args = append([]string{executable}, args...)
+		executable = node
+	}
+	return exec.CommandContext(ctx, executable, args...), nil
 }

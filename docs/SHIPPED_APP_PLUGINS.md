@@ -67,10 +67,11 @@ does not prevent the Pi engine from starting. Installed account packages take
 precedence over shared packages. Uninstalled account selections suppress the
 shared app for that account; another account keeps its own selection.
 
-These are administrator-trusted native packages, not a security sandbox. Custom
-apps made by Pi retain the isolated iframe runtime and declared host capabilities
-described in `APP_PLATFORM.md`. They cannot install arbitrary native backends or
-root code through the custom-app installer.
+These are trusted native packages, not a security sandbox. Pi can create them
+through the complete-plugin builder described below. Pi also supports the
+separate sandbox builder in `APP_PLATFORM.md`; those apps retain an isolated
+iframe and declared host capabilities. Their installer does not accept native
+backends. Neither builder can install arbitrary root capabilities.
 
 ## Build
 
@@ -231,3 +232,36 @@ The design follows Lumo's App Platform, Protocol, Privilege Model and Desktop
 Style specifications. The process protocol uses standard HTTP request framing
 and a bounded JSON response over private pipes. No third-party implementation
 was used as a reference.
+
+
+## Building complete plugins in Pi
+
+Enable Lumo App Builder in Pi settings. Start with `lumo_plugin_api`, which returns
+an embedded [authoring guide](../server/internal/appbuilder/GUIDE.md) covering the
+UI, backend and Pi extension. `lumo_plugin_create` creates all three parts by
+default, with backend/Pi parts optional. It adds a `validate.mjs` script that calls
+the installed host validator. The host repeats validation in `lumo_plugin_build`
+and `lumo_plugin_install`; changing the project's script cannot skip those checks.
+
+The current authoring toolchain compiles local React/TSX modules using Lumo's
+fixed host imports, a self-contained Node.js backend, and a self-contained Pi
+extension. Builds are offline and do not execute app code or project scripts.
+Diagnostics include file, code, message, fix and source location where available.
+Checks cover source boundaries, imports, syntax, manifest compatibility, namespaced
+routes, and exact Pi tool declarations. They are not full TypeScript type checking
+or proof of runtime behavior. Test actual UI flows and backend/Pi operations.
+
+`lumo_plugin_build` stages an immutable account package; it does not activate it.
+`lumo_plugin_list` supplies revisions, `lumo_plugin_install` selects an exact digest
+with explicit account trust, and `lumo_plugin_restore` restores previous code.
+These tools share App Library's account catalog and filesystem lock. Management
+request IDs retain the last 64 successful receipts per app, atomically with the
+selection, and reject changed payloads. Stale revisions still fail after receipts
+expire from that bounded history. Existing app data survives code changes.
+
+Backend manifests may set `runtime: "node"`. Lumo then uses the account's installed
+Pi Node runtime or system Node without downloading anything. Omit runtime for
+existing native executables. Native plugins remain trusted account code. Existing
+running Pi processes must restart to load changed extension code. Native builder
+previews are not isolated: validate first, then install within the user's scope
+and test the installed app. Sandbox builder previews remain separate.

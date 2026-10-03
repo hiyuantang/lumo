@@ -1,0 +1,7 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.plugin-__APP__ { padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: auto; scrollbar-gutter: stable; }
+.plugin-__APP__ header, .plugin-__APP__ .actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.plugin-__APP__ header { justify-content: space-between; }
+.plugin-__APP__ h1 { margin: 0; font-size: 18px; }
+.plugin-__APP__ textarea { min-height: 140px; width: 100%; resize: vertical; box-sizing: border-box; }
+.plugin-__APP__ p { margin: 0; overflow-wrap: anywhere; }

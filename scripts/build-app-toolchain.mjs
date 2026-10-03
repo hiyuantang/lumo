@@ -14,6 +14,7 @@ for (const [name, version] of Object.entries(versions)) {
 const out = path.join(root, 'server/internal/desktopapps/toolchain');
 await mkdir(out, { recursive: true });
 await Promise.all([
+  build({ absWorkingDir: root, entryPoints: ['scripts/app-toolchain/native.cjs'], outfile: path.join(out, 'native.cjs'), bundle: true, platform: 'node', format: 'cjs', target: 'node22', minify: true, legalComments: 'inline' }),
   build({ absWorkingDir: root, entryPoints: ['scripts/app-toolchain/compiler.cjs'], outfile: path.join(out, 'compiler.cjs'), bundle: true, platform: 'node', format: 'cjs', target: 'node22', minify: true, legalComments: 'inline' }),
   build({ absWorkingDir: root, entryPoints: ['scripts/app-toolchain/runtime.tsx'], outfile: path.join(out, 'runtime.js'), bundle: true, platform: 'browser', format: 'iife', globalName: 'LumoReactV1', target: 'es2022', minify: true, define: { 'process.env.NODE_ENV': '"production"' }, legalComments: 'inline' }),
 ]);

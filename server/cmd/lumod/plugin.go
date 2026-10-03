@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"lumo/server/internal/appplugins"
 	"os"
@@ -19,12 +20,11 @@ func runPlugin(args []string) {
 		fmt.Fprintln(os.Stderr, "App package unavailable.")
 		os.Exit(1)
 	}
-	executable, err := app.Executable()
+	command, err := app.Command(context.Background(), home, args[1:]...)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "App backend unavailable.")
 		os.Exit(1)
 	}
-	command := exec.Command(executable, args[1:]...)
 	command.Env = append(os.Environ(), "LUMO_APP_DATA="+appplugins.DataDirectory(home, args[0]))
 	command.Stdin = os.Stdin
 	command.Stdout = os.Stdout

@@ -8,7 +8,8 @@ Skills, Git, Docker, Nginx and Monitor use that native plugin platform.
 Sandboxing limits app access; it does not prevent self-contained packaging.
 Use the sandbox when its capabilities meet the task. Native plugins have broader
 account access and suit features that need the separate native plugin contract.
-The current Pi App Builder tools create sandboxed apps.
+Pi App Builder provides `lumo_app_*` for sandboxed apps and `lumo_plugin_*`
+for [complete plugins](../server/internal/appbuilder/GUIDE.md).
 
 Lumo supports local desktop apps that Pi can create, build, preview, install and
 update without rebuilding Lumo. Apps run independently of the Pi conversation.

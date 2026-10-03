@@ -3,7 +3,7 @@ export interface NativeManifest {
   schemaVersion: number; hostApiVersion: number; id: string; name: string; description?: string; version: string; license: string;
   icon: string; window: { width: number; height: number; minWidth: number; minHeight: number };
   entry: string; styles?: string; background?: string; requiredPackage?: 'git' | 'docker' | 'nginx'; permissions?: string[];
-  backend?: { entry: string; platform: string; protocolVersion: number; routes: string[] };
+  backend?: { runtime?: 'node'; entry: string; platform: string; protocolVersion: number; routes: string[] };
   pi?: { entry: string; setting: string; readTools: string[]; writeTools: string[] };
 }
 export interface NativeRelease { digest: string; manifest: NativeManifest }

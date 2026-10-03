@@ -26,12 +26,12 @@ func validPiPermissionMode(mode string) bool {
 func piToolsForMode(mode string, desktop, appBuilder bool) string {
 	tools := "read,grep,find,ls,ask_user"
 	if appBuilder {
-		tools += ",lumo_app_api,lumo_app_list,lumo_app_status"
+		tools += ",lumo_app_api,lumo_app_list,lumo_app_status,lumo_plugin_api,lumo_plugin_list,lumo_plugin_validate"
 	}
 	if mode != "read-only" {
 		tools += ",bash,edit,write"
 		if appBuilder {
-			tools += ",lumo_app_create,lumo_app_build,lumo_app_install,lumo_app_restore"
+			tools += ",lumo_app_create,lumo_app_build,lumo_app_install,lumo_app_restore,lumo_plugin_create,lumo_plugin_build,lumo_plugin_install,lumo_plugin_restore"
 		}
 	}
 	if desktop {
