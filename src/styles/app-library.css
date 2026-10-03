@@ -128,3 +128,7 @@
 .server-app-confirm:has(.library-uninstall-options) { max-height: calc(100dvh - 40px); overflow-y: auto; }
 .server-app-confirm:has(.library-uninstall-options) h2,
 .server-app-confirm .library-uninstall-note { margin: 0; }
+
+.library-hero > .library-managed-actions { flex: 0 1 auto; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.library-managed-actions > .btn { width: auto; min-width: 80px; }
+.library-managed-actions > .library-action-progress { min-width: 124px; }

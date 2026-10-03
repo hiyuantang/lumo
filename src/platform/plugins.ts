@@ -7,4 +7,5 @@ import nginx from '../../apps/nginx/lumo.plugin.json';
 import monitor from '../../apps/monitor/lumo.plugin.json';
 
 export const pluginPackages = { calendar: 'calendar', skills: 'skills', git: 'git', containers: 'docker', websites: 'nginx', home: 'monitor' } as const;
+export type PluginId = keyof typeof pluginPackages;
 export const pluginManifests = [calendar, skills, git, docker, nginx, monitor];

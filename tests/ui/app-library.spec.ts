@@ -11,7 +11,7 @@ async function open(page: Page) {
 test('Discovery uses adaptive cards and keeps details separate from launch', async ({ page }) => {
   await open(page);
   const cards = page.locator('.library-discovery-grid');
-  await expect(cards.getByRole('button')).toHaveCount(4);
+  await expect(cards.getByRole('button')).toHaveCount(7);
   const columns = () => cards.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);
   expect(await columns()).toBe(2);
   await page.getByTestId('library-nginx').click();
@@ -156,3 +156,52 @@ for (const width of [1440, 390]) {
     await page.screenshot({ path: `/tmp/lumo-library-expanded-${width}.png`, animations: 'disabled' });
   });
 }
+
+test('all six shipped apps appear once, report their active version and open from details', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await open(page);
+  for (const [id, appId, name] of [
+    ['calendar', 'calendar', 'Calendar'], ['skills', 'skills', 'Skills'], ['monitor', 'home', 'Monitor'],
+    ['git', 'git', 'Git'], ['docker', 'containers', 'Docker'], ['nginx', 'websites', 'Nginx'],
+  ]) {
+    const card = page.getByTestId(`library-${id}`);
+    await expect(card).toHaveCount(1);
+    await expect(card).toContainText('Installed · 1.0.0');
+    await card.click();
+    await expect(page.getByRole('region', { name: `${name} details`, exact: true })).toContainText('App version1.0.0');
+    await expect(page.getByTestId(`window-${appId}`)).toHaveCount(0);
+    await page.getByTestId('library-open').click();
+    await expect(page.getByTestId(`window-${appId}`)).toBeVisible();
+    await page.getByTestId(`window-close-${appId}`).click();
+    await page.getByTestId('library-back').click();
+  }
+  for (const colorScheme of ['light', 'dark'] as const) for (const width of [1440,390]) {
+    await page.emulateMedia({ colorScheme });
+    await page.setViewportSize({ width, height: 1000 });
+    await page.screenshot({ path: `/tmp/lumo-library-plugins-${width}-${colorScheme}.png` });
+    expect(await page.getByTestId('app-library').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+  expect(errors).toEqual([]);
+});
+
+test('App Library reads deployed versions and recovers a failed manifest through Refresh', async ({ page }) => {
+  let unavailable = true;
+  await page.route('**/plugins/skills/manifest.json', async (route) => {
+    if (unavailable) { await route.fulfill({ status: 503, body: 'Unavailable' }); return; }
+    const response = await route.fetch();
+    await route.fulfill({ json: { ...await response.json(), version: '2.3.4' } });
+  });
+  await open(page);
+  await expect(page.getByTestId('library-skills')).toContainText('App unavailable');
+  await page.getByTestId('library-skills').click();
+  await expect(page.getByTestId('library-open')).toBeDisabled();
+  await expect(page.getByTestId('app-library').getByRole('alert')).toContainText('View → Refresh');
+  unavailable = false;
+  await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Refresh', exact: true }).click();
+  await expect(page.getByTestId('app-library')).toContainText('2.3.4');
+  await expect(page.getByTestId('library-open')).toBeEnabled();
+  await page.getByTestId('library-back').click();
+  await expect(page.getByTestId('library-skills')).toContainText('Installed · 2.3.4');
+});

@@ -41,6 +41,18 @@ root command endpoint is added. Pi-created `local.*` apps retain the isolated
 iframe runtime, declared capabilities and per-account App Library lifecycle.
 Do not install unreviewed generated code as a trusted shipped plugin.
 
+## App Library
+
+Discovery lists all six shipped apps alongside Pi and locally created apps.
+Each app has one entry and a details page with its active app version and Open.
+Calendar, Skills and Monitor are included with Lumo. Git, Docker and Nginx retain
+their existing Ubuntu package installation controls; Open is available when
+the required package is installed. Their app version comes from the deployed
+frontend manifest, independently of the Ubuntu package version.
+View → Refresh rereads these manifests without loading the apps themselves.
+A failed or incompatible manifest is shown as unavailable, and Open is disabled
+until a successful refresh. Other apps remain usable.
+
 ## Build one app
 
 From the repository root, with the locked dependencies already installed:

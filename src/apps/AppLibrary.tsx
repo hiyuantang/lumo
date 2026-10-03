@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { usePluginCatalog } from '../platform/usePluginCatalog';
+import { pluginPackages, type PluginId } from '../platform/plugins';
 import { DesktopAppLibrary } from '../platform/DesktopAppLibrary';
 import { useDesktopApps } from '../platform/catalog';
 import { useAppMenus } from '../shell/appMenus';
@@ -25,7 +27,14 @@ const CATALOG = [
   { id: 'pi' as const, name: APPS.pi.title, appId: 'pi' as const, description: 'A coding agent with a native workspace.', overview: 'Work with Pi in a native conversation. Follow file edits and commands, choose a model, and return to saved project sessions.', packages: 'Pi and its runtime' },
 ];
 const JOB_KEY = 'lumo-app-install';
-type LibraryPage = 'Discovery' | 'Updates' | LibraryAppID;
+const INCLUDED_APPS = [
+  { id: 'calendar' as const, appId: 'calendar' as const, name: APPS.calendar.title, description: 'Plan events and keep track of reminders.' },
+  { id: 'skills' as const, appId: 'skills' as const, name: APPS.skills.title, description: 'Browse your skills and edit their instructions.' },
+  { id: 'monitor' as const, appId: 'home' as const, name: APPS.home.title, description: 'Inspect server resources, services and logs.' },
+];
+const DISCOVERY = [...INCLUDED_APPS, ...CATALOG];
+type LibraryPage = 'Discovery' | 'Updates' | LibraryAppID | typeof INCLUDED_APPS[number]['id'];
+const managedPage = (page: LibraryPage): page is LibraryAppID => CATALOG.some((app) => app.id === page);
 type Job = { app: LibraryAppID; requestId: string; operation?: AppOperation };
 type Review = { app: LibraryAppID; operation: AppOperation; plan: UpdatePlan };
 function readJob(): Job | null {
@@ -50,12 +59,13 @@ export function AppLibrary() {
   });
   const page = navigation.pages[navigation.index];
   const isDetail = page !== 'Discovery' && page !== 'Updates';
+  const includedApp = INCLUDED_APPS.find((item) => item.id === page);
   const section = page === 'Updates' ? 'Updates' : 'Discovery';
   const canBack = navigation.index > 0;
   const canForward = navigation.index < navigation.pages.length - 1;
   const content = useRef<HTMLElement | null>(null);
   function navigate(next: LibraryPage) {
-    if (next !== 'Discovery' && next !== 'Updates') setSelected(next);
+    if (managedPage(next)) setSelected(next);
     setConfirm(null);
     setNavigation((current) => current.pages[current.index] === next ? current : { pages: [...current.pages.slice(0, current.index + 1), next], index: current.index + 1 });
   }
@@ -63,7 +73,7 @@ export function AppLibrary() {
     const index = navigation.index + direction;
     if (index < 0 || index >= navigation.pages.length) return;
     const next = navigation.pages[index];
-    if (next !== 'Discovery' && next !== 'Updates') setSelected(next);
+    if (managedPage(next)) setSelected(next);
     setConfirm(null);
     setNavigation((current) => ({ ...current, index }));
   }
@@ -82,6 +92,7 @@ export function AppLibrary() {
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
   const [retry, setRetry] = useState(0);
   const [refresh, setRefresh] = useState(0);
+  const plugins = usePluginCatalog(refresh);
   const [confirm, setConfirm] = useState<Review | 'pi' | null>(null);
   const [cleanUninstall, setCleanUninstall] = useState(false);
   useEffect(() => { setCleanUninstall(false); }, [confirm]);
@@ -237,15 +248,24 @@ export function AppLibrary() {
         <header className="library-page-heading"><nav className="app-history" aria-label="Page history"><button type="button" className="app-history-back" aria-label="Back" title="Back" data-testid="library-back" disabled={!canBack} onClick={() => travel(-1)}><IconChevronRight size={18}/></button><button type="button" aria-label="Forward" title="Forward" data-testid="library-forward" disabled={!canForward} onClick={() => travel(1)}><IconChevronRight size={18}/></button></nav>{!isDetail && <div><h1>{section}</h1><p>{section === 'Discovery' ? 'Find apps for your server.' : 'Keep your installed apps current.'}</p></div>}</header>
         {page === 'Discovery' && <>
           <DesktopAppLibrary />
-          <div className="library-discovery-grid">{CATALOG.map((item) => {
+          <div className="library-discovery-grid">{DISCOVERY.map((item) => {
+            const plugin = item.appId in pluginPackages ? plugins[item.appId as PluginId] : undefined;
+            const included = INCLUDED_APPS.some((app) => app.id === item.id);
             const ready = catalog?.apps.find((entry) => entry.id === item.id)?.installed;
-            return <button type="button" key={item.id} data-testid={`library-${item.id}`} className="library-item" onClick={() => { navigate(item.id); setError(null); }}><span className="library-icon"><AppIcon appId={item.appId}/></span><span className="library-card-name"><strong>{item.name}</strong><small>{ready ? 'Installed' : catalog ? 'Available' : 'Checking…'}</small></span><span className="library-card-description">{item.description}</span></button>;
+            return <button type="button" key={item.id} data-testid={`library-${item.id}`} className="library-item" onClick={() => { navigate(item.id); setError(null); }}><span className="library-icon"><AppIcon appId={item.appId}/></span><span className="library-card-name"><strong>{item.name}</strong><small>{plugin?.error ? 'App unavailable' : included ? plugin?.version ? `Installed · ${plugin.version}` : 'Checking…' : ready ? plugin?.version ? `Installed · ${plugin.version}` : 'Installed' : catalog ? 'Available' : 'Checking…'}</small></span><span className="library-card-description">{item.description}</span></button>;
           })}</div>
         </>}
         {page === 'Updates' && <DesktopAppLibrary updates />}
-        {isDetail && <section className="library-app-overview" aria-label={`${app.name} details`}>
+        {includedApp && <section className="library-app-overview" aria-label={`${includedApp.name} details`}>
+          <header className="library-hero"><span className="library-icon library-hero-icon"><AppIcon appId={includedApp.appId}/></span><div><h1>{includedApp.name}</h1><p>{includedApp.description}</p></div><div className="library-action"><button type="button" className="btn btn-primary" data-testid="library-open" disabled={!plugins[includedApp.appId]?.version} onClick={() => actions.openApp(includedApp.appId)}>Open</button></div></header>
+          <p className="library-description" data-testid="library-description">Included with Lumo.</p>
+          <div className="library-information"><span>App version</span><strong>{plugins[includedApp.appId]?.version ?? (plugins[includedApp.appId]?.error ? 'Unavailable' : 'Checking…')}</strong></div>
+          {plugins[includedApp.appId]?.error && <p className="server-app-error" role="alert">{plugins[includedApp.appId]?.error}</p>}
+        </section>}
+        {isDetail && !includedApp && <section className="library-app-overview" aria-label={`${app.name} details`}>
             <header className="library-hero"><span className="library-icon library-hero-icon"><AppIcon appId={app.appId}/></span><div><h1>{app.name}</h1><p>{app.description}</p></div>
-              <div className="library-action">
+              <div className="library-action library-managed-actions">
+                {installed && <button className="btn" type="button" data-testid="library-open" disabled={locked || app.id !== 'pi' && !plugins[app.appId as PluginId]?.version} onClick={() => actions.openApp(app.appId)}>Open</button>}
                 {activeHere ? <div className="library-action-progress" data-testid="library-progress" role="progressbar" aria-label={`${operationLabel} ${app.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={error ? 'Connection interrupted' : progress?.message || `${operationLabel}…`} title={progress?.message}>
                   <span aria-hidden="true">{error ? 'Interrupted' : progress?.done ? 'Finishing…' : `${operationLabel}…`}{percent !== undefined && !error && <small>{Math.round(percent)}%</small>}</span>
                   <progress max={100} value={percent}/>
@@ -253,6 +273,8 @@ export function AppLibrary() {
               </div>
             </header>
             <p className="library-description" data-testid="library-description">{app.overview}</p>
+            {app.id !== 'pi' && <div className="library-information"><span>App version</span><strong>{plugins[app.appId as PluginId]?.version ?? (plugins[app.appId as PluginId]?.error ? 'Unavailable' : 'Checking…')}</strong></div>}
+            {app.id !== 'pi' && plugins[app.appId as PluginId]?.error && <p className="server-app-error" role="alert">{plugins[app.appId as PluginId]?.error}</p>}
             <div className="library-information"><span>Includes</span><strong>{app.packages}</strong></div>
             {app.id === 'pi' && (!installed || !canManage) && <p className="server-app-muted">{installed ? 'This installation is managed outside Lumo. Use the package manager that installed it to uninstall.' : 'Installs Pi and everything it needs for your Linux account.'}</p>}
           </section>}
@@ -278,7 +300,7 @@ export function AppLibrary() {
             })}</div>
           </>}
         </section>}
-        {isDetail && !catalog?.canInstall && catalog && selected !== 'pi' && <p className="server-app-error">Package management unavailable. Check the package manager and Lumo service.</p>}
+        {isDetail && !includedApp && !catalog?.canInstall && catalog && selected !== 'pi' && <p className="server-app-error">Package management unavailable. Check the package manager and Lumo service.</p>}
         {error && <div className="server-app-error" role="alert">{error}{job && <><button type="button" className="btn" onClick={() => { setError(null); setRetry((n) => n + 1); }}>Reconnect</button><button type="button" className="btn" onClick={checkInstalledApps}>Check installed apps</button></>}</div>}
         {section === 'Updates' && <section className="library-update-section library-history" data-testid="library-history"><h2>Update history</h2><p className="library-history-note">Recent app updates made through Lumo by your account.</p>{historyError ? <p className="server-app-error" role="alert">{historyError}</p> : historyLoading ? <p className="server-app-muted">Loading history…</p> : !history.length ? <p className="server-app-muted">No updates recorded yet.</p> : history.map((item) => {
           const app = CATALOG.find((app) => app.id === item.appId)!;

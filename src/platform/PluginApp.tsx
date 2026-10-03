@@ -3,10 +3,10 @@ import { Component, useEffect, useState, type ComponentType, type ReactNode } fr
 import { useCurrentWindow } from '../shell/WindowContext';
 import { APPS } from '../apps/registry';
 import { pluginPackages, pluginManifests } from './plugins';
+import { readPluginManifest, pluginAsset as asset } from './pluginManifest';
+import type { PluginId } from './plugins';
 import './host';
 
-interface PluginManifest { schemaVersion: number; hostApiVersion: number; id: string; entry: string; styles?: string; background?: string }
-const asset = /^[a-f0-9]{64}\.(js|css)$/;
 const loading = new Map<string, Promise<ComponentType>>();
 const styleLoads = new Map<string, Promise<void>>();
 
@@ -28,10 +28,7 @@ function loadStyle(href: string, name: string) {
 
 async function loadPlugin(name: string, id: string, background = false): Promise<ComponentType> {
   const base = `/plugins/${name}/`;
-  const response = await fetch(base + 'manifest.json', { cache: 'no-store' });
-  if (!response.ok) throw new Error('App package is unavailable.');
-  const manifest: PluginManifest = await response.json();
-  if (manifest.schemaVersion !== 1 || manifest.hostApiVersion !== 1 || manifest.id !== id || !asset.test(manifest.entry) || !manifest.entry.endsWith('.js') || (manifest.styles !== undefined && (!asset.test(manifest.styles) || !manifest.styles.endsWith('.css')))) throw new Error('This app package is incompatible with Lumo.');
+  const manifest = await readPluginManifest(id as PluginId);
   if (background && (!manifest.background || !asset.test(manifest.background) || !manifest.background.endsWith('.js'))) throw new Error('App background service is missing.');
   const key = base + (background ? manifest.background : manifest.entry);
   let pending = loading.get(key);
