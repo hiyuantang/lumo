@@ -371,3 +371,49 @@ test('Activity choices govern manual and idle play, disabling a running activity
   const still = { ...pet.ball! }; pet.step(.04); expect(pet.ball).toEqual(still);
   pet.setTerrain({ ...terrain, width: 390 }); expect(pet.ball).toBeNull();
 });
+
+test('Golf shots vary their launch angle and strength and trace a rising then falling arc', () => {
+  const angles = new Set<number>(); const speeds = new Set<number>();
+  for (let seed = 1; seed <= 12; seed++) {
+    const pet = new PetMotion({ x: 600, y: 650 }, { ...terrain, dock: null }, random(seed));
+    pet.startActivity('golf');
+    while (!pet.ball!.launched) pet.step(1 / 120);
+    const launch = { ...pet.ball! }; let peak = launch.y; let descending = false;
+    angles.add(Math.round(Math.atan2(-launch.vy, Math.abs(launch.vx)) * 180 / Math.PI));
+    speeds.add(Math.round(Math.hypot(launch.vx, launch.vy)));
+    for (let frame = 0; frame < 240; frame++) {
+      pet.step(1 / 120); peak = Math.min(peak, pet.ball!.y); descending ||= pet.ball!.vy > 0;
+    }
+    expect(launch.y - peak).toBeGreaterThan(100); expect(descending).toBe(true);
+  }
+  expect(angles.size).toBeGreaterThan(5); expect(speeds.size).toBeGreaterThan(5);
+});
+
+test('Golf lands on the actual dock or pet floor, falls off the dock, and rebounds from its sides', () => {
+  for (const rate of [30, 60, 120]) {
+    const pet = new PetMotion({ x: 600, y: 500 }, terrain, () => .5);
+    pet.startActivity('golf'); pet.movement = 'perform'; pet.elapsed = 1; pet.trickDuration = 30;
+    const ball = pet.ball!; ball.launched = true;
+    const drop = (x: number, y: number, vx = 0) => {
+      Object.assign(ball, { x, y, vx, vy: 180 });
+      for (let frame = 0; frame < rate * 2 && ball.vy >= 0; frame++) pet.step(1 / rate);
+    };
+    drop(200, 850);
+    expect(ball.vy).toBeLessThan(0); expect(ball.y + ball.radius).toBeGreaterThan(terrain.dock!.top + 40);
+    expect(ball.ground + ball.radius).toBe(terrain.height - PET_SIZE - 2 + PET_FEET);
+    drop(700, 850);
+    expect(ball.vy).toBeLessThan(0);
+    expect(ball.y + ball.radius).toBeLessThanOrEqual(terrain.dock!.top);
+    expect(ball.y + ball.radius).toBeGreaterThan(terrain.dock!.top - 15);
+    Object.assign(ball, { x: terrain.dock!.right - 10, y: terrain.dock!.top - ball.radius, vx: 160, vy: 0 });
+    for (let frame = 0; frame < rate / 2; frame++) pet.step(1 / rate);
+    expect(ball.x).toBeGreaterThan(terrain.dock!.right); expect(ball.y + ball.radius).toBeGreaterThan(terrain.dock!.top + 20);
+    for (const direction of [-1, 1]) {
+      const side = direction > 0 ? terrain.dock!.left : terrain.dock!.right;
+      Object.assign(ball, { x: side - direction * 30, y: terrain.dock!.top + 30, vx: direction * 240, vy: 0 });
+      for (let frame = 0; frame < rate / 3 && Math.sign(ball.vx) === direction; frame++) pet.step(1 / rate);
+      expect(Math.sign(ball.vx)).toBe(-direction);
+      expect(direction > 0 ? ball.x + ball.radius <= side : ball.x - ball.radius >= side).toBe(true);
+    }
+  }
+});

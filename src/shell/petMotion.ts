@@ -195,8 +195,8 @@ export class PetMotion {
     this.direction = this.point.x + PET_SIZE + 24 > this.terrain.width ? -1 : this.point.x < 24 ? 1 : this.direction;
     if (activity === 'golf' || activity === 'basketball') {
       const radius = activity === 'golf' ? 5 : 9;
-      const ground = Math.min(this.terrain.height - radius - 8, this.point.y + PET_FEET - radius);
-      this.ball = { x: clamp(this.point.x + (this.direction > 0 ? 76 : 8), radius + 8, this.terrain.width - radius - 8), y: ground, vx: 0, vy: 0, radius, spin: 0, bounces: 0, ground, launched: false };
+      const ground = activity === 'golf' ? this.floorY() + PET_FEET - radius : Math.min(this.terrain.height - radius - 8, this.point.y + PET_FEET - radius);
+      this.ball = { x: clamp(this.point.x + (this.direction > 0 ? 76 : 8), radius + 8, this.terrain.width - radius - 8), y: Math.min(ground, this.point.y + PET_FEET - radius), vx: 0, vy: 0, radius, spin: 0, bounces: 0, ground, launched: false };
     }
     this.phase(this.reduced ? 'perform' : 'conjure'); return true;
   }
@@ -232,17 +232,40 @@ export class PetMotion {
     if (!ball || this.reduced || this.elapsed < .5) return;
     if (!ball.launched) {
       ball.launched = true;
-      ball.vx = this.activity === 'golf' ? this.direction * clamp(this.terrain.width * .65, 360, 1000) : 0;
-      ball.vy = this.activity === 'golf' ? -140 : -280;
+      if (this.activity === 'golf') {
+        const speed = clamp(this.terrain.width * .7, 440, 1050) * this.between(.85, 1.15);
+        const angle = this.between(.55, .95);
+        ball.vx = this.direction * speed * Math.cos(angle); ball.vy = -speed * Math.sin(angle);
+      } else { ball.vx = 0; ball.vy = -280; }
     }
     for (let remaining = seconds; remaining > .000001;) {
       const dt = Math.min(remaining, 1 / 120); remaining -= dt;
+      const beforeX = ball.x; const beforeY = ball.y;
       ball.x += ball.vx * dt; ball.y += ball.vy * dt + 340 * dt * dt;
       ball.vy += 680 * dt; ball.spin += ball.vx * dt / ball.radius * 180 / Math.PI;
       const left = ball.radius + 8; const right = Math.max(left, this.terrain.width - ball.radius - 8);
       if (ball.x < left) { ball.x = left; ball.vx = Math.abs(ball.vx) * .86; ball.bounces++; }
       if (ball.x > right) { ball.x = right; ball.vx = -Math.abs(ball.vx) * .86; ball.bounces++; }
       if (ball.y < this.terrain.top + ball.radius) { ball.y = this.terrain.top + ball.radius; ball.vy = Math.abs(ball.vy) * .5; }
+      if (this.activity === 'golf') {
+        ball.ground = this.floorY() + PET_FEET - ball.radius;
+        const dock = this.terrain.dock;
+        if (dock) {
+          const top = dock.top - ball.radius;
+          const crossing = ball.y > beforeY ? (top - beforeY) / (ball.y - beforeY) : 0;
+          const landingX = beforeX + (ball.x - beforeX) * clamp(crossing, 0, 1);
+          if (ball.vy >= 0 && beforeY <= top + .5 && ball.y >= top && landingX >= dock.left && landingX <= dock.right) {
+            ball.ground = top;
+          } else {
+            const side = ball.vx > 0 ? dock.left - ball.radius : dock.right + ball.radius;
+            const crossingSide = ball.x !== beforeX ? (side - beforeX) / (ball.x - beforeX) : -1;
+            const sideY = beforeY + (ball.y - beforeY) * crossingSide;
+            if (crossingSide >= 0 && crossingSide <= 1 && sideY + ball.radius > dock.top && ((ball.vx > 0 && beforeX <= side) || (ball.vx < 0 && beforeX >= side))) {
+              ball.x = side; ball.vx *= -.7; ball.bounces++;
+            }
+          }
+        }
+      }
       if (ball.y >= ball.ground && ball.vy >= 0) {
         ball.y = ball.ground;
         ball.vy = this.activity === 'basketball' ? -280 : ball.vy > 45 ? -ball.vy * .48 : 0;

@@ -219,9 +219,10 @@ wand and sparkles, performs for a few seconds, then makes the props disappear.
 Pet settings includes a trailing switch for each activity in compact rows, with two
 columns when the content has enough room and one in narrow windows. Disabled activities leave
 the context menu and idle selection, and disabling the current one clears its props.
-Golf balls travel across the desktop, rebound off either edge with decreasing speed,
-and bounce on their play surface; basketballs dribble. Sports props stay below the
-menu bar and inside the viewport, clear on pickup or resize, and ignore pointer input.
+Golf shots use a fresh random launch angle and strength for a clear curved flight.
+Balls rebound off desktop edges and the dock sides with decreasing speed. They land
+on the dock only within its bounds and otherwise fall to the same floor as the pet.
+Basketballs dribble. Sports props stay below the menu bar and inside the viewport, clear on pickup or resize, and ignore pointer input.
 Reduced motion shows still props without moving the ball.
 
 Free mode allows these stationary tricks; Gravity also chooses them between
