@@ -176,10 +176,11 @@ test('all six shipped apps appear once, report their active version and open fro
     await page.getByTestId(`window-close-${appId}`).click();
     await page.getByTestId('library-back').click();
   }
-  for (const colorScheme of ['light', 'dark'] as const) for (const width of [1440,390]) {
+  for (const width of [1440,390]) for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
     await page.setViewportSize({ width, height: 1000 });
-    await page.screenshot({ path: `/tmp/lumo-library-plugins-${width}-${colorScheme}.png` });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme);
+    await page.screenshot({ path: `/tmp/lumo-library-plugins-${width}-${colorScheme}.png`, animations: 'disabled' });
     expect(await page.getByTestId('app-library').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   }
   expect(errors).toEqual([]);
