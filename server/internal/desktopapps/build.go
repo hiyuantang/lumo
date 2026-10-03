@@ -89,7 +89,7 @@ func Create(project, id, name string, template ...string) (any, error) {
 		js = strings.Replace(ReactTSX, "TITLE", "{"+string(nameJSON)+"}", 1)
 		types += ReactTypes
 	}
-	for file, content := range map[string]string{"lumo.app.json": string(data) + "\n", m.Entry: js, "src/style.css": TemplateCSS, "lumo.d.ts": types, "README.md": "# " + name + "\n\nEdit the manifest entry file and src/style.css. Increase lumo.app.json version before rebuilding changed source. Use Pi's lumo_app_build, lumo_app_preview and lumo_app_install tools. The runtime exposes lumo.call and lumo.ready; see lumo.d.ts. Storage values must stay backward compatible across app versions. Preview data is temporary and separate from installed data. No external imports or package scripts are supported.\n"} {
+	for file, content := range map[string]string{"APP_BUILD.md": builderGuide, "lumo.app.json": string(data) + "\n", m.Entry: js, "src/style.css": TemplateCSS, "lumo.d.ts": types, "README.md": "# " + name + "\n\nRead APP_BUILD.md before editing. Edit the manifest entry file and src/style.css. Increase lumo.app.json version before rebuilding changed source. Use Pi's lumo_app_build, lumo_app_preview and lumo_app_install tools. The runtime exposes lumo.call and lumo.ready; see lumo.d.ts. Storage values must stay backward compatible across app versions. Preview data is temporary and separate from installed data. No external imports or package scripts are supported.\n"} {
 		if e := os.WriteFile(filepath.Join(project, file), []byte(content), 0600); e != nil {
 			return nil, e
 		}

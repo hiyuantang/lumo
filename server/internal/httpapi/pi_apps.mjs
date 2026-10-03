@@ -17,7 +17,7 @@ export function appRequest(operation, params, signal) {
 }
 export default function(pi) {
  const tools=[
-  ['api','Discover supported Lumo app APIs, SDK and build rules before writing an app.',{}],
+  ['api','Call this first for every app build or update. Read builderGuide for app-type selection, project structure, implementation, verification and release. Returns the current sandbox APIs and SDK; these tools do not build native backend or Pi-extension packages.',{}],
   ['list','List installed apps and staged builds. Read current revisions before changing installed apps.',{}],
   ['create','Create a template (default pulse; optional counter, notes, or react with app-owned saved data) in a new absolute project directory. Never overwrites files.',{project:{type:'string'},id:{type:'string'},name:{type:'string'},template:{type:'string',enum:['pulse','counter','notes','react']}}],
   ['build','Validate and stage an immutable JavaScript/CSS or fixed React/TSX app from an absolute project directory. Increase manifest version for changed source. No downloads or project build scripts.',{project:{type:'string'}}],

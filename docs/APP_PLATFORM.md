@@ -1,8 +1,14 @@
 # Lumo App Platform
 
-Calendar, Skills, Git, Docker, Nginx and Monitor are also independently built,
-administrator-deployed [shipped app plugins](SHIPPED_APP_PLUGINS.md). They use
-the trusted host SDK. The local apps described below use the isolated runtime.
+Lumo supports two app runtimes. The sandboxed apps described here use an
+isolated frame and declared capabilities. [Complete native plugins](SHIPPED_APP_PLUGINS.md)
+can own a UI, backend and Pi extension and can be installed per account. Calendar,
+Skills, Git, Docker, Nginx and Monitor use that native plugin platform.
+
+Sandboxing limits app access; it does not prevent self-contained packaging.
+Use the sandbox when its capabilities meet the task. Native plugins have broader
+account access and suit features that need the separate native plugin contract.
+The current Pi App Builder tools create sandboxed apps.
 
 Lumo supports local desktop apps that Pi can create, build, preview, install and
 update without rebuilding Lumo. Apps run independently of the Pi conversation.
@@ -25,6 +31,12 @@ Ask Pi:
 > Create a Server Pulse desktop app in a new folder in my workspace. Discover
 > the Lumo app API, build it, and open a preview. Install it after checking the
 > result.
+
+Pi reads the [app-building guide](../server/internal/desktopapps/APP_BUILD.md)
+through the `builderGuide` field of `lumo_app_api`. Each generated project also
+contains that same guide as `APP_BUILD.md`. It covers app-type selection, source
+structure, data handling, UI checks, installation and rollback. The guide is
+embedded in the server, so discovery works without network access.
 
 Pi discovers the contract through `lumo_app_api`, creates the local template,
 edits source with its existing coding tools, and builds an immutable snapshot.
@@ -288,7 +300,7 @@ are not an isolation boundary against another process running as the same user.
 
 | Tool | Result |
 | --- | --- |
-| `lumo_app_api` | API version, capability and source rules |
+| `lumo_app_api` | App-building guide, API version, capability and source rules |
 | `lumo_app_create` | New project; `pulse` for metrics (default), `counter` for saved data, `notes` for an editor, or `react` for TSX |
 | `lumo_app_build` | Checked snapshot and exact digest |
 | `lumo_app_list` | Installed revisions and staged builds |
@@ -309,8 +321,8 @@ distinction when reporting results.
 
 ## Boundaries and next steps
 
-This release supports small metrics apps and utilities with app-owned saved data. It does not
-provide arbitrary server plugins, filesystem access, background jobs, app-owned
+The sandbox builder supports small metrics apps and utilities with app-owned
+saved data. Its runtime does not provide custom backends, filesystem access, background jobs, app-owned
 menus, automatic draft recovery, arbitrary dependency bundling or a
 marketplace. App Library closes affected app windows before a management change;
 Pi/CLI activation changes reload clean windows when the catalog refreshes and
