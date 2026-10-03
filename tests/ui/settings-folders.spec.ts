@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { expect, test } from '../offline';
 
 test('individual folders move, remove to Trash, and can be added after restoring', async ({ page }) => {
@@ -80,7 +81,8 @@ test('individual folders move, remove to Trash, and can be added after restoring
 test('folder conflicts block Apply without issuing any mutation', async ({ page }) => {
   const mutations: string[] = [];
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     if (route.request().method() !== 'GET') mutations.push(path);
     if (path.endsWith('/files/locations/plan')) return route.fulfill({ status: 400, json: { ok: false, error: { code: 'validation_failed', message: 'notes.txt already exists. Nothing was moved.', details: {} } } });

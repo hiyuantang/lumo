@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { clickPreviewTool } from '../preview-tools';
 import { expect, test } from '../offline';
 
@@ -9,7 +10,8 @@ const html = '<!doctype html><html><head><style>body { margin: 32px; color: #243
 test('HTML renders isolated local content and keeps raw editing, save and refresh', async ({ page, context }) => {
   let content = html; let revision = 'first';
   const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message));
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     let data: unknown = {};
     if (path.endsWith('/apps')) data = { apps: [], capabilities: {} };

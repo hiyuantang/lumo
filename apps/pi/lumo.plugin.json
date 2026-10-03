@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "hostApiVersion": 1,
+  "id": "pi",
+  "name": "Pi",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "required": true,
+  "icon": "IconCode",
+  "window": {
+    "width": 980,
+    "height": 680,
+    "minWidth": 460,
+    "minHeight": 360
+  },
+  "permissions": [
+    "account"
+  ],
+  "provider": true,
+  "assistant": true,
+  "backend": {
+    "entry": "backend",
+    "protocolVersion": 1,
+    "resident": true,
+    "contributions": [
+      "software",
+      "history"
+    ],
+    "routes": [
+      "GET /api/v1/pi/providers",
+      "GET /api/v1/pi/connections",
+      "POST /api/v1/pi/auth/start",
+      "GET /api/v1/pi/auth",
+      "POST /api/v1/pi/auth/reply",
+      "POST /api/v1/pi/auth/cancel",
+      "GET /api/v1/pi/reference",
+      "GET /api/v1/pi/compaction",
+      "POST /api/v1/pi/compaction",
+      "GET /api/v1/pi/image-settings",
+      "POST /api/v1/pi/image-settings",
+      "GET /api/v1/pi/templates",
+      "POST /api/v1/pi/templates",
+      "POST /api/v1/pi/images",
+      "GET /api/v1/pi/settings",
+      "POST /api/v1/pi/settings",
+      "GET /api/v1/pi/sessions",
+      "POST /api/v1/pi/sessions/delete",
+      "GET /api/v1/pi/sessions/archived",
+      "POST /api/v1/pi/sessions/archive",
+      "POST /api/v1/pi/sessions/restore",
+      "POST /api/v1/pi/start",
+      "POST /api/v1/pi/command",
+      "GET /api/v1/pi/events",
+      "POST /api/v1/pi/answer",
+      "GET /api/v1/pi/extensions",
+      "POST /api/v1/pi/extensions",
+      "POST /api/v1/pi/desktop/claim",
+      "POST /api/v1/pi/desktop/result",
+      "POST /api/v1/pi/stop",
+      "POST /api/v1/apps/pi/uninstall",
+      "POST /api/v1/apps/pi/plan",
+      "POST /api/v1/apps/pi/apply",
+      "GET /api/v1/apps/pi/progress"
+    ],
+    "maxBodyBytes": 12582912
+  },
+  "terminal": {
+    "candidates": [
+      "$HOME/.local/share/lumo/pi/bin/pi",
+      "$HOME/.local/bin/pi",
+      "/usr/local/bin/pi",
+      "/usr/bin/pi"
+    ],
+    "path": [
+      "$HOME/.local/share/lumo/pi/bin",
+      "$HOME/.local/bin"
+    ]
+  }
+}

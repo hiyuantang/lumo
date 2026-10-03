@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { DesktopAppsProvider } from './platform/catalog';
-import { PluginServices } from './platform/PluginApp';
+import { PluginServices, PluginProviders } from './platform/PluginApp';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ServerClockProvider } from './shell/ServerClockContext';
 import { WindowOverview } from './shell/WindowOverview';
@@ -13,8 +13,7 @@ import { DesktopItems } from './shell/DesktopItems';
 import { AppCatalogProvider } from './shell/AppCatalogContext';
 import { LoginScreen } from './shell/LoginScreen';
 import { PiAssistant } from './shell/PiAssistant';
-import { PiConversationWindowsProvider } from './apps/PiConversationLocation';
-import type { PiAssistantRequest } from './apps/Pi';
+import type { AssistantRequest as PiAssistantRequest } from './api/app-plugins';
 import { MenuBar } from './shell/MenuBar';
 import { NotificationCenter, ShortcutsDialog } from './shell/NotificationCenter';
 import { ReauthProvider } from './shell/ReauthSheet';
@@ -59,7 +58,7 @@ function Shell() {
       </div>
     );
   }
-  return state.user ? <AppCatalogProvider><DesktopAppsProvider><ServerClockProvider><PiConversationWindowsProvider><Desktop /></PiConversationWindowsProvider></ServerClockProvider></DesktopAppsProvider></AppCatalogProvider> : <LoginScreen />;
+  return state.user ? <AppCatalogProvider><DesktopAppsProvider><ServerClockProvider><PluginProviders><Desktop /></PluginProviders></ServerClockProvider></DesktopAppsProvider></AppCatalogProvider> : <LoginScreen />;
 }
 
 export default function App() {

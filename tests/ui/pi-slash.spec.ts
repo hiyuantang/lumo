@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, test } from '../offline';
-import { attachmentPrompt, expandSkillCommands, splitAttachmentPrompt } from '../../src/apps/piAttachments';
+import { attachmentPrompt, expandSkillCommands, splitAttachmentPrompt } from '../../apps/pi/src/piAttachments';
 import { piPage } from './pi-fixture';
 
 test('Chat actions are start-only and skills insert inline with keyboard navigation', async ({ page }) => {

@@ -13,6 +13,7 @@ export async function nativeApps() {
   return structuredClone(apps);
 }
 export async function importNativeApp(bundle: NativeBundle) {
+  if (bundle.manifest.required || pluginManifests.some(app => app.required && pluginPackages[app.id] === bundle.name)) throw new Error("Required apps are managed with Lumo.");
   await nativeApps();
   const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(bundle.manifest))))).map((n) => n.toString(16).padStart(2,'0')).join('');
   const release = { digest, manifest: bundle.manifest };
@@ -23,6 +24,7 @@ export async function importNativeApp(bundle: NativeBundle) {
 export async function changeNativeApp(change: NativeChange) {
   await nativeApps();
   const app = apps!.find((app) => app.name === change.name);
+  if (app?.current?.manifest.required) throw new Error("Required apps cannot be removed or replaced.");
   if (!app || app.revision !== change.revision) throw new Error('App selection changed; refresh and try again.');
   if (change.action === 'uninstall') { app.installed = false; app.previous = app.current?.digest; app.current = undefined; }
   else {

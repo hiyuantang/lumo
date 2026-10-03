@@ -3,6 +3,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"lumo/server/internal/broker"
 	"net/http"
 	"regexp"
@@ -103,13 +104,17 @@ func (s *Server) handleAppUpdateHistory(w http.ResponseWriter, r *http.Request) 
 		}
 		entries = append(entries, result...)
 	}
-	s.pi.mu.Lock()
-	entries = append(entries, s.pi.saved.History...)
-	err := s.pi.loadError
-	s.pi.mu.Unlock()
+	contributions, err := s.pluginContributions(r.Context(), "history")
 	if err != nil {
-		WriteError(w, NewError(CodeUnavailable, "Pi update history is unavailable."))
+		WriteError(w, NewError(CodeUnavailable, "App update history is unavailable."))
 		return
+	}
+	for _, value := range contributions {
+		raw, _ := json.Marshal(value)
+		var entry broker.AppUpdateHistoryEntry
+		if json.Unmarshal(raw, &entry) == nil {
+			entries = append(entries, entry)
+		}
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].CompletedAt > entries[j].CompletedAt })
 	WriteData(w, map[string]any{"entries": entries})

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { expect, test } from '../offline';
 import { piFixture } from './pi-fixture';
 
@@ -60,7 +61,8 @@ test('Dock menus sit above icons and Trash offers confirmed emptying', async ({ 
 });
 
 test('Files remembers dotfile visibility and opens each folder as an Pi workspace', async ({ page }) => {
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     const data = path.endsWith('/auth/session') ? { user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/user' } }
       : path.endsWith('/apps') ? { canInstall: false, apps: [{ id: 'pi', installed: true }] }

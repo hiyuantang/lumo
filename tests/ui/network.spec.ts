@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { expect, test, type Page } from '../offline';
 import type { NetworkSnapshot } from '../../src/api/source';
 
@@ -88,6 +89,7 @@ test('live overview separates loading, failures, empty data and external changes
   const writes: string[] = [];
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
   await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     if (path.startsWith('/api/v1/network') && route.request().method() !== 'GET') writes.push(path);
     const data = (value: unknown) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, data: value }) });

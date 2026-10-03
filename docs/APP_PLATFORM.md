@@ -2,8 +2,8 @@
 
 Lumo supports two app runtimes. The sandboxed apps described here use an
 isolated frame and declared capabilities. [Complete native plugins](SHIPPED_APP_PLUGINS.md)
-can own a UI, backend and Pi extension and can be installed per account. Calendar,
-Skills, Git, Docker, Nginx and Monitor use that native plugin platform.
+can own a UI, backend and Pi extension and can be installed per account. All shipped apps use that native plugin platform. Required system apps,
+including Pi, are administrator-managed and stay outside App Library.
 
 Sandboxing limits app access; it does not prevent self-contained packaging.
 Use the sandbox when its capabilities meet the task. Native plugins have broader
@@ -239,7 +239,7 @@ Ask Pi to create a project with `template: "notes"` to start an editor.
 | `server/internal/desktopapps/` | Manifest, template, source checks, immutable bundles, activation, recovery and app document generation |
 | `server/internal/httpapi/desktop_apps.go` | Authenticated launches, metrics and app-owned storage bridge |
 | `server/cmd/lumod/desktop_apps.go` | Same-account JSON command adapter for Pi |
-| `server/internal/httpapi/pi_apps.mjs` | Pi tool definitions and app workflow |
+| `apps/pi/backend/pi_apps.mjs` | Pi tool definitions and app workflow |
 | `server/internal/desktopapps/sdk.js` | Embedded frame SDK, capability requests and dirty-state reporting |
 | `src/platform/` | Dynamic catalog, App Library controls and isolated window contents |
 | `src/api/desktop-apps.ts` | Typed live/mock contract |

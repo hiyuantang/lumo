@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, test } from '../offline';
 import { piPage } from './pi-fixture';
-import { expandTemplate, expandTemplateCommand, initialTemplate, templateCatalog, templateContent } from '../../src/apps/piTemplates';
+import { expandTemplate, expandTemplateCommand, initialTemplate, templateCatalog, templateContent } from '../../apps/pi/src/piTemplates';
 import { piMessages, piRetryMessage, type PiMessage } from '../../src/api/pi';
 
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=';

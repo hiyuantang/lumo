@@ -4,6 +4,7 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"os/user"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -45,16 +46,19 @@ type Server struct {
 	deps        Deps
 	processes   system.ProcessSampler
 	idem        *idemStore
-	pi          *piWorker
-	piRPC       piRuntime
-	piAuth      piAuthRuntime
+	home        string
+	residents   residentRuntime
 }
 
 func NewServer(deps Deps) *Server {
 	if deps.Packages == nil {
 		deps.Packages = updates.NewWorker()
 	}
-	return &Server{deps: deps, idem: newIdemStore(), pi: newPiWorker(), piRPC: piRuntime{processes: map[string]*piProcess{}}}
+	home := ""
+	if u, err := user.Current(); err == nil {
+		home = u.HomeDir
+	}
+	return &Server{deps: deps, idem: newIdemStore(), home: home}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -70,43 +74,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/desktop-apps/call", s.handleDesktopCall)
 	mux.HandleFunc("POST /api/v1/desktop-apps/report", s.handleDesktopCall)
 	mux.HandleFunc("POST /api/v1/desktop-apps/close", s.handleDesktopCall)
-	mux.HandleFunc("GET /api/v1/pi/providers", s.handlePiProviders)
-	mux.HandleFunc("GET /api/v1/pi/connections", s.handlePiConnections)
-	mux.HandleFunc("POST /api/v1/pi/auth/start", s.handlePiAuthStart)
-	mux.HandleFunc("GET /api/v1/pi/auth", s.handlePiAuthState)
-	mux.HandleFunc("POST /api/v1/pi/auth/reply", s.handlePiAuthReply)
-	mux.HandleFunc("POST /api/v1/pi/auth/cancel", s.handlePiAuthCancel)
-	mux.HandleFunc("GET /api/v1/pi/reference", s.handlePiReference)
-	mux.HandleFunc("GET /api/v1/pi/compaction", s.handlePiCompaction)
-	mux.HandleFunc("POST /api/v1/pi/compaction", s.handlePiCompaction)
-	mux.HandleFunc("GET /api/v1/pi/image-settings", s.handlePiImageSettings)
-	mux.HandleFunc("POST /api/v1/pi/image-settings", s.handlePiImageSettings)
-	mux.HandleFunc("GET /api/v1/pi/templates", s.handlePiTemplates)
-	mux.HandleFunc("POST /api/v1/pi/templates", s.handlePiTemplates)
-	mux.HandleFunc("POST /api/v1/pi/images", s.handlePiImage)
-	mux.HandleFunc("GET /api/v1/pi/settings", s.handlePiSettings)
-	mux.HandleFunc("POST /api/v1/pi/settings", s.handlePiSettings)
-	mux.HandleFunc("GET /api/v1/pi/sessions", s.handlePiSessions)
-	mux.HandleFunc("POST /api/v1/pi/sessions/delete", s.handlePiDeleteSession)
-	mux.HandleFunc("GET /api/v1/pi/sessions/archived", s.handlePiArchivedSessions)
-	mux.HandleFunc("POST /api/v1/pi/sessions/archive", s.handlePiArchiveSession)
-	mux.HandleFunc("POST /api/v1/pi/sessions/restore", s.handlePiRestoreSession)
-	mux.HandleFunc("POST /api/v1/pi/start", s.handlePiStart)
-	mux.HandleFunc("POST /api/v1/pi/command", s.handlePiCommand)
-	mux.HandleFunc("GET /api/v1/pi/events", s.handlePiEvents)
-	mux.HandleFunc("POST /api/v1/pi/answer", s.handlePiAnswer)
-	mux.HandleFunc("GET /api/v1/pi/extensions", s.handlePiExtensions)
-	mux.HandleFunc("POST /api/v1/pi/extensions", s.handlePiExtensions)
-	mux.HandleFunc("POST /api/v1/pi/desktop/claim", s.handlePiDesktop)
-	mux.HandleFunc("POST /api/v1/pi/desktop/result", s.handlePiDesktop)
-	mux.HandleFunc("POST /api/v1/pi/stop", s.handlePiStop)
 	mux.HandleFunc("GET /api/v1/meta/version", s.handleVersion)
 	mux.HandleFunc("GET /api/v1/apps", s.handleApps)
 	mux.HandleFunc("POST /api/v1/apps/plan", s.handleAppPlan)
-	mux.HandleFunc("POST /api/v1/apps/pi/uninstall", s.handlePiUninstall)
-	mux.HandleFunc("POST /api/v1/apps/pi/plan", s.handlePiPlan)
-	mux.HandleFunc("POST /api/v1/apps/pi/apply", s.handlePiApply)
-	mux.HandleFunc("GET /api/v1/apps/pi/progress", s.handlePiProgress)
 	mux.HandleFunc("GET /api/v1/system/identity", s.handleIdentity)
 	mux.HandleFunc("GET /api/v1/system/overview", s.handleOverview)
 	mux.HandleFunc("GET /api/v1/system/metrics", s.handleMetrics)
@@ -164,20 +134,20 @@ func (s *Server) wrap(next http.Handler) http.Handler {
 				WriteError(w, NewError(CodeInternal, "Internal server error."))
 			}
 		}()
+		if name := appplugins.Owner(r.URL.Path); name != "" {
+			s.handlePlugin(w, r, name)
+			return
+		}
 		limit := int64(maxBodyBytes)
 		if r.URL.Path == "/api/v1/app-plugins/import" {
 			limit = maxPluginBody
 		}
-		if r.URL.Path == "/api/v1/files/write" || r.URL.Path == "/api/v1/pi/images" {
+		if r.URL.Path == "/api/v1/files/write" {
 			limit = maxWriteBodyBytes
 		} else if r.URL.Path == "/api/v1/files/write-privileged" {
 			limit = maxPrivilegedWriteBodyBytes
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
-		if name := appplugins.Owner(r.URL.Path); name != "" {
-			s.handlePlugin(w, r, name)
-			return
-		}
 		next.ServeHTTP(w, r)
 	})
 }

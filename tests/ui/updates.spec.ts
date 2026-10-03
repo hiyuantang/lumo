@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { expect, test } from '../offline';
 
 test('updates interface: refresh, review and apply a saved plan', async ({ page }) => {
@@ -83,7 +84,8 @@ test('package catalog stays local, separates sources and paginates large invento
     { name: 'local-tool', version: '1.0', architecture: 'all', summary: 'Locally installed tool', group: 'unknown', origin: '', held: true, security: false },
   ] };
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     requests.push(`${route.request().method()} ${path}`);
     if (path.endsWith('/updates/packages') && fail) return route.fulfill({ status: 503, json: { ok: false, error: { code: 'unavailable', message: 'Package catalog unavailable.' } } });

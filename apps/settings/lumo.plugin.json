@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "hostApiVersion": 1,
+  "id": "settings",
+  "name": "Settings",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "required": true,
+  "icon": "IconGear",
+  "window": {
+    "width": 840,
+    "height": 610,
+    "minWidth": 440,
+    "minHeight": 340
+  },
+  "permissions": [
+    "account"
+  ]
+}

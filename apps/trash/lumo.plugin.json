@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "hostApiVersion": 1,
+  "id": "trash",
+  "name": "Trash",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "required": true,
+  "icon": "IconTrash",
+  "window": {
+    "width": 860,
+    "height": 590,
+    "minWidth": 390,
+    "minHeight": 320
+  },
+  "permissions": [
+    "account"
+  ]
+}

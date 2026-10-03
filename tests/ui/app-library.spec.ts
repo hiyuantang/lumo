@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { test, expect, type Page } from '../offline';
 async function open(page: Page) {
   await page.goto('/');
@@ -57,7 +58,8 @@ test('Updates checks installed apps and records one-click updates in history', a
 
 test('Unavailable checks and history never appear as up to date or empty history', async ({ page }) => {
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/apps/plan') || path.endsWith('/apps/update-history')) return route.fulfill({ status: 503, json: { ok: false, error: { code: 'unavailable', message: 'Test service unavailable' } } });
     const data = path.endsWith('/auth/session') ? { user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/user' } }

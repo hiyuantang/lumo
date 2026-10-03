@@ -201,17 +201,17 @@ def build_binary(directory):
 
 def plugin_files(directory):
     result = {}
-    ids = {'calendar': 'calendar', 'skills': 'skills', 'git': 'git', 'docker': 'containers', 'nginx': 'websites', 'monitor': 'home'}
+    ids = {**{name: name for name in {'pi', 'files', 'preview', 'terminal', 'settings', 'library', 'trash'}}, 'calendar': 'calendar', 'skills': 'skills', 'git': 'git', 'docker': 'containers', 'nginx': 'websites', 'monitor': 'home'}
     arch = 'amd64' if platform.machine() == 'x86_64' else 'arm64'
     for name, app_id in ids.items():
         package = directory / name
         raw = (package / 'manifest.json').read_bytes()
         manifest = json.loads(raw)
-        if manifest.get('schemaVersion') != 1 or manifest.get('hostApiVersion') != 1 or manifest.get('id') != app_id or manifest.get('license') != 'AGPL-3.0-only':
+        if manifest.get('schemaVersion') != 1 or manifest.get('hostApiVersion') != 1 or manifest.get('id') != app_id or manifest.get('license') != 'AGPL-3.0-only' or bool(manifest.get('required')) != (name in {'pi', 'files', 'preview', 'terminal', 'settings', 'library', 'trash'}):
             raise ValueError('Incompatible app package: ' + name)
         assets = {key: manifest.get(key) for key in ('entry', 'styles', 'background')}
         backend = manifest.get('backend')
-        if name != 'monitor' and not backend:
+        if name in ('calendar', 'skills', 'git', 'docker', 'nginx', 'pi') and not backend:
             raise ValueError('Missing app backend: ' + name)
         if backend:
             if backend.get('protocolVersion') != 1 or backend.get('platform') != 'linux/' + arch:

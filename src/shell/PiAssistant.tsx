@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { lazy, Suspense, useCallback, useRef } from 'react';
-import type { PiAssistantRequest } from '../apps/Pi';
-const Pi = lazy(() => import('../apps/Pi').then((module) => ({ default: module.Pi })));
+import { useCallback, useRef } from 'react';
+import type { AssistantRequest as PiAssistantRequest } from '../api/app-plugins';
+import { PluginSurface } from '../platform/PluginApp';
+import { pluginManifests } from '../platform/plugins';
 import { WindowContext } from './WindowContext';
 import { PiAssistantFrame } from './PiAssistantFrame';
 
@@ -9,6 +10,6 @@ export function PiAssistant({ open, onOpen, onHide, request }: { open: boolean; 
   const attention = useRef(onOpen); attention.current = onOpen;
   const onAttention = useCallback(() => attention.current(), []);
   return <PiAssistantFrame open={open} focusKey={request?.action === 'new' ? request.id : undefined} onHide={() => { onHide(); document.querySelector<HTMLButtonElement>('[data-testid="pi-tray-button"]')?.focus(); }}>
-    {(rect) => <WindowContext.Provider value={{ ...rect, id: 'pi:assistant', appId: 'pi', z: 3900, minimized: false, maximized: false, snapped: null, restore: null }}><Suspense fallback={<div role="status">Opening Pi…</div>}><Pi compact onAttention={onAttention} assistantRequest={request}/></Suspense></WindowContext.Provider>}
+    {(rect) => <WindowContext.Provider value={{ ...rect, id: 'pi:assistant', appId: 'pi', z: 3900, minimized: false, maximized: false, snapped: null, restore: null }}><PluginSurface id={pluginManifests.find((app) => app.assistant)?.id ?? 'pi'} componentProps={{compact:true,onAttention,assistantRequest:request}}/></WindowContext.Provider>}
   </PiAssistantFrame>;
 }

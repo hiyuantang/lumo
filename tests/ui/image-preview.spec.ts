@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { clickPreviewTool } from '../preview-tools';
 import { expect, test, type Page } from '../offline';
 
@@ -7,7 +8,8 @@ async function openImage(page: Page) {
   const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message));
   const requests: string[] = [];
   let images: Record<string, string> = {};
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const url = new URL(route.request().url());
     let data: unknown = {};
     if (url.pathname.endsWith('/apps')) data = { apps: [], capabilities: {} };

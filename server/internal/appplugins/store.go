@@ -74,6 +74,9 @@ func selection(home, name string) (Selection, bool, error) {
 	return s, true, err
 }
 func LoadFor(home, name string) (*Package, error) {
+	if Required(name) {
+		return Load(name)
+	}
 	if !ValidName(name) {
 		return nil, errors.New("invalid app name")
 	}
@@ -137,6 +140,9 @@ func Import(home string, b Bundle) (result Release, err error) {
 	return
 }
 func importBundle(home string, b Bundle) (Release, error) {
+	if Required(b.Name) {
+		return Release{}, errors.New("required apps are managed with Lumo and cannot be imported per account")
+	}
 	if !ValidName(b.Name) || len(b.Files) > 16 || len(b.Manifest) > 65536 {
 		return Release{}, errors.New("invalid app package")
 	}
@@ -295,6 +301,9 @@ func capture(home, name, digest string) (*Package, error) {
 }
 func Apply(home string, c Change) error { return locked(home, func() error { return apply(home, c) }) }
 func apply(home string, c Change) error {
+	if Required(c.Name) {
+		return errors.New("required apps are managed with Lumo and cannot be removed or replaced per account")
+	}
 	if !ValidName(c.Name) {
 		return errors.New("invalid app name")
 	}

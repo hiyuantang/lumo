@@ -95,6 +95,10 @@ func build(source, apps, output, selected string) error {
 			goexe := filepath.Join(runtime.GOROOT(), "bin", "go")
 			command := exec.Command(goexe, "build", "-trimpath", "-o", temp.Name(), "./"+name+"/backend")
 			command.Dir = apps
+			if _, err := os.Stat(filepath.Join(apps, name, "backend", "go.mod")); err == nil {
+				command = exec.Command(goexe, "build", "-trimpath", "-o", temp.Name(), ".")
+				command.Dir = filepath.Join(apps, name, "backend")
+			}
 			command.Stdout = os.Stdout
 			command.Stderr = os.Stderr
 			if err = command.Run(); err != nil {

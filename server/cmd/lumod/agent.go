@@ -95,6 +95,8 @@ func runAgent(args []string) {
 		BrokerSocket: *brokerSock,
 	})
 
+	defer api.Close()
+
 	var lastActivity atomic.Int64
 	lastActivity.Store(time.Now().Unix())
 

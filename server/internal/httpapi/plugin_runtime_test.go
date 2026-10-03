@@ -74,7 +74,7 @@ func TestPluginReplacementFailureContainmentAndHostBoundary(t *testing.T) {
 }
 func TestPluginRequestIDCannotReplayDifferentMutation(t *testing.T) {
 	server := NewServer(Deps{})
-	server.pi.home = t.TempDir()
+	server.home = t.TempDir()
 	for index, body := range []string{`{"requestId":"same","action":"collection","collection":{"name":"One","color":"#336699","kind":"event"}}`, `{"requestId":"same","action":"collection","collection":{"name":"Two","color":"#336699","kind":"event"}}`} {
 		response := httptest.NewRecorder()
 		server.Handler().ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/calendar", strings.NewReader(body)))
@@ -90,7 +90,7 @@ func TestPluginRequestIDCannotReplayDifferentMutation(t *testing.T) {
 
 func TestPluginCalendarMutationsQueueWithReminderPolling(t *testing.T) {
 	server := NewServer(Deps{})
-	server.pi.home = t.TempDir()
+	server.home = t.TempDir()
 	handler := server.Handler()
 	start := make(chan struct{})
 	results := make(chan int, 2)

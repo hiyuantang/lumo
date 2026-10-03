@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "hostApiVersion": 1,
+  "id": "library",
+  "name": "App Library",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "required": true,
+  "icon": "IconGrid",
+  "window": {
+    "width": 900,
+    "height": 630,
+    "minWidth": 390,
+    "minHeight": 380
+  },
+  "permissions": [
+    "account"
+  ]
+}

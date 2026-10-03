@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"lumo/server/internal/piruntime"
+	"lumo/server/internal/appruntime"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +28,15 @@ type Window struct {
 	MinWidth  int `json:"minWidth"`
 	MinHeight int `json:"minHeight"`
 }
+type Terminal struct {
+	Candidates []string `json:"candidates"`
+	Path       []string `json:"path"`
+}
 type Manifest struct {
+	Terminal        *Terminal  `json:"terminal,omitempty"`
+	Required        bool       `json:"required,omitempty"`
+	Provider        bool       `json:"provider,omitempty"`
+	Assistant       bool       `json:"assistant,omitempty"`
 	Name            string     `json:"name"`
 	Description     string     `json:"description,omitempty"`
 	Icon            string     `json:"icon"`
@@ -48,6 +56,9 @@ type Manifest struct {
 	Pi              *Extension `json:"pi,omitempty"`
 }
 type Backend struct {
+	MaxBodyBytes    int64    `json:"maxBodyBytes,omitempty"`
+	Resident        bool     `json:"resident,omitempty"`
+	Contributions   []string `json:"contributions,omitempty"`
 	Runtime         string   `json:"runtime,omitempty"`
 	Privileged      bool     `json:"privileged,omitempty"`
 	ProtocolVersion int      `json:"protocolVersion"`
@@ -68,14 +79,21 @@ type Package struct {
 	Manifest  Manifest
 }
 
+var requiredNames = map[string]bool{"pi": true, "files": true, "preview": true, "terminal": true, "settings": true, "library": true, "trash": true}
+
+func Required(name string) bool { return requiredNames[name] }
+
 var legacyIDs = map[string]string{"calendar": "calendar", "skills": "skills", "git": "git", "docker": "containers", "nginx": "websites", "monitor": "home"}
 var assetName = regexp.MustCompile(`^[a-f0-9]{64}\.(bin|mjs|js|css)$`)
 var packageName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,47}$`)
 
 func ValidName(name string) bool {
-	return packageName.MatchString(name) && !map[string]bool{"app": true, "plugin": true, "pi": true, "files": true, "preview": true, "terminal": true, "settings": true, "library": true, "trash": true, "home": true, "containers": true, "websites": true}[name]
+	return packageName.MatchString(name) && !map[string]bool{"app": true, "plugin": true, "home": true, "containers": true, "websites": true}[name]
 }
 func AppID(name string) string {
+	if Required(name) {
+		return name
+	}
 	if id, ok := legacyIDs[name]; ok {
 		return id
 	}
@@ -123,10 +141,25 @@ func Parse(name, directory string, raw []byte) (*Package, error) {
 	if !ValidName(name) || len(raw) > 65536 || json.Unmarshal(raw, &m) != nil {
 		return nil, errors.New("invalid app manifest")
 	}
-	if m.ID != AppID(name) || m.SchemaVersion != 1 || m.HostAPIVersion != 1 || m.License != "AGPL-3.0-only" || !version.MatchString(m.Version) {
+	if m.Required != Required(name) || (m.Provider || m.Assistant) && !m.Required || m.ID != AppID(name) || m.SchemaVersion != 1 || m.HostAPIVersion != 1 || m.License != "AGPL-3.0-only" || !version.MatchString(m.Version) {
 		return nil, errors.New("incompatible app plugin")
 	}
+	if m.Terminal != nil && !m.Required {
+		return nil, errors.New("terminal contributions require a system app")
+	}
 	if b := m.Backend; b != nil {
+		if b.MaxBodyBytes < 0 || b.MaxBodyBytes > 12<<20 {
+			return nil, errors.New("invalid app body limit")
+		}
+		if b.Resident && (!m.Required || b.Runtime != "" || b.Privileged) || len(b.Contributions) > 0 && !b.Resident {
+			return nil, errors.New("unsupported resident backend")
+		}
+		for _, c := range b.Contributions {
+			if c != "software" && c != "history" {
+				return nil, errors.New("unsupported app contribution")
+			}
+		}
+
 		if (b.Runtime != "" && b.Runtime != "node") || b.ProtocolVersion != 1 || b.Platform != runtime.GOOS+"/"+runtime.GOARCH || !assetName.MatchString(b.Entry) || !strings.HasSuffix(b.Entry, ".bin") {
 			return nil, errors.New("incompatible app backend")
 		}
@@ -213,6 +246,9 @@ func AllowedRoute(name, route string) bool {
 	if _, ok := legacyIDs[name]; ok {
 		prefixes = append(prefixes, "/api/v1/"+name)
 	}
+	if name == "pi" {
+		prefixes = append(prefixes, "/api/v1/pi", "/api/v1/apps/pi")
+	}
 	if name == "docker" {
 		prefixes = append(prefixes, "/api/v1/containers")
 	}
@@ -230,6 +266,9 @@ func AllowedRoute(name, route string) bool {
 	return false
 }
 func Owner(path string) string {
+	if AllowedRoute("pi", "GET "+path) {
+		return "pi"
+	}
 	for name := range legacyIDs {
 		if AllowedRoute(name, "GET "+path) {
 			return name
@@ -326,7 +365,7 @@ func (p *Package) Command(ctx context.Context, home string, args ...string) (*ex
 		return nil, err
 	}
 	if p.Manifest.Backend.Runtime == "node" {
-		node, err := piruntime.Lookup(home, "node")
+		node, err := appruntime.Lookup(home, "node")
 		if err != nil {
 			return nil, fmt.Errorf("Node.js is unavailable; set up Pi's runtime: %w", err)
 		}

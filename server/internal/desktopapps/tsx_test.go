@@ -3,7 +3,7 @@ package desktopapps
 
 import (
 	"context"
-	"lumo/server/internal/piruntime"
+	"lumo/server/internal/appruntime"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -63,7 +63,7 @@ func TestBuildUsesPrivateNodeWithoutSystemNode(t *testing.T) {
 		t.Fatal(e)
 	}
 	home := t.TempDir()
-	private := piruntime.Bin(home)
+	private := appruntime.Bin(home)
 	if e = os.MkdirAll(private, 0700); e != nil {
 		t.Fatal(e)
 	}

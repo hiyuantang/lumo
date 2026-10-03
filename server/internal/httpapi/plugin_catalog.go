@@ -13,7 +13,7 @@ import (
 const maxPluginBody = 90 << 20
 
 func (s *Server) handlePluginCatalog(w http.ResponseWriter, r *http.Request) {
-	WriteData(w, appplugins.Catalog(s.pi.home))
+	WriteData(w, appplugins.Catalog(s.home))
 }
 func (s *Server) handlePluginImport(w http.ResponseWriter, r *http.Request) {
 	var request struct {
@@ -24,11 +24,11 @@ func (s *Server) handlePluginImport(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, NewError(CodeValidationFailed, "Invalid app package."))
 		return
 	}
-	if _, err := appplugins.Import(s.pi.home, request.Bundle); err != nil {
+	if _, err := appplugins.Import(s.home, request.Bundle); err != nil {
 		WriteError(w, NewError(CodeValidationFailed, err.Error()))
 		return
 	}
-	WriteData(w, appplugins.Catalog(s.pi.home))
+	WriteData(w, appplugins.Catalog(s.home))
 }
 func (s *Server) handlePluginChange(w http.ResponseWriter, r *http.Request) {
 	var request struct {
@@ -40,7 +40,7 @@ func (s *Server) handlePluginChange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	request.Change.RequestID = request.RequestID
-	if err := appplugins.Apply(s.pi.home, request.Change); err != nil {
+	if err := appplugins.Apply(s.home, request.Change); err != nil {
 		code := CodeValidationFailed
 		if errors.Is(err, appplugins.ErrConflict) {
 			code = CodeConflict
@@ -48,7 +48,7 @@ func (s *Server) handlePluginChange(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, NewError(code, err.Error()))
 		return
 	}
-	WriteData(w, appplugins.Catalog(s.pi.home))
+	WriteData(w, appplugins.Catalog(s.home))
 }
 func (s *Server) handlePluginAsset(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.PathValue("asset"), "/")
@@ -56,7 +56,7 @@ func (s *Server) handlePluginAsset(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	p, err := appplugins.LoadFor(s.pi.home, parts[0])
+	p, err := appplugins.LoadFor(s.home, parts[0])
 	if err != nil {
 		http.NotFound(w, r)
 		return

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, test } from '../offline';
 import type { PiMessage } from '../../src/api/pi';
-import { messagePreview, workGroups, workDuration } from '../../src/apps/piWorkGroups';
+import { messagePreview, workGroups, workDuration } from '../../apps/pi/src/piWorkGroups';
 import { piPage } from './pi-fixture';
 
 const user = (text: string, timestamp = 1000): PiMessage => ({ role: 'user', timestamp, content: text });

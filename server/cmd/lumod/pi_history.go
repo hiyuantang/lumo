@@ -2,28 +2,29 @@
 package main
 
 import (
-	"encoding/json"
-	"flag"
+	"context"
 	"fmt"
-	"lumo/server/internal/pihistory"
+	"lumo/server/internal/appplugins"
 	"os"
+	"os/user"
 )
 
 func runPiHistory(args []string) {
-	flags := flag.NewFlagSet("pi-history", flag.ExitOnError)
-	file := flags.String("file", "", "Absolute saved Pi session path")
-	query := flags.String("query", "", "Search user and assistant text, returning short excerpts")
-	entry := flags.String("entry", "", "Read one entry by ID, up to 4000 characters")
-	before := flags.Int("before", 0, "Return matching entries before this line")
-	offset := flags.Int("offset", 0, "Character offset within a selected entry")
-	limit := flags.Int("limit", 8, "Maximum excerpts (1–20)")
-	flags.Parse(args)
-	result, err := pihistory.Read(*file, pihistory.Options{Query: *query, Entry: *entry, Before: *before, Offset: *offset, Limit: *limit})
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	u, err := user.Current()
+	if err == nil {
+		var pkg *appplugins.Package
+		pkg, err = appplugins.LoadFor(u.HomeDir, "pi")
+		if err == nil {
+			command, e := pkg.Command(context.Background(), u.HomeDir, append([]string{"pi-history"}, args...)...)
+			err = e
+			if err == nil {
+				command.Stdout = os.Stdout
+				command.Stderr = os.Stderr
+				err = command.Run()
+			}
+		}
 	}
-	if err = json.NewEncoder(os.Stdout).Encode(result); err != nil {
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

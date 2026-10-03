@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { expect, test } from '../offline';
 
 test('Desktop reflects Files changes and supports opening, folder navigation and Trash drops', async ({ page }) => {
@@ -77,7 +78,8 @@ test('Desktop uses configured paths and fills down from the top right before add
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const url = new URL(route.request().url());
     if (url.pathname.endsWith('/files/list')) listed.push(url.searchParams.get('path')!);
     const data = url.pathname.endsWith('/auth/session') ? { user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/demo' } }

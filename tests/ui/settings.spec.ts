@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { expect, test } from '../offline';
 
 test('settings confirms and schedules a restart', async ({ page }) => {
@@ -162,7 +163,8 @@ test('menu bar and Settings share server time and follow saved time-zone changes
   const snapshot = () => ({ timezone, serverTime: '2028-01-02T03:04:05Z', revision: timezone, runtimeHostname: 'clock-test', canEdit: true, available: true, ntpSynchronized: true });
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     const data = (value: unknown) => route.fulfill({ json: { ok: true, data: value } });
     if (path.endsWith('/auth/session')) return data({ user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/user' } });

@@ -226,7 +226,7 @@ These tests do not invoke an LLM or spend tokens on compaction.
 Pi conversation reference checks use `tests/ui/pi-references.spec.ts` for actual
 HTML drag/drop, deduplication, whole-chip removal, hidden lookup instructions,
 context tooltips, running indicators and reduced motion in both themes and a
-narrow viewport. `server/internal/pihistory` tests bounded Unicode expansion,
+narrow viewport. `apps/pi/backend/history` tests bounded Unicode expansion,
 search, pagination, branch ancestry metadata, oversized records and archived
 references; the HTTP tests verify reference resolution without transcript
 content. These checks use fixtures and make no model/provider requests.
@@ -344,3 +344,16 @@ syntax, ignored project configuration, non-execution of source, linked-entry
 rejection and use of Pi's private Node.js without system Node. The production
 browser and Ubuntu workflows compile a React app and verify shared controls,
 unsaved-edit protection and saved data after reload.
+
+## Required system app boundaries
+
+`npm run test:unit` builds all 13 packages, runs the independent Pi backend and
+history tests, and checks that required apps cannot be removed or replaced per
+account. The resident backend test checks process reuse, software/history
+contributions, private route isolation, crash restart and lifetime-pipe cleanup.
+The installer checks the full required-app distribution before activation.
+
+`npm run test:docker` repeats the backend tests in Ubuntu and exercises real
+Pi chat, permission and builder workflows with offline fixtures. UI tests for
+plugins, Pi assistant/conversation location, Files, Terminal, Settings and App
+Library exercise loading through the host SDK and shared React instance.

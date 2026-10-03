@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, test } from '../offline';
-import { splitAttachmentPrompt } from '../../src/apps/piAttachments';
+import { splitAttachmentPrompt } from '../../apps/pi/src/piAttachments';
 import { piPage } from './pi-fixture';
 
 test('Pi centers a new chat, selects a workspace, and shows file cards and sends read paths without uploading', async ({ page }) => {

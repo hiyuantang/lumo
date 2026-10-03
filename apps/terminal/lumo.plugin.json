@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "hostApiVersion": 1,
+  "id": "terminal",
+  "name": "Terminal",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "required": true,
+  "icon": "IconTerminal",
+  "window": {
+    "width": 640,
+    "height": 420,
+    "minWidth": 380,
+    "minHeight": 260
+  },
+  "permissions": [
+    "account"
+  ]
+}

@@ -19,7 +19,7 @@ test('Read only fails closed before starting any mutating process', async () => 
  assert.throws(()=>module.calendarRequest('list',{},AbortSignal.abort()),/interrupted/);
 });
 test('Ask approves exact Calendar mutations but listing needs no approval', async () => {
- const source=(await readFile(new URL('../server/internal/httpapi/pi_questions.mjs',import.meta.url),'utf8')).replace('const pluginReadTools = [];', 'const pluginReadTools = ["lumo_calendar_list"];');
+ const source=(await readFile(new URL('../apps/pi/backend/pi_questions.mjs',import.meta.url),'utf8')).replace('const pluginReadTools = [];', 'const pluginReadTools = ["lumo_calendar_list"];');
  const module=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
  const handlers={};module.default({on(name,fn){handlers[name]=fn},registerTool(){}});
  assert.equal(await handlers.tool_call({toolName:'lumo_calendar_list',input:{from:'2026-10-01T00:00:00Z'}},{}),undefined);
@@ -28,7 +28,7 @@ test('Ask approves exact Calendar mutations but listing needs no approval', asyn
  assert.deepEqual(seen,input);assert.equal(result.block,true);
 });
 test('Disabling the extension leaves its tools out of the active set', async () => {
- const source=(await readFile(new URL('../server/internal/httpapi/pi_questions.mjs',import.meta.url),'utf8')).replace('const pluginReadTools = [];', 'const pluginReadTools = ["lumo_calendar_list"];');
+ const source=(await readFile(new URL('../apps/pi/backend/pi_questions.mjs',import.meta.url),'utf8')).replace('const pluginReadTools = [];', 'const pluginReadTools = ["lumo_calendar_list"];');
  const module=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
  const handlers={};let active=['read'];module.default({on(name,fn){handlers[name]=fn},registerTool(){},getAllTools:()=>[{name:'read'}],getActiveTools:()=>active,setActiveTools:(tools)=>{active=tools}});
  await handlers.session_start({},{sessionManager:{getBranch:()=>[]},ui:{setStatus(){}}});

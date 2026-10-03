@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import lumoUse, { desktopRequest } from '../server/internal/httpapi/lumo_use.mjs';
+import lumoUse, { desktopRequest } from '../apps/pi/backend/lumo_use.mjs';
 
 function tools() { const result = {}; lumoUse({ on() {}, registerTool(tool) { result[tool.name] = tool; } }); return result; }
 

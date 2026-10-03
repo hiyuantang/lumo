@@ -2,7 +2,7 @@
 import { expect, test } from '../offline';
 import { piPage } from './pi-fixture';
 import { piAction } from './pi-actions';
-import { attachmentPrompt, splitAttachmentPrompt, fileAttachmentKey, conversationAttachmentKey } from '../../src/apps/piAttachments';
+import { attachmentPrompt, splitAttachmentPrompt, fileAttachmentKey, conversationAttachmentKey } from '../../apps/pi/src/piAttachments';
 
 test('Conversation references round trip without exposing lookup instructions in visible text', () => {
   const reference = { project: "/home/user/it's a project", session: 'chat.jsonl', name: 'Earlier work', path: "/home/user/it's a project/chat.jsonl", reader: '/usr/local/bin/lumod' };

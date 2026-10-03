@@ -3,12 +3,12 @@ import { Component, useEffect, useState, type ComponentType, type ReactNode } fr
 import { useCurrentWindow } from '../shell/WindowContext';
 import { APPS } from '../apps/registry';
 import { useNativeApps } from './nativeCatalog';
-import { pluginPackages, pluginBases, pluginSession } from './plugins';
+import { pluginPackages, pluginBases, pluginSession, pluginManifests } from './plugins';
 import { readPluginManifest, pluginAsset as asset } from './pluginManifest';
 import type { PluginId } from './plugins';
 import './host';
 
-const loading = new Map<string, Promise<ComponentType>>();
+const loading = new Map<string, Promise<Record<string, ComponentType<Record<string, unknown>>>>>();
 const styleLoads = new Map<string, Promise<void>>();
 window.addEventListener('lumo:plugin-session', () => { loading.clear(); styleLoads.clear(); for (const link of document.querySelectorAll('link[data-lumo-plugin-style]')) link.remove(); });
 
@@ -28,7 +28,7 @@ function loadStyle(href: string, name: string) {
   return pending;
 }
 
-async function loadPlugin(name: string, id: string, background = false): Promise<ComponentType> {
+async function loadPlugin(name: string, id: string, background = false, componentName = 'default'): Promise<ComponentType<Record<string, unknown>>> {
   const base = pluginBases[id] ?? `/plugins/${name}/`;
   const manifest = await readPluginManifest(id as PluginId);
   if (background && (!manifest.background || !asset.test(manifest.background) || !manifest.background.endsWith('.js'))) throw new Error('App background service is missing.');
@@ -38,12 +38,14 @@ async function loadPlugin(name: string, id: string, background = false): Promise
     pending = (async () => {
       const module = await import(/* @vite-ignore */ key);
       if (typeof module.default !== 'function') throw new Error('App entry is missing.');
-      return module.default as ComponentType;
+      return module as Record<string, ComponentType<Record<string, unknown>>>;
     })();
     loading.set(key, pending);
     void pending.catch(() => loading.delete(key));
   }
-  const Body = await pending;
+  const module = await pending;
+  const Body = module[componentName];
+  if (typeof Body !== 'function') throw new Error('App component is missing: '+componentName);
   const style = base + manifest.styles + `?session=${pluginSession}`;
   if (!background && manifest.styles) await loadStyle(style, name);
   if (!background) for (const link of document.querySelectorAll<HTMLLinkElement>('link[data-lumo-plugin-style]')) {
@@ -65,28 +67,32 @@ export class AppBoundary extends Component<{ children: ReactNode; name: string }
 
 export function PluginApp() {
   const { appId } = useCurrentWindow();
+  return <PluginSurface id={appId} />;
+}
+
+export function PluginSurface({ id: appId, componentProps = {}, componentName = 'default' }: { id: string; componentProps?: Record<string, unknown>; componentName?: string }) {
   const native = useNativeApps();
   const available = !native.ready || native.apps.some((app) => app.installed && app.current?.manifest.id === appId);
   const name = pluginPackages[appId as keyof typeof pluginPackages];
-  const [Body, setBody] = useState<ComponentType | null>(null);
+  const [Body, setBody] = useState<ComponentType<Record<string, unknown>> | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!available || !native.ready) return;
     let alive = true;
     setError('');
-    void loadPlugin(name, appId).then((component) => { if (alive) setBody(() => component); }, (err: unknown) => { if (alive) setError(err instanceof Error ? err.message : 'App could not load.'); });
+    void loadPlugin(name, appId, false, componentName).then((component) => { if (alive) setBody(() => component); }, (err: unknown) => { if (alive) setError(err instanceof Error ? err.message : 'App could not load.'); });
     return () => { alive = false; };
-  }, [name, appId, attempt, available, native.ready]);
+  }, [name, appId, attempt, available, native.ready, componentName]);
   if (!native.ready && native.error) return <div className="app" data-testid="plugin-load-error"><p role="alert">{native.error}</p><button className="btn" onClick={() => void native.refresh().catch(() => {})}>Try again</button></div>;
   if (!available) return <div className="app" role="status">This app is not installed. Open App Library to install it.</div>;
   if (error) return <div className="app" data-testid="plugin-load-error"><p role="alert">{error}</p><button type="button" className="btn" onClick={() => setAttempt((value) => value + 1)}>Try again</button></div>;
-  if (!Body) return <div className="app" role="status">Opening {APPS[appId].title}…</div>;
-  return <Body />;
+  if (!Body) return <div className="app" role="status">Opening {APPS[appId as keyof typeof APPS].title}…</div>;
+  return <Body {...componentProps}/>;
 }
 
 function PluginService({ name, id }: { name: string; id: string }) {
-  const [Service, setService] = useState<ComponentType | null>(null);
+  const [Service, setService] = useState<ComponentType<Record<string, unknown>> | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
     let alive = true;
@@ -100,4 +106,21 @@ function PluginService({ name, id }: { name: string; id: string }) {
 export function PluginServices() {
   const native = useNativeApps();
   return <>{native.apps.filter((app) => app.installed && app.current?.manifest.background).map((app) => <PluginService key={app.name + app.current!.digest} name={app.name} id={app.current!.manifest.id} />)}</>;
+}
+
+export function PluginProviders({ children }: { children: ReactNode }) {
+  const native = useNativeApps();
+  const [providers, setProviders] = useState<ComponentType<{ children: ReactNode }>[]>([]);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!native.ready) return;
+    let active = true;
+    const definitions = pluginManifests.filter((app) => app.required && app.provider);
+    void Promise.all(definitions.map((app) => loadPlugin(pluginPackages[app.id], app.id, false, 'Provider'))).then((items) => {
+      if (active) { setProviders(items as ComponentType<{ children: ReactNode }>[]); setReady(true); }
+    }, () => { if (active) setReady(true); });
+    return () => { active = false; };
+  }, [native.ready]);
+  if (!ready && !native.error) return <div role="status">Opening system apps…</div>;
+  return providers.reduceRight((content, Provider) => <Provider>{content}</Provider>, children);
 }

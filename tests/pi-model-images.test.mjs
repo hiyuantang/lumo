@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createImagePreprocessor, encodeQuality90 } from '../server/internal/httpapi/pi_model_images.mjs';
+import { createImagePreprocessor, encodeQuality90 } from '../apps/pi/backend/pi_model_images.mjs';
 
 const image = { type: 'image', mimeType: 'image/png', data: Buffer.alloc(5000, 42).toString('base64') };
 const message = (timestamp, role = 'user') => ({ role, timestamp, ...(role === 'toolResult' ? { toolCallId: `read-${timestamp}`, toolName: 'read' } : {}), content: [{ type: 'text', text: 'Inspect this image.' }, { ...image }] });

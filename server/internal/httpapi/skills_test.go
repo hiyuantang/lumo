@@ -20,7 +20,7 @@ func TestSkillsAccountRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := NewServer(Deps{})
-	server.pi.home = home
+	server.home = home
 	handler := server.Handler()
 	for _, test := range []struct {
 		path     string

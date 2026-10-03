@@ -7,14 +7,14 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 
-const names = { calendar: 'calendar', skills: 'skills', git: 'git', docker: 'containers', nginx: 'websites', monitor: 'home' };
+const names = { pi:'pi',files:'files',preview:'preview',terminal:'terminal',settings:'settings',library:'library',trash:'trash', calendar: 'calendar', skills: 'skills', git: 'git', docker: 'containers', nginx: 'websites', monitor: 'home' };
 for (const [name, id] of Object.entries(names)) test(`${name} has a standalone package with intact assets`, async () => {
   const directory = path.join('.tools/plugin-packages', name);
   const manifest = JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8'));
   assert.equal(manifest.id, id);
   assert.equal(manifest.hostApiVersion, 1);
   assert.equal(manifest.license, 'AGPL-3.0-only');
-  if (name !== 'monitor') {
+  if (manifest.backend) {
     assert.equal(manifest.backend.protocolVersion, 1);
     const executable = await readFile(path.join(directory, manifest.backend.entry));
     assert.equal(createHash('sha256').update(executable).digest('hex'), manifest.backend.entry.slice(0,64));
@@ -63,4 +63,18 @@ test('deployment validates before activation and supports rollback and bundled r
     const bundled = run('--bundled'); assert.equal(bundled.status,0,bundled.stderr);
     await assert.rejects(readFile(file),{code:'ENOENT'});
   } finally { await rm(destination,{recursive:true,force:true}); }
+});
+
+test('the engine has no static imports of app frontend implementations', async () => {
+  const { readdir } = await import('node:fs/promises');
+  const visit = async (directory) => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) { if (file !== path.join('src','mock')) await visit(file); continue; }
+      if (!/\.tsx?$/.test(file)) continue;
+      const source = await readFile(file, 'utf8');
+      assert.doesNotMatch(source, /(?:from\s*|import\s*\()\s*['"][^'"]*apps\/[^/]+\/src\//, file);
+    }
+  };
+  await visit('src');
 });

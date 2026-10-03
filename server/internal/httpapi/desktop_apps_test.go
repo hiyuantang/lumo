@@ -79,9 +79,7 @@ func TestDesktopAppLaunchCapabilityAndRevocation(t *testing.T) {
 	if w = call("POST", "/api/v1/desktop-apps/call", "one", map[string]string{"token": launch.Data.Token, "method": "system.metrics.read"}); w.Code != http.StatusNotFound {
 		t.Fatal("revoked launch accepted", w.Body.String())
 	}
-	if validDesktopRequest(piDesktopRequest{Action: "app_preview", Target: "../../etc/passwd", Label: "App"}) || !validDesktopRequest(piDesktopRequest{Action: "app_preview", Target: b.Digest, Label: "App"}) {
-		t.Fatal("preview request validation")
-	}
+
 }
 
 func TestDesktopAppStoragePermissionsPreviewAndErrors(t *testing.T) {

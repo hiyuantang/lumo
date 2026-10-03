@@ -48,7 +48,8 @@ for (const name of chosen ? [chosen] : names) {
       builder.onResolve({ filter: /.*/ }, (args) => {
         if (modules.has(args.path)) return { path: args.path, namespace: 'lumo-host' };
         if (args.namespace === 'lumo-host') return;
-        if (args.kind === 'entry-point') return;
+        if (args.kind === 'entry-point' || args.importer.includes('/node_modules/')) return;
+        if (manifest.required && (args.path.startsWith('@xterm/') || args.path.startsWith('@fontsource-variable/'))) return;
         if (!args.path.startsWith('.')) throw new Error(`Unsupported plugin dependency: ${args.path}`);
         const resolved = path.resolve(args.resolveDir, args.path);
         if (!resolved.startsWith(directory + path.sep)) throw new Error(`Plugin imports outside its package: ${args.path}`);

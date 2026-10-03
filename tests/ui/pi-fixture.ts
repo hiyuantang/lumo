@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import type { Page } from '@playwright/test';
 import type { DesktopRequest, PiExtensionSettings } from '../../src/api/lumo-use';
 import type { PiImageSettings, PiTemplate, PiRetry, PiSessionMetrics, PiPermissionMode, PiQuestion, PiAnswer, PiAuthState, PiCommand, PiEvent, PiMessage } from '../../src/api/pi';
@@ -147,7 +148,8 @@ export async function piFixture(page: Page) {
 }
 export async function piPage(page: Page) {
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     const data = path.endsWith('/desktop-apps') ? { apps: [], builds: [] } : path.endsWith('/auth/session') ? { user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/user' } } : path.endsWith('/apps') ? { canInstall: false, apps: [{ id: 'pi', installed: true }] } : {};
     return route.fulfill({ json: { ok: true, data } });

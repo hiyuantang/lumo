@@ -10,11 +10,13 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/creack/pty"
-	"lumo/server/internal/piruntime"
+	"lumo/server/internal/appplugins"
+	"lumo/server/internal/appruntime"
 )
 
 const (
@@ -237,17 +239,15 @@ func (m *Manager) Open(opts OpenOptions) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	if opts.Program != "" && opts.Program != "shell" && opts.Program != "pi" {
-		return nil, fmt.Errorf("%w: unsupported terminal program", ErrValidation)
-	}
 	command := shell
-	if opts.Program == "pi" {
+	var programPath []string
+	if opts.Program != "" && opts.Program != "shell" {
 		if opts.Shell != "" {
-			return nil, fmt.Errorf("%w: shell cannot be set for Pi", ErrValidation)
+			return nil, fmt.Errorf("%w: shell cannot be set for an app", ErrValidation)
 		}
-		command = PiPath()
+		command, programPath = appplugins.TerminalProgram(homeDir(), opts.Program)
 		if command == "" {
-			return nil, fmt.Errorf("%w: Pi is not installed for this account", ErrNotFound)
+			return nil, fmt.Errorf("%w: app terminal program is unavailable", ErrValidation)
 		}
 	}
 	directory := homeDir()
@@ -264,10 +264,10 @@ func (m *Manager) Open(opts OpenOptions) (*Session, error) {
 	cmd := exec.Command(command)
 	cmd.Env = cleanEnv(shell)
 	cmd.Dir = directory
-	if opts.Program == "pi" {
+	if len(programPath) > 0 {
 		for index, value := range cmd.Env {
 			if len(value) > 5 && value[:5] == "PATH=" {
-				cmd.Env[index] = "PATH=" + piruntime.Bin(homeDir()) + ":" + filepath.Join(homeDir(), ".local/share/lumo/pi/bin") + ":" + filepath.Join(homeDir(), ".local/bin") + ":" + value[5:]
+				cmd.Env[index] = "PATH=" + appruntime.Bin(homeDir()) + ":" + strings.Join(programPath, ":") + ":" + value[5:]
 			}
 		}
 	}
@@ -313,15 +313,6 @@ func (m *Manager) Count() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.sessions)
-}
-
-func PiPath() string {
-	for _, path := range []string{filepath.Join(homeDir(), ".local/share/lumo/pi/bin/pi"), filepath.Join(homeDir(), ".local/bin/pi"), "/usr/local/bin/pi", "/usr/bin/pi"} {
-		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
-			return path
-		}
-	}
-	return ""
 }
 
 func resolveShell(requested string) (string, error) {

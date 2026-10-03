@@ -261,7 +261,10 @@ Layout:
 
 - `src/shell/` — desktop shell (window manager, menu bar, dock, command
   center, notification center, login).
-- `src/apps/` — applications rendered inside shell windows.
+- `apps/<name>/` — all shipped app packages, including required system apps.
+  Keep app UI, app-specific backend and Pi extensions inside their package.
+  Shared engine services stay in `src/platform/` and `server/internal/`.
+- `src/apps/` — shared app controls and manifest-based registry.
 - `src/api/` — typed data-source seam + live protocol client.
 - `src/mock/` — mock implementation of the seam. Apps must read system
   state only through the seam (`src/api/source.ts`); never call `fetch`

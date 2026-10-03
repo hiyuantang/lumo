@@ -17,23 +17,23 @@ class InstallerTests(unittest.TestCase):
     def test_plugin_distribution_validates_before_activation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            ids = {'calendar': 'calendar', 'skills': 'skills', 'git': 'git', 'docker': 'containers', 'nginx': 'websites', 'monitor': 'home'}
+            ids = {**{name: name for name in {'pi', 'files', 'preview', 'terminal', 'settings', 'library', 'trash'}}, 'calendar': 'calendar', 'skills': 'skills', 'git': 'git', 'docker': 'containers', 'nginx': 'websites', 'monitor': 'home'}
             for name, app_id in ids.items():
                 package = root / name
                 package.mkdir()
                 assets = {}
-                for field, suffix in [('entry', 'js'), *([] if name == 'monitor' else [('backend', 'bin')])]:
+                for field, suffix in [('entry', 'js'), *([] if name not in ('calendar', 'skills', 'git', 'docker', 'nginx', 'pi') else [('backend', 'bin')])]:
                     data = (name + field).encode()
                     filename = installer.hashlib.sha256(data).hexdigest() + '.' + suffix
                     (package / filename).write_bytes(data)
                     assets[field] = filename
-                manifest = {'schemaVersion': 1, 'hostApiVersion': 1, 'license': 'AGPL-3.0-only', 'id': app_id, 'entry': assets['entry']}
-                if name != 'monitor':
+                manifest = {'schemaVersion': 1, 'hostApiVersion': 1, 'license': 'AGPL-3.0-only', 'id': app_id, 'required': name in {'pi', 'files', 'preview', 'terminal', 'settings', 'library', 'trash'}, 'entry': assets['entry']}
+                if name in ('calendar', 'skills', 'git', 'docker', 'nginx', 'pi'):
                     manifest['backend'] = {'entry': assets['backend'], 'protocolVersion': 1, 'platform': 'linux/amd64'}
                 (package / 'manifest.json').write_text(installer.json.dumps(manifest))
             with patch.object(installer.platform, 'machine', return_value='x86_64'):
                 files = installer.plugin_files(root)
-                self.assertEqual(sum(path.suffix == '.bin' for path in files), 5)
+                self.assertEqual(sum(path.suffix == '.bin' for path in files), 6)
                 self.assertTrue(all(mode == 0o755 for path, (_, mode) in files.items() if path.suffix == '.bin'))
                 manifest_path = root / 'skills/manifest.json'
                 manifest = installer.json.loads(manifest_path.read_text())

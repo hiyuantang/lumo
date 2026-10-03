@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { expect, test, type Page } from '../offline';
 
 async function openSettings(page: Page) {
@@ -9,6 +10,7 @@ async function openSettings(page: Page) {
   let writes = 0;
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
   await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
     const data = (value: unknown) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, data: value }) });

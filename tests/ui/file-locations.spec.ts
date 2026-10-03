@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { expect, test } from '../offline';
 
 test('existing standard folders navigate, accept drops, and stay distinct from pins', async ({ page }) => {
@@ -41,7 +42,8 @@ test('live locations use custom absolute paths and tolerate servers with no stan
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const url = new URL(route.request().url());
     if (route.request().method() !== 'GET') mutations.push(url.pathname);
     if (url.pathname.endsWith('/files/list')) paths.push(url.searchParams.get('path')!);

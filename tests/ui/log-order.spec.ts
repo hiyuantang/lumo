@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { expect, test } from '../offline';
 
 test('Logs puts newest entries first and keeps older entries steady while streaming', async ({ page }) => {
@@ -14,7 +15,8 @@ test('Logs puts newest entries first and keeps older entries steady while stream
       emit = (index) => socket.send(JSON.stringify({ type: 'event', channel: frame.channel, seq: ++seq, data: entry(index) }));
     }
   }));
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     const data = path.endsWith('/auth/session') ? { user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/user' } }
       : path.endsWith('/journal') ? { entries: Array.from({ length: 80 }, (_, index) => entry(index)), nextCursor: 'entry-79' }

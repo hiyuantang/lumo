@@ -13,7 +13,7 @@ import (
 	"io/fs"
 	"lumo/server/internal/appplugins"
 	"lumo/server/internal/desktopapps"
-	"lumo/server/internal/piruntime"
+	"lumo/server/internal/appruntime"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -237,7 +237,7 @@ func projectInput(project string) (appplugins.Manifest, map[string]string, error
 	return m, files, nil
 }
 func compile(ctx context.Context, home string, m appplugins.Manifest, files map[string]string, compiled bool) Report {
-	node, err := piruntime.Lookup(home, "node")
+	node, err := appruntime.Lookup(home, "node")
 	if err != nil {
 		return failure("runtime", "runtime", err, "Set up Pi's Node.js runtime, then retry.")
 	}

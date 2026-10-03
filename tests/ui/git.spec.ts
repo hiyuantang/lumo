@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { test, expect, type Page } from '../offline';
 
 async function open(page: Page) {
@@ -178,6 +179,7 @@ test('A stale live repository preserves the commit draft and refreshes before re
   let revision = 'old'; let called = 0;
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
   await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/git/action')) {
       called++;
@@ -270,6 +272,7 @@ test('Git exposes abort after a conflicted merge and confirms discarding resolut
   const calls: string[] = [];
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
   await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/git/action')) {
       const body = route.request().postDataJSON(); calls.push(body.action);
@@ -372,6 +375,7 @@ test('Sync defaults to the tracking remote and offers a choice only for multiple
   const calls: string[] = [];
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
   await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/git/action')) { calls.push(route.request().postDataJSON().remote); return route.fulfill({ json: { ok: true, data: { done: true } } }); }
     const data = path.endsWith('/auth/session') ? { user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/user' } }
@@ -440,6 +444,7 @@ test('One sync button prioritizes unpublished commits and stops on a rejected pu
   const calls: string[] = [];
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
   await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/git/action')) {
       const action = route.request().postDataJSON().action; calls.push(action);
@@ -517,6 +522,7 @@ test('Git keeps file positions and selection stable when staging changes native 
   let staged = false; let revision = 0;
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
   await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/git/action')) {
       const body = route.request().postDataJSON();

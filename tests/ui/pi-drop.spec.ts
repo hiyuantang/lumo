@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { expect, test } from '../offline';
 import { piFixture } from './pi-fixture';
 import { piAction } from './pi-actions';
@@ -10,7 +11,8 @@ test('Files drops project folders into the workspace and file paths into the com
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     if (route.request().method() !== 'GET') mutations.push(path);
     const data = path.endsWith('/auth/session') ? { user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/demo' } }

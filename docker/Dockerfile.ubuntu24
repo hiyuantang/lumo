@@ -9,7 +9,7 @@ COPY dist/ ./internal/static/dist/
 ENV GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local
 RUN go run ./cmd/package-plugins -output /out/plugins
 ENV LUMO_PLUGIN_BUNDLED_DIR=/out/plugins
-RUN (cd ../apps && go test ./...) && (cd ../plugin-sdk && go test ./...) && CGO_ENABLED=1 go test -tags pam ./...
+RUN (cd ../apps && go test ./...) && (cd ../apps/pi/backend && go test ./...) && (cd ../plugin-sdk && go test ./...) && CGO_ENABLED=1 go test -tags pam ./...
 RUN CGO_ENABLED=1 go build -tags pam,webdist -o /out/lumod ./cmd/lumod
 
 FROM lumo-test-runtime:deps

@@ -6,8 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [name, target, option] = process.argv.slice(2);
-const ids = { calendar: 'calendar', skills: 'skills', git: 'git', docker: 'containers', nginx: 'websites', monitor: 'home' };
-if ((!/^[a-z][a-z0-9-]{0,47}$/.test(name) || ['pi','files','preview','terminal','settings','library','trash','home','containers','websites'].includes(name)) || !target || (option && !['--rollback', '--bundled'].includes(option))) throw new Error('Usage: node scripts/deploy-plugin.mjs <app-name> <plugin-directory> [--rollback|--bundled]');
+const required = ['pi','files','preview','terminal','settings','library','trash'];
+const ids = { ...Object.fromEntries(required.map(name => [name,name])), calendar: 'calendar', skills: 'skills', git: 'git', docker: 'containers', nginx: 'websites', monitor: 'home' };
+if ((!/^[a-z][a-z0-9-]{0,47}$/.test(name) || ['app','plugin','home','containers','websites'].includes(name)) || !target || (option && !['--rollback', '--bundled'].includes(option))) throw new Error('Usage: node scripts/deploy-plugin.mjs <app-name> <plugin-directory> [--rollback|--bundled]');
 const destination = path.resolve(target, name);
 if (option === '--bundled') {
   try { await unlink(path.join(destination, 'manifest.json')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -17,8 +18,8 @@ if (option === '--bundled') {
 const source = option ? destination : path.join(root, '.tools/plugin-packages', name);
 const raw = await readFile(path.join(source, option ? 'previous.json' : 'manifest.json'), 'utf8');
 const manifest = JSON.parse(raw);
-if (manifest.schemaVersion !== 1 || manifest.hostApiVersion !== 1 || manifest.id !== (ids[name] ?? `plugin:${name}`) || manifest.license !== 'AGPL-3.0-only') throw new Error('Incompatible plugin package.');
-if (Object.hasOwn(ids,name) && name !== 'monitor' && !manifest.backend) throw new Error('The complete package must include its backend.');
+if (manifest.schemaVersion !== 1 || manifest.hostApiVersion !== 1 || manifest.id !== (ids[name] ?? `plugin:${name}`) || manifest.license !== 'AGPL-3.0-only' || Boolean(manifest.required) !== required.includes(name)) throw new Error('Incompatible plugin package.');
+if (['calendar','skills','git','docker','nginx','pi'].includes(name) && !manifest.backend) throw new Error('The complete package must include its backend.');
 if (!/^\d+\.\d+\.\d+$/.test(manifest.version)) throw new Error('Invalid package version.');
 const files = [];
 const assets = { entry: manifest.entry, styles: manifest.styles, background: manifest.background, backend: manifest.backend?.entry, pi: manifest.pi?.entry };
@@ -50,4 +51,4 @@ if (previous) {
 const temp = path.join(destination, 'manifest.' + nonce);
 await writeFile(temp, raw, { flag: 'wx', mode: 0o644 });
 await rename(temp, path.join(destination, 'manifest.json'));
-console.log(`${manifest.name} ${manifest.version} ${option ? 'restored' : 'deployed'}. Reopen its window to load the selected bundle. Frontend background services update on desktop reload. Backend requests and new Pi chats use the selected complete package.`);
+console.log(`${manifest.name} ${manifest.version} ${option ? 'restored' : 'deployed'}. Reopen its window to load the selected bundle. Frontend background services update on desktop reload. Resident system apps require an agent restart; other backend requests and new Pi chats use the selected complete package.`);

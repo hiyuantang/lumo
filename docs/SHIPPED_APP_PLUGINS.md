@@ -1,9 +1,14 @@
 # App plugins
 
-Calendar, Skills, Git, Docker, Nginx and Monitor are trusted Lumo app packages.
-Each package owns its frontend, any app-specific backend, and any Pi extension.
-One manifest selects their version together. Files, Preview, Terminal, Pi,
-Settings, App Library and Trash are core apps.
+All 13 shipped apps are Lumo app packages. Each owns its frontend, app-specific
+backend and Pi extensions when needed. A manifest selects the parts of a release.
+Lumo is the underlying engine: authentication, account isolation, windows,
+shared capabilities, package loading and the privileged broker.
+
+Pi, Files, Preview, Terminal, Settings, App Library and Trash are **required
+system apps**. They load through the same package mechanism but stay outside
+App Library. Accounts cannot remove, replace or shadow them. Calendar, Skills,
+Git, Docker, Nginx and Monitor remain optional per-account apps.
 
 ## Ownership
 
@@ -15,19 +20,27 @@ Settings, App Library and Trash are core apps.
 | Docker | Containers and resources | Docker reads and typed action requests | None required |
 | Nginx | Sites, editing and logs | Website reads and typed save requests | None required |
 | Monitor | Metrics, processes, services and logs | Uses shared host capabilities | None required |
+| Pi | Chat, assistant, settings and builder controls | Chat runtime, streaming, providers, engine setup, history and extension assembly | Built-in permission, builder, question, image and desktop tools |
+| Files | Browser and file details | Uses shared filesystem capabilities | None required |
+| Preview | Documents, images and editing | Uses shared filesystem capabilities | None required |
+| Terminal | Terminal interface | Uses the shared terminal service | None required |
+| Settings | System preferences and updates | Uses shared host settings and package services | None required |
+| App Library | Discovery, installation and updates | Uses the engine's app stores | None required |
+| Trash | Browse, restore and delete | Uses shared recoverable storage | None required |
 
-An optional component is omitted when the app does not need it. Monitor does
-not need a duplicate metrics sampler or service manager. Pi remains Lumo's core
-assistant engine. Its setup and updates are in Pi → Settings → Engine; App
-Library has no Pi entry or uninstall control.
+A package omits components it does not need. Shared file access, terminal
+sessions, system sampling and account permissions remain engine capabilities.
+This avoids separate versions of the same system service in each app.
+Pi's setup and CLI updates remain in Pi → Settings → Engine. Removing its CLI
+keeps the required Pi app available to reinstall it.
 
-App source lives in `apps/<name>/`, including `lumo.plugin.json`, `src/`, and
-optional `backend/` and `pi/` directories. The Go apps module builds each backend
-separately. `plugin-sdk/` defines the versioned process protocol and shared API
-response format. Calendar, Skills and Git implementations are not linked into
-the production host binary. Calendar keeps its existing account database and
-Google configuration paths. Git uses the account's existing repositories and
-configuration; Skills reads existing skill folders.
+Source lives in `apps/<name>/`, with `lumo.plugin.json`, `src/` and optional
+`backend/` and `pi/` directories. Pi's backend is an independent Go module under
+`apps/pi/backend`; its embedded extensions and history reader ship with that
+binary. Other backend packages use the shared apps module. `plugin-sdk/` and the
+engine's shared capability packages supply transport and system services.
+App-specific unprivileged backends are not linked into the production host.
+Existing account data paths remain unchanged.
 
 Docker and Nginx also own their system-operation implementation and validation
 source. Their privileged operations are compiled into the broker as reviewed,
@@ -39,20 +52,39 @@ arbitrary code as root.
 The host owns authentication, sessions, the desktop, windows, shared controls,
 notifications, system sampling and the privileged broker. Apps use the typed
 host SDK. Frontend builds reject imports outside the app except React and
-`@lumo/sdk/*`. React is shared with the host. Native packages are discovered from their manifests. New app identities,
+`@lumo/sdk/*` (required system apps can also bundle their installed terminal and
+font libraries). React is shared with the host. Native packages are discovered from their manifests. New app identities,
 frontend entries, backend routes and Pi tools do not require a host release.
 The set of privileged host capabilities remains reviewed and compiled into Lumo.
 
 ## Backend lifecycle
 
 The authenticated per-user agent dispatches app-owned HTTP routes to the
-selected backend executable. Each request starts a short-lived process under
+selected backend executable. Ordinary app requests start a short-lived process under
 the same Linux account, with private standard-input/output transport. There is
 no public backend port and no idle backend process. Requests have body limits,
-response limits and a deadline. A crash produces an app error while core apps
+response limits and a deadline. A crash produces an app error while other apps
 remain available. Git operations are serialized. Mutations retain host request
 replay protection, and reuse of a successful request ID with different content
 is rejected.
+
+Pi declares `backend.resident: true`. The engine starts one backend per account
+on demand and reuses it for concurrent requests and chat event streams. It
+passes a private Unix listener as file descriptor 3; no public port is opened.
+The app's standard input is a lifetime pipe. Closing it stops Pi's child chats
+and provider setup processes and shuts down the backend. An exited backend is
+restarted on the next request. Saved conversations remain on disk; a backend
+crash can interrupt the current generation, which the user must resume.
+
+Private `/_lumo/status`, `/_lumo/software` and `/_lumo/history` endpoints supply
+activity, CLI status and update history to the engine. They are never public app
+routes. Active Pi operations prevent the account worker from idling out.
+`terminal` in the manifest declares Pi's CLI candidates and search directories;
+the shared terminal service resolves that contribution. `provider: true` exposes
+a named frontend `Provider`, loaded from the same module as the app so its chat
+window context is shared. The assistant uses the host's embedded app surface.
+Resident backends, providers and terminal contributions are reserved for required
+administrator-managed apps. Custom apps retain the documented request protocol.
 
 Backend responses can request only the app's allowed typed broker actions. The
 host supplies the original authenticated session; it does not send session
@@ -63,8 +95,9 @@ The manifest selects hashed executable and Pi-extension assets. The host checks
 platform, protocol, paths, namespaces and checksums before use. Pi loads tool
 names and source from the app package when a chat starts. Read tools and write
 tools remain subject to Lumo's permission mode. Removing an optional app package
-does not prevent the Pi engine from starting. Installed account packages take
-precedence over shared packages. Uninstalled account selections suppress the
+does not prevent the Pi engine from starting. Installed optional account packages take
+precedence over shared packages. Required apps always resolve from administrator
+packages, ignoring account selections. Uninstalled account selections suppress the
 shared app for that account; another account keeps its own selection.
 
 These are trusted native packages, not a security sandbox. Pi can create them
@@ -121,7 +154,8 @@ npm run deploy:plugin -- calendar /usr/local/lib/lumo/plugin-overrides --bundled
 Deployment validates every component before atomically replacing `manifest.json`.
 The preceding manifest is retained for rollback. Old hashed files stay available
 for open windows and in-flight requests. Backend requests use the selected
-package immediately. Reopen the app window for frontend changes, reload the
+package immediately for ordinary backends. Resident app updates require an
+account-agent restart after active work has finished. Reopen the app window for frontend changes, reload the
 desktop for frontend background services, and start a new Pi chat for extension
 changes. Existing windows, drafts and chats are not forcibly closed.
 

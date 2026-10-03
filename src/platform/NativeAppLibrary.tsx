@@ -64,7 +64,7 @@ export function NativeAppUpdates({ onSelect }: { onSelect(name: string): void })
   const { state } = useShell();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const updates = native.apps.filter((app) => app.installed && app.current && app.releases[0] && app.current.digest !== app.releases[0].digest);
+  const updates = native.apps.filter((app) => !app.current?.manifest.required && app.installed && app.current && app.releases[0] && app.current.digest !== app.releases[0].digest);
   const open = (app: NativeApp) => Object.values(state.windows).some((window) => window?.appId === app.current?.manifest.id);
   async function apply(apps: NativeApp[]) {
     setBusy(true); setError('');
@@ -72,7 +72,7 @@ export function NativeAppUpdates({ onSelect }: { onSelect(name: string): void })
     catch (err) { setError(err instanceof Error ? err.message : 'App update failed.'); }
     finally { await native.refresh().catch(() => {}); setBusy(false); }
   }
-  const history = native.apps.flatMap((app) => (app.history ?? []).filter((item) => item.from).map((item) => ({...item,name:app.name,title:app.current?.manifest.name ?? app.name})));
+  const history = native.apps.filter(app=>!app.current?.manifest.required).flatMap((app) => (app.history ?? []).filter((item) => item.from).map((item) => ({...item,name:app.name,title:app.current?.manifest.name ?? app.name})));
   if (!updates.length && !history.length) return null;
   return <section className="library-update-section" aria-label="App package updates"><div className="library-update-heading"><h2>App packages</h2>{updates.length > 0 && <button className="btn" data-testid="plugin-update-all" disabled={busy || updates.some(open)} onClick={() => void apply(updates)}>Update all packages</button>}</div>
     {updates.map((app) => <article className="library-update-row" key={app.name}><div className="library-update-copy"><h3>{app.current!.manifest.name}</h3><p>{app.current!.manifest.version} → {app.releases[0].manifest.version}</p>{open(app) && <p>Close this app’s windows to update.</p>}</div><button className="btn" disabled={busy || open(app)} onClick={() => void apply([app])}>Update</button><button className="btn" onClick={() => onSelect(app.name)}>Details</button></article>)}

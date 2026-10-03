@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { expect, test } from '../offline';
 import { piPage } from './pi-fixture';
 import { piAction } from './pi-actions';
@@ -88,7 +89,8 @@ test(`Pi sets up its core engine and updates it without App Library or APT (${ap
   const commands: string[] = [];
   const plan = () => ({ id: 'pi_plan', appId: 'pi', operation, packages: version === '1.2.1' ? [] : [{ name: 'pi', fromVersion: version, toVersion: operation === 'install' ? '1.2.0' : '1.2.1', security: false, downloadBytes: 0, installedDeltaBytes: 0 }], downloadBytes: 0, installedDeltaBytes: 0, securityCount: 0, rebootRequired: false, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 900000).toISOString() });
   await page.routeWebSocket(/\/api\/v1\/ws/, () => {});
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     const data = (value: unknown) => route.fulfill({ json: { ok: true, data: value } });
     if (path.endsWith('/auth/session')) return data({ user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/user' } });

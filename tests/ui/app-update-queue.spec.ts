@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { nativeAppRoute } from './native-app-fixture';
 import { expect, test, type Page } from '../offline';
 
 type App = 'docker' | 'nginx';
@@ -22,7 +23,8 @@ async function fixture(page: Page, requirePassword = false) {
       send();
     });
   });
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
+    if (await nativeAppRoute(route)) return;
     const path = new URL(route.request().url()).pathname;
     const data = (value: unknown) => route.fulfill({ json: { ok: true, data: value } });
     if (path.endsWith('/auth/session')) return data({ user: { name: 'demo', uid: 1000, gid: 1000, home: '/home/demo' }, csrf: 'test-csrf' });

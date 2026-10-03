@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"lumo/server/internal/piruntime"
+	"lumo/server/internal/appruntime"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -147,7 +147,7 @@ func (s *Store) Build(ctx context.Context, project string) (Bundle, error) {
 	if e != nil {
 		return Bundle{}, e
 	}
-	node, e := piruntime.Lookup(s.Home, "node")
+	node, e := appruntime.Lookup(s.Home, "node")
 	if e != nil {
 		return Bundle{}, errors.New("Node.js is required to check app source. Install it explicitly before building.")
 	}

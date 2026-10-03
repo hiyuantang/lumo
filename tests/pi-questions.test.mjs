@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import questions from '../server/internal/httpapi/pi_questions.mjs';
+import questions from '../apps/pi/backend/pi_questions.mjs';
 
 function tool() {
   let registered;
@@ -41,7 +41,7 @@ test('ask_user rejects unavailable UI and an already interrupted turn', async ()
 
 async function permissions(mode) {
   const { readFile } = await import('node:fs/promises');
-  const source = (await readFile(new URL('../server/internal/httpapi/pi_questions.mjs', import.meta.url), 'utf8')).replace("const permissionMode = 'ask';", `const permissionMode = '${mode}';`);
+  const source = (await readFile(new URL('../apps/pi/backend/pi_questions.mjs', import.meta.url), 'utf8')).replace("const permissionMode = 'ask';", `const permissionMode = '${mode}';`);
   const module = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
   const handlers = {};
   module.default({ on(name, handler) { handlers[name] = handler; }, registerTool() {} });
@@ -87,7 +87,7 @@ test('Approve for me runs without dialogs and invalid modes fail closed', async 
 });
 
 test('Session metrics weight token counts and time, deduplicate timing, and exclude unrelated branches', async () => {
-  const { sessionMetrics } = await import('../server/internal/httpapi/pi_questions.mjs');
+  const { sessionMetrics } = await import('../apps/pi/backend/pi_questions.mjs');
   const message = (id, input, cacheRead, cacheWrite, output) => ({ type: 'message', id, message: { role: 'assistant', stopReason: 'stop', usage: { input, cacheRead, cacheWrite, output } } });
   const timing = (messageId, elapsedMs) => ({ type: 'custom', customType: 'lumo-response-timing', data: { messageId, elapsedMs } });
   const first = message('one', 20, 60, 20, 100);
@@ -100,7 +100,7 @@ test('Session metrics weight token counts and time, deduplicate timing, and excl
 });
 
 test('Session metrics do not invent timing or usage for missing, invalid, failed, or aborted responses', async () => {
-  const { sessionMetrics } = await import('../server/internal/httpapi/pi_questions.mjs');
+  const { sessionMetrics } = await import('../apps/pi/backend/pi_questions.mjs');
   const entries = ['aborted', 'error', 'stop', 'length'].map((stopReason, index) => ({ type: 'message', id: String(index), message: { role: 'assistant', stopReason, usage: { input: 10, cacheRead: 0, cacheWrite: 0, output: 20 } } }));
   entries.push(...entries.map((entry, i) => ({ type: 'custom', customType: 'lumo-response-timing', data: { messageId: entry.id, elapsedMs: i === 2 ? 0 : 1000 } })));
   entries.push({ type: 'message', id: 'missing', message: { role: 'assistant' } }, { type: 'message', id: 'invalid', message: { role: 'assistant', usage: { input: -2, cacheRead: 50, cacheWrite: 0 } } });
@@ -119,7 +119,7 @@ test('Loaded extension tools join the active set without activating excluded bui
 
 test('Disabling Questions removes ask_user while approval enforcement and session hooks remain active', async () => {
   const { readFile } = await import('node:fs/promises');
-  const source = (await readFile(new URL('../server/internal/httpapi/pi_questions.mjs', import.meta.url), 'utf8')).replace('const questionsEnabled = true;', 'const questionsEnabled = false;');
+  const source = (await readFile(new URL('../apps/pi/backend/pi_questions.mjs', import.meta.url), 'utf8')).replace('const questionsEnabled = true;', 'const questionsEnabled = false;');
   const module = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
   const handlers = {}; const tools = [];
   module.default({ on(name, handler) { handlers[name] = handler; }, registerTool(value) { tools.push(value.name); } });
