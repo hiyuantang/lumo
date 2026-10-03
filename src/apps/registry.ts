@@ -12,6 +12,7 @@ export interface AppMeta {
   id: AppId;
   requiredPackage?: 'git' | 'docker' | 'nginx' | 'pi';
   iconImage?: string;
+  multipleWindows?: boolean;
   title: string;
   icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
   defaultSize: { w: number; h: number };
@@ -22,7 +23,7 @@ export const APP_ORDER: AppId[] = ['home', 'files', 'preview', 'terminal', 'git'
 
 const builtinApps = {
   ...Object.fromEntries(pluginManifests.map((manifest) => [manifest.id, {
-    id: manifest.id, title: manifest.name, icon: Icons[manifest.icon as keyof typeof Icons],
+    multipleWindows: manifest.window.multiple ?? false, id: manifest.id, title: manifest.name, icon: Icons[manifest.icon as keyof typeof Icons],
     defaultSize: { w: manifest.window.width, h: manifest.window.height },
     minSize: { w: manifest.window.minWidth, h: manifest.window.minHeight },
     requiredPackage: 'requiredPackage' in manifest ? manifest.requiredPackage : undefined,

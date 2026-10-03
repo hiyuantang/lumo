@@ -9,7 +9,7 @@ const problem = (file, code, message, fix, node, source) => {
   const pos = node && source ? source.getLineAndCharacterOfPosition(node.getStart(source)) : null;
   diagnostics.push({file, code, message, fix, ...(pos ? {line:pos.line+1,column:pos.character+1} : {})});
 };
-const host = new Set(['react', 'react/jsx-runtime', '@lumo/sdk/api/plugins', '@lumo/sdk/api/notifications', '@lumo/sdk/shell/ShellContext', '@lumo/sdk/shell/WindowContext']);
+const host = new Set(['react', 'react/jsx-runtime', '@lumo/sdk/app', '@lumo/sdk/shell/appMenus', '@lumo/sdk/shell/useAppState', '@lumo/sdk/apps/FilePicker', '@lumo/sdk/shell/AppModal', '@lumo/sdk/shell/ContextMenu', '@lumo/sdk/api/plugins', '@lumo/sdk/api/notifications', '@lumo/sdk/shell/ShellContext', '@lumo/sdk/shell/WindowContext']);
 const builtin = new Set(builtinModules.map(name => name.replace(/^node:/,'')));
 const options = {target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true,isolatedModules:true};
 try {
@@ -59,7 +59,7 @@ try {
         if (host.has(value)) { resolved.set(value,value); return; }
         const base=path.normalize(path.join(path.dirname(name),value));
         const target=[base,base+'.tsx',base+'.ts',base+'.jsx',base+'.js',base+'/index.tsx',base+'/index.ts'].find(p=>Object.hasOwn(files,p));
-        if (!value.startsWith('.') || !base.startsWith('src/') || !target || !/\.(tsx?|jsx?)$/.test(target)) { problem(name,'dependency',`Unsupported or missing import: ${value}`,'Use a local module under src/, react, or @lumo/sdk/api/plugins.',n,source); return; }
+        if (!value.startsWith('.') || !base.startsWith('src/') || !target || !/\.(tsx?|jsx?)$/.test(target)) { problem(name,'dependency',`Unsupported or missing import: ${value}`,'Use a local module under src/, react, or a supported @lumo/sdk/app import.',n,source); return; }
         resolved.set(value,target); compile(target);
       });
       const result=ts.transpileModule(files[name],{fileName:name,compilerOptions:options,reportDiagnostics:true});

@@ -21,6 +21,8 @@ export type WindowId = AppId | `preview:${string}` | `pi:${string}`;
 
 export interface WindowState extends Rect {
   id: WindowId;
+  title?: string;
+  badge?: string;
   previewMode?: 'rendered' | 'raw';
   appId: AppId;
   filePath?: string[];
@@ -94,6 +96,8 @@ type Action =
   | { type: 'empty-trash' }
   | { type: 'pi-project'; id: WindowId; path: string | null }
   | { type: 'new-desktop-app'; appId: AppId }
+  | { type: 'new-app-window'; appId: AppId }
+  | { type: 'window-presentation'; id: WindowId; title?: string; badge?: string }
   | { type: 'new-preview' }
   | { type: 'open-pi'; path: string }
   | { type: 'open-pi-settings'; section: 'pet' }
@@ -176,7 +180,7 @@ function createWindow(state: ShellState, appId: AppId, id: WindowId): ShellState
   const count = Object.keys(state.windows).length;
   const rect = saved ? fitFloatingRect(saved, appId, state.viewport) : clampRect({ x: 96 + count * 40, y: MENUBAR_H + 40 + count * 32, ...APPS[appId].defaultSize }, state.viewport);
   const win = fitWindow({ ...(saved ? windowLayout(saved) : {}), ...rect, appId, id, z: state.zTop + 1, minimized: false, maximized: saved?.maximized ?? false, snapped: saved?.snapped ?? null, restore: saved?.restore ?? null }, state.viewport);
-  if ((appId === 'preview' || appId === 'pi') && !win.maximized && !win.snapped && Object.values(state.windows).some((item) => item?.appId === appId)) {
+  if (APPS[appId].multipleWindows && !win.maximized && !win.snapped && Object.values(state.windows).some((item) => item?.appId === appId)) {
     Object.assign(win, clampRect({ ...win, x: 96 + count * 40, y: MENUBAR_H + 40 + count * 32 }, state.viewport));
   }
   return { ...state, windows: { ...state.windows, [id]: win }, focused: id, zTop: win.z };
@@ -209,6 +213,14 @@ function reducer(state: ShellState, action: Action): ShellState {
       return { ...state, authReady: true };
     case 'files-changed':
       return { ...state, fileRevision: state.fileRevision + 1 };
+    case 'new-app-window':
+      return APPS[action.appId].multipleWindows ? createWindow(state, action.appId, state.windows[action.appId] ? `${action.appId}:${state.zTop + 1}` as WindowId : action.appId) : reducer(state, { type: 'open-app', appId: action.appId });
+    case 'window-presentation': {
+      const win = state.windows[action.id];
+      const title = action.title?.trim().slice(0, 120) || undefined;
+      const badge = action.badge?.trim().slice(0, 8) || undefined;
+      return !win || win.title === title && win.badge === badge ? state : { ...state, windows: { ...state.windows, [action.id]: { ...win, title, badge } } };
+    }
     case 'new-desktop-app':
       return createWindow(state, action.appId, `${action.appId}:${state.zTop + 1}` as WindowId);
     case 'new-pi':
@@ -461,9 +473,9 @@ function initState(account?: string): ShellState {
   const windows: Partial<Record<WindowId, WindowState>> = {};
   if (stored?.windows) {
     for (const [id, win] of Object.entries(stored.windows)) {
-      const appId = id.startsWith('app:') && win?.appId?.startsWith('app:') ? win.appId : (id === 'network' || id === 'updates') ? 'settings' : (id === 'logs' || id === 'services') ? 'home' : id.startsWith('preview:') ? 'preview' : id.startsWith('pi:') ? 'pi' : id as AppId;
+      const appId = (id.startsWith('app:') || id.startsWith('plugin:')) && win?.appId && id.startsWith(win.appId) ? win.appId : (id === 'network' || id === 'updates') ? 'settings' : (id === 'logs' || id === 'services') ? 'home' : id.startsWith('preview:') ? 'preview' : id.startsWith('pi:') ? 'pi' : id as AppId;
       const windowId = ((id === 'network' || id === 'updates') ? 'settings' : (id === 'logs' || id === 'services') ? 'home' : id) as WindowId;
-      if (id.startsWith('app:') && new URLSearchParams(location.search).get('recovery') === '1') continue;
+      if ((id.startsWith('app:') || id.startsWith('plugin:')) && new URLSearchParams(location.search).get('recovery') === '1') continue;
       if (!win || !APPS[appId] || ((id === 'network' || id === 'updates') && stored.windows.settings) || ((id === 'logs' || id === 'services') && stored.windows.home)) continue;
       windows[windowId] = fitWindow({ ...restorePreviewMode(win), id: windowId, appId }, viewport);
     }
@@ -507,6 +519,8 @@ export interface ShellActions {
   newPreviewWindow(): void;
   newPiWindow(): void;
   newDesktopAppWindow(appId: AppId): void;
+  newAppWindow(appId: AppId): void;
+  setWindowPresentation(id: WindowId, presentation: { title?: string; badge?: string }): void;
   setPreviewMode(id: WindowId, mode: 'rendered' | 'raw'): void;
   filesChanged(): void;
   registerWindowGuard(appId: WindowId, guard: (proceed: () => void) => void): () => void;
@@ -719,6 +733,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       filesChanged: () => dispatch({ type: 'files-changed' }),
       newPreviewWindow: () => dispatch({ type: 'new-preview' }),
       newPiWindow: () => dispatch({ type: 'new-pi' }),
+      newAppWindow: (appId) => dispatch({ type: 'new-app-window', appId }),
+      setWindowPresentation: (id, presentation) => dispatch({ type: 'window-presentation', id, ...presentation }),
       newDesktopAppWindow: (appId) => dispatch({ type: 'new-desktop-app', appId }),
       setPreviewMode: (id, mode) => dispatch({ type: 'preview-mode', id, mode }),
       emptyTrash: () => dispatch({ type: 'empty-trash' }),

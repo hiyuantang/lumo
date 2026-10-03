@@ -25,7 +25,7 @@ export function NativeAppsProvider({ children }: { children: ReactNode }) {
         const id = manifest.id as AppId;
         pluginPackages[id] = app.name;
         pluginBases[id] = getDataSource().kind === 'live' ? `/api/v1/app-plugins/assets/${app.name}/` : `/plugins/${app.name}/`;
-        APPS[id] = { id, title: manifest.name, iconImage: manifest.iconImage, icon: Icons[manifest.icon as keyof typeof Icons] ?? Icons.IconGrid, defaultSize: { w: manifest.window.width, h: manifest.window.height }, minSize: { w: manifest.window.minWidth, h: manifest.window.minHeight }, requiredPackage: manifest.requiredPackage };
+        APPS[id] = { id, multipleWindows: manifest.window.multiple ?? false, title: manifest.name, iconImage: manifest.iconImage, icon: Icons[manifest.icon as keyof typeof Icons] ?? Icons.IconGrid, defaultSize: { w: manifest.window.width, h: manifest.window.height }, minSize: { w: manifest.window.minWidth, h: manifest.window.minHeight }, requiredPackage: manifest.requiredPackage };
       }
       const active = next.filter((app) => app.installed && app.current).map((app) => app.current!.manifest.id as AppId);
       APP_ORDER.splice(0, APP_ORDER.length, ...APP_ORDER.filter((id) => (!(id in pluginPackages) && !id.startsWith('plugin:')) || active.includes(id)), ...active.filter((id) => !APP_ORDER.includes(id)));

@@ -13,8 +13,7 @@ import { IconPi } from './icons';
 import { DropdownMenu } from './DropdownMenu';
 import { useMenuInput } from './useMenuInput';
 
-type MenuId = 'app' | 'file' | 'edit' | 'view' | 'window';
-const order: MenuId[] = ['app', 'file', 'edit', 'view', 'window'];
+type MenuId = 'app' | 'file' | 'edit' | 'view' | 'tools' | 'window' | 'help';
 
 export function MenuBar({ piOpen, onTogglePi, onNewPi, onPiWorkspace }: { piOpen: boolean; onTogglePi: () => void; onNewPi: () => void; onPiWorkspace: () => void }) {
   const input = useMenuInput();
@@ -27,6 +26,7 @@ export function MenuBar({ piOpen, onTogglePi, onNewPi, onPiWorkspace }: { piOpen
 
   const registered = useWindowMenus(state.focused ?? 'files');
   const custom = state.focused ? registered : Object.fromEntries(Object.entries(registered).map(([category, items]) => [category, items.map((item: AppCommand) => ({ ...item, run: () => { actions.openApp('files'); item.run(); } }))])) as typeof registered;
+  const order: MenuId[] = ['app', 'file', 'edit', 'view', ...(custom.tools?.length ? ['tools' as const] : []), 'window', ...(custom.help?.length ? ['help' as const] : [])];
   const appName = focusedWindow ? APPS[focusedWindow.appId].title : 'Files';
   const editTarget = useRef<HTMLElement | null>(null);
   const [editing, setEditing] = useState<AppCommand[]>(() => editCommands(null, () => {}));
@@ -64,9 +64,16 @@ export function MenuBar({ piOpen, onTogglePi, onNewPi, onPiWorkspace }: { piOpen
   useLayoutEffect(() => {
     const node = dropdownRef.current;
     if (!node) return;
-    node.style.translate = '';
-    const box = node.getBoundingClientRect();
-    node.style.translate = `${Math.min(0, window.innerWidth - box.right - 8)}px 0`;
+    const position = () => {
+      const anchor = barRef.current?.querySelector(`[data-menu-button="${openMenu}"]`)?.getBoundingClientRect();
+      if (!anchor) return;
+      node.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - node.getBoundingClientRect().width - 8))}px`;
+      node.style.top = `${anchor.bottom + 6}px`;
+    };
+    position();
+    const strip = barRef.current?.querySelector('.menubar-left');
+    strip?.addEventListener('scroll', position, { passive: true });
+    return () => strip?.removeEventListener('scroll', position);
   }, [openMenu, appName]);
   function open(menu: MenuId | null) {
     const selection = window.getSelection();
@@ -90,16 +97,19 @@ export function MenuBar({ piOpen, onTogglePi, onNewPi, onPiWorkspace }: { piOpen
     ] },
     file: { label: 'File', items: [
       ...combine([
-        { id: 'new-window', label: 'New Window', disabled: !focusedWindow || !['preview', 'pi'].includes(focusedWindow.appId), run: () => focusedWindow?.appId === 'preview' ? actions.newPreviewWindow() : actions.newPiWindow() },
+        { id: 'new-window', label: 'New Window', disabled: !focusedWindow || !APPS[focusedWindow.appId].multipleWindows, run: () => focusedWindow && actions.newAppWindow(focusedWindow.appId) },
         disabled('new-file', 'New File'), disabled('new-folder', 'New Folder'),
         { ...(!focusedWindow ? { id: 'open', label: 'Open Files', run: () => actions.openApp('files') } : disabled('open', 'Open File…')), separatorAbove: true },
         disabled('upload', 'Upload File…'), disabled('download', 'Download'), disabled('save', 'Save'),
       ], custom.file),
       { id: 'close-window', label: 'Close Window', hint: '⌥W', separatorAbove: true, disabled: !focusedWindow, run: () => focusedWindow && actions.closeApp(focusedWindow.id) },
     ] },
-    edit: { label: 'Edit', items: editing },
+    edit: { label: 'Edit', items: combine(editing, custom.edit) },
+    tools: { label: 'Tools', items: custom.tools ?? [] },
+    help: { label: 'Help', items: custom.help ?? [] },
     view: { label: 'View', items: combine([disabled('refresh', 'Refresh'), disabled('sidebar', 'Show Sidebar')], custom.view) },
     window: { label: 'Window', items: [
+      ...(custom.window ?? []),
       { id: 'minimize-window', label: 'Minimize Window', disabled: !focusedWindow, run: () => focusedWindow && actions.minimizeApp(focusedWindow.id) },
       { id: 'maximize-window', label: 'Maximize Window', disabled: !focusedWindow || focusedWindow.maximized || state.viewport.w <= COMPACT_WIDTH, run: () => focusedWindow && actions.toggleMaximize(focusedWindow.id) },
       { id: 'restore-window', label: 'Restore Window', disabled: !focusedWindow || (!focusedWindow.maximized && !focusedWindow.snapped) || state.viewport.w <= COMPACT_WIDTH, run: () => focusedWindow && actions.updateRect(focusedWindow.id, focusedWindow.restore ?? focusedWindow) },

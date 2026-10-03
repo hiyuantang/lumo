@@ -356,3 +356,6 @@ agent-authored packages. No implementation was copied or translated. This
 review does not amend Lumo's general clean-room rules.
 
 Account notifications and packaged app icons are described in [App services](APP_SERVICES.md). Both sandboxed and complete plugins declare notification access in their manifests.
+
+See [App connections](APP_CONNECTIONS.md) for desktop menus, command search, dock
+actions, window presentation and native background component lifecycle.

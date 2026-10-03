@@ -22,4 +22,4 @@ cd "$ROOT/server"
 cd "$ROOT"
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v
 
-node --test tests/plugin-packages.test.mjs tests/desktop-sdk.test.mjs tests/pi-apps.test.mjs tests/pi-calendar.test.mjs tests/pi-questions.test.mjs tests/pi-model-images.test.mjs tests/lumo-use.test.mjs
+node --test tests/app-contributions.test.mjs tests/plugin-packages.test.mjs tests/desktop-sdk.test.mjs tests/pi-apps.test.mjs tests/pi-calendar.test.mjs tests/pi-questions.test.mjs tests/pi-model-images.test.mjs tests/lumo-use.test.mjs

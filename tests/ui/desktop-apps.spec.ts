@@ -103,6 +103,24 @@ test('Production gateway hosts real app artifacts with isolated metrics access',
       script.onload = () => resolve('allowed'); script.onerror = () => resolve('blocked');
       document.body.append(script);
     }))).toBe('blocked');
+    await content.locator('body').evaluate(() => {
+      const api = (globalThis as unknown as { lumo: { setMenus(value: unknown): void; setPresentation(value: unknown): void; onCommand(handler: (id: string) => void): void } }).lumo;
+      api.onCommand((id) => { document.querySelector('#status')!.textContent = id; });
+      api.setMenus({tools:[{id:'frame-export',label:'Frame export'}]}); api.setPresentation({title:'Frame draft',badge:'4'});
+    });
+    await page.locator('[data-menu-button="tools"]').click(); await page.getByTestId('menu-frame-export').click();
+    await expect(content.locator('#status')).toHaveText('frame-export');
+    await expect(page.getByRole('dialog',{name:'Frame draft — Server Pulse Preview',exact:true})).toBeVisible();
+    await content.locator('body').evaluate(() => (globalThis as unknown as {lumo:{setMenus(value:unknown):void}}).lumo.setMenus({tools:[{id:'invalid',label:'Invalid',url:'https://example.invalid'}]}));
+    const host = iframe.locator('..');
+    await expect(host.getByRole('alert')).toContainText('Unsupported command field');
+    await expect(page.locator('[data-menu-button=tools]')).toHaveCount(0);
+    await host.getByRole('button',{name:'Retry',exact:true}).click();
+    await expect(content.locator('#cpu')).toHaveText(/\d+\.\d%/);
+    await content.locator('body').evaluate(() => {for(let i=0;i<31;i++) (globalThis as unknown as {lumo:{setMenus(value:unknown):void}}).lumo.setMenus({});});
+    await expect(host.getByRole('alert')).toContainText('too many UI updates');
+    await host.getByRole('button',{name:'Retry',exact:true}).click();
+    await expect(content.locator('#cpu')).toHaveText(/\d+\.\d%/);
     const frameURL = await iframe.getAttribute('src');
     const response = await page.request.get(url + frameURL!); expect(response.headers()['content-security-policy']).toContain("connect-src 'none'"); expect(response.headers()['x-frame-options']).toBe('SAMEORIGIN');
     await page.screenshot({ path: '/tmp/lumo-app-production.png', animations: 'disabled' });

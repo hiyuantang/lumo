@@ -45,7 +45,7 @@ func failure(file, code string, err error, fix string) Report {
 }
 func API() any {
 	guide, _ := resources.ReadFile("GUIDE.md")
-	return map[string]any{"apiVersion": 1, "kind": "native", "guide": string(guide), "frontendImports": []string{"react", "react/jsx-runtime", "@lumo/sdk/api/plugins", "@lumo/sdk/api/notifications", "@lumo/sdk/shell/ShellContext", "@lumo/sdk/shell/WindowContext"}, "backendRuntime": "node", "platform": runtime.GOOS + "/" + runtime.GOARCH, "validation": "Static checks do not execute app code and do not replace runtime or visual tests."}
+	return map[string]any{"apiVersion": 1, "kind": "native", "guide": string(guide), "frontendImports": []string{"react", "react/jsx-runtime", "@lumo/sdk/app", "@lumo/sdk/shell/appMenus", "@lumo/sdk/shell/useAppState", "@lumo/sdk/apps/FilePicker", "@lumo/sdk/shell/AppModal", "@lumo/sdk/shell/ContextMenu", "@lumo/sdk/api/plugins", "@lumo/sdk/api/notifications", "@lumo/sdk/shell/ShellContext", "@lumo/sdk/shell/WindowContext"}, "backendRuntime": "node", "platform": runtime.GOOS + "/" + runtime.GOARCH, "validation": "Static checks do not execute app code and do not replace runtime or visual tests."}
 }
 func Create(project, name, title string, backend, extension bool) (any, error) {
 	if !filepath.IsAbs(project) || !appplugins.ValidName(name) || appplugins.AppID(name) != "plugin:"+name || strings.TrimSpace(title) == "" || len(title) > 80 || extension && !backend {
@@ -54,7 +54,7 @@ func Create(project, name, title string, backend, extension bool) (any, error) {
 	if err := os.Mkdir(project, 0700); err != nil {
 		return nil, err
 	}
-	m := appplugins.Manifest{SchemaVersion: 1, HostAPIVersion: 1, ID: "plugin:" + name, Name: title, Description: "A personal notebook.", Version: "0.1.0", License: "AGPL-3.0-only", Icon: "IconGrid", Window: appplugins.Window{Width: 640, Height: 460, MinWidth: 320, MinHeight: 280}, Entry: "src/main.tsx", Styles: "src/style.css", Permissions: []string{"account"}}
+	m := appplugins.Manifest{SchemaVersion: 1, HostAPIVersion: 1, ID: "plugin:" + name, Name: title, Description: "A personal notebook.", Version: "0.1.0", License: "AGPL-3.0-only", Icon: "IconGrid", Window: appplugins.Window{Multiple: true, Width: 640, Height: 460, MinWidth: 320, MinHeight: 280}, Entry: "src/main.tsx", Styles: "src/style.css", Permissions: []string{"account"}}
 	if backend {
 		m.Backend = &appplugins.Backend{Runtime: "node", ProtocolVersion: 1, Entry: "backend/main.mjs", Platform: runtime.GOOS + "/" + runtime.GOARCH, Routes: []string{"GET /api/v1/plugins/" + name, "POST /api/v1/plugins/" + name}}
 	}
@@ -162,8 +162,8 @@ func projectInput(project string) (appplugins.Manifest, map[string]string, error
 	if m.ID != "plugin:"+name || appplugins.AppID(name) != m.ID || !appplugins.ValidName(name) {
 		return m, nil, errors.New("Set id to plugin:<new-name>; built-in and shipped names are reserved")
 	}
-	if !strings.HasPrefix(m.Entry, "src/") || m.Background != "" || m.Auth != nil {
-		return m, nil, errors.New("Use an entry under src/; this builder does not yet support background or OAuth entries")
+	if !strings.HasPrefix(m.Entry, "src/") || m.Background != "" && !strings.HasPrefix(m.Background, "src/") || m.Auth != nil {
+		return m, nil, errors.New("Use frontend entries under src/; OAuth entries require administrator packaging")
 	}
 	if m.Backend != nil && (m.Backend.Runtime != "node" || m.Backend.Entry != "backend/main.mjs") {
 		return m, nil, errors.New("Use backend/main.mjs with backend.runtime=node")
@@ -213,7 +213,7 @@ func projectInput(project string) (appplugins.Manifest, map[string]string, error
 	if err = walk("src"); err != nil {
 		return m, nil, err
 	}
-	for _, entry := range []string{m.Entry, m.Styles} {
+	for _, entry := range []string{m.Entry, m.Styles, m.Background} {
 		if entry != "" {
 			if _, ok := files[entry]; !ok {
 				return m, nil, fmt.Errorf("Missing source: %s", entry)
@@ -261,6 +261,19 @@ func compile(ctx context.Context, home string, m appplugins.Manifest, files map[
 	if err = json.Unmarshal(raw, &value); err != nil {
 		return failure("runtime", "validator", err, "Rebuild Lumo's validator.")
 	}
+	if value.OK && m.Background != "" {
+		background := m
+		background.Entry = m.Background
+		background.Background = ""
+		background.Styles = ""
+		background.Backend = nil
+		background.Pi = nil
+		checked := compile(ctx, home, background, files, compiled)
+		if !checked.OK {
+			return checked
+		}
+		value.Files[m.Background] = checked.Files[m.Background]
+	}
 	return Report{OK: value.OK, Diagnostics: value.Diagnostics, Files: value.Files}
 }
 func bundle(m appplugins.Manifest, files map[string]string) appplugins.Bundle {
@@ -272,6 +285,9 @@ func bundle(m appplugins.Manifest, files map[string]string) appplugins.Bundle {
 		return name
 	}
 	m.Entry = asset(m.Entry, ".js")
+	if m.Background != "" {
+		m.Background = asset(m.Background, ".js")
+	}
 	if m.Styles != "" {
 		m.Styles = asset(m.Styles, ".css")
 	}

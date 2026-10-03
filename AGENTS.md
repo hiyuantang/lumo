@@ -75,6 +75,50 @@ When a web UI exists, add an About → Legal page covering:
 This page is also the natural place to host the source-code offer
 required by AGPL-3.0 §13 for modified versions used over a network.
 
+## App and engine architecture
+
+Lumo is a plugin-based app platform. Keep apps self-contained and the engine
+reusable. This applies to shipped apps, required system apps and user-built apps.
+A required app may be protected from removal without moving its features into
+the engine. Pi is a required app and hosts the agent and app-building extensions.
+
+- Keep each app's frontend, backend, Pi extension, styles, icon and manifest in
+  its own package. Use only the parts that app needs. Share domain operations
+  between its UI and Pi tools instead of duplicating business rules.
+- The manifest declares identity, entry points, permissions, window behavior
+  and assets. Discover packages through the catalog; do not add an app ID branch
+  to the shell to install, launch or render a new app.
+- The engine owns sessions, account isolation, package lifecycle, window layout,
+  menus, command search, dock, notifications, shared UI primitives and typed
+  system services. Apps contribute content and actions through the host SDK;
+  the engine controls their presentation, routing, validation and cleanup.
+- Use `@lumo/sdk/app` for native app menus, window title/status, window state,
+  preferences, close guards, file picking and shared dialogs. Register actions
+  with `useAppMenus`; do not edit MenuBar, Dock or CommandCenter for app features.
+  Declare `window.multiple` for multiple windows. Scope drafts and commands to
+  their window; release registrations when the window closes or code unloads.
+- Sandboxed apps use the validated message bridge for menus and window status,
+  and declared capabilities for data. Never use parent DOM access or expand
+  their permissions merely to integrate with the desktop. Native plugins are
+  trusted account code; manifest permissions do not make them sandboxed.
+- Use typed APIs for files, notifications and system operations. Keep privileged
+  actions in the authenticated, authorized and audited engine broker. Never
+  supply arbitrary root execution through a plugin.
+- A frontend `background` component belongs to its app and must clean up effects
+  on update, uninstall and logout. It runs only while the desktop is connected.
+  Persistent server work needs an explicit account service; notifications do
+  not schedule jobs or keep request backends alive.
+- When an app needs a missing integration, add a small reusable host contract,
+  document it in the builder guide, expose it through validation and test its
+  lifecycle and account/window boundaries. Do not introduce another special
+  case for one app. Keep compatibility adapters explicit until migrated.
+- Treat validation, import, install, update, rollback and uninstall as one
+  contract. Keep source examples, SDK exports, compiler allowlists, manifest
+  validation and tests consistent. Preserve user data and unsaved work.
+
+See [APP_CONNECTIONS.md](docs/APP_CONNECTIONS.md) for supported connection points,
+examples, lifecycle limits and remaining compatibility adapters.
+
 ## Coding conventions
 
 - Do not add license headers other than the SPDX line above.

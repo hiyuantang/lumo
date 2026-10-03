@@ -33,9 +33,13 @@ names. Do not hand-edit the generated store or installed assets.
 
 Export a React component as default from src/main.tsx. Do not mount another React
 root. Local .tsx/.ts/.jsx/.js modules must remain under src/. Supported host imports
-are react, react/jsx-runtime, @lumo/sdk/api/plugins, @lumo/sdk/api/notifications,
-@lumo/sdk/shell/ShellContext and @lumo/sdk/shell/WindowContext. Other shared host
-APIs may exist, but this builder does not promise or bundle them. Use no remote
+are react, react/jsx-runtime and @lumo/sdk/app (the preferred desktop facade).
+Also supported: @lumo/sdk/api/plugins, @lumo/sdk/api/notifications,
+@lumo/sdk/shell/ShellContext, @lumo/sdk/shell/WindowContext,
+@lumo/sdk/shell/appMenus, @lumo/sdk/shell/useAppState,
+@lumo/sdk/apps/FilePicker, @lumo/sdk/shell/AppModal and
+@lumo/sdk/shell/ContextMenu. Other shared host APIs may exist, but this builder
+does not promise or bundle them. Use no remote
 imports, downloads, dynamic imports, require, package scripts or npm dependencies.
 
 requestPlugin(name) sends GET /api/v1/plugins/<name> and returns the data inside
@@ -213,3 +217,60 @@ Verify a notification with the window closed, refresh the desktop, dismiss it,
 and refresh again. Test a duplicate requestId, a missing permission and invalid
 icon bytes. A native package is trusted account code; these manifest checks are
 an integration contract, not isolation from other account code.
+
+## Desktop connections
+
+Use the shared facade from the root component inside each app window:
+
+```tsx
+import { useAppMenus, useAppWindow, useAppState } from '@lumo/sdk/app';
+export default function App() {
+  const [tab, setTab] = useAppState('my-app', 'tab', 'summary');
+  const win = useAppWindow({ title: 'My document', badge: '2' });
+  useAppMenus({
+    tools: [{ id: 'show-summary', label: 'Show Summary',
+      keywords: 'overview', run: () => setTab('summary') }],
+    dock: [{ id: 'new-document', label: 'New Document', run: win.newWindow }],
+  });
+  return <main>{tab}</main>;
+}
+```
+
+Menu categories: app, file, edit, view, tools, window and help. Tools and Help
+appear only when populated. File/Edit/View commands with matching IDs replace
+engine placeholders; keep unique IDs within each menu. The engine retains its
+window controls. The dock category contributes to the most recently focused
+window's dock menu. The commands category contributes only to Command Center.
+Enabled actions from all categories are searchable while their window is open,
+including minimized windows. Reuse the same ID for the same action in several
+places to avoid duplicate search results. Set palette:false to omit an action
+from search. hint is display text, not a keyboard shortcut registration.
+
+useAppWindow sets a title (up to 120 characters) and badge (up to 8). Call it once
+at the app root. Lumo appends the app name to the title and shows the most recently
+focused window's badge in the dock. Empty values clear them. The result supplies
+id, appId, theme, reducedMotion, close(), newWindow() and registerCloseGuard().
+For a close guard, register in an effect and return its unsubscribe function;
+call the supplied proceed callback only after saving or confirming discard.
+Do not call window-scoped hooks from a background component.
+
+Declare window.multiple:true to permit New Window in File and dock menus. The
+builder template enables it. Each window needs independent drafts and command
+callbacks. useAppState stores small browser view state per account and window;
+useAppPreference shares small browser preferences across the app's open windows.
+Neither replaces backend data storage. The facade also exports FilePicker,
+AppModal, AppConfirmation and useContextMenu; reuse them for consistent dialogs
+and local actions. FilePicker selects a path; file reading/writing still requires
+the relevant typed data API and server authorization.
+
+Optional background:"src/background.tsx" declares a default-exported React
+component mounted once per installed package per desktop session, independent
+of app windows. Return null and release timers, subscriptions and requests in
+effect cleanup. Update, uninstall and logout unmount it. Multiple browser tabs
+can each run a copy, so make mutations idempotent. This is frontend lifecycle,
+not an always-running server process. The same compiler and import restrictions
+apply; validate/build/install check the entry and include its immutable asset.
+Authentication providers remain administrator-packaged system integrations.
+
+Verify menu focus, disabled actions, search deduplication, dock actions, separate
+window drafts, reload, close cleanup, background cleanup and both themes/sizes.

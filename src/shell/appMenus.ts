@@ -10,9 +10,13 @@ export interface AppCommand {
   checked?: boolean;
   hint?: string;
   separatorAbove?: boolean;
+  keywords?: string;
+  palette?: boolean;
   run: () => void;
 }
-export type AppMenus = Partial<Record<'app' | 'file' | 'view', AppCommand[]>>;
+export const appMenuCategories = ['app', 'file', 'edit', 'view', 'tools', 'window', 'help', 'dock', 'commands'] as const;
+export type AppMenuCategory = typeof appMenuCategories[number];
+export type AppMenus = Partial<Record<AppMenuCategory, AppCommand[]>>;
 const entries = new Map<string, { windowId: WindowId; menus: AppMenus }>();
 const listeners = new Set<() => void>();
 let snapshot = [...entries.values()];
@@ -31,9 +35,20 @@ export function useWindowMenus(windowId: WindowId | null): AppMenus {
   const result: AppMenus = {};
   for (const entry of all) {
     if (entry.windowId !== windowId) continue;
-    for (const category of ['app', 'file', 'view'] as const) {
+    for (const category of appMenuCategories) {
       result[category] = [...(result[category] ?? []), ...(entry.menus[category] ?? [])];
     }
   }
   return result;
+}
+
+export function useRegisteredAppMenus() {
+  const all = useSyncExternalStore(subscribe, () => snapshot);
+  const windows = new Map<WindowId, AppMenus>();
+  for (const entry of all) {
+    const menus = windows.get(entry.windowId) ?? {};
+    for (const category of appMenuCategories) menus[category] = [...(menus[category] ?? []), ...(entry.menus[category] ?? [])];
+    windows.set(entry.windowId, menus);
+  }
+  return windows;
 }

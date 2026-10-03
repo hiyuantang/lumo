@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { windowTitle } from './WindowContext';
+import { useRegisteredAppMenus } from './appMenus';
+import { useNativeApps } from '../platform/nativeCatalog';
 import { useDesktopApps } from '../platform/catalog';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { describeError, getDataSource, isReauthRequired, type ServiceUnit } from '../api/source';
@@ -37,6 +40,8 @@ export function CommandCenter() {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const desktopApps = useDesktopApps();
+  const nativeApps = useNativeApps();
+  const appMenus = useRegisteredAppMenus();
   const [services, setServices] = useState<ServiceUnit[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -121,8 +126,18 @@ export function CommandCenter() {
         run: actions.logout,
       },
     );
+    for (const [windowId, menus] of appMenus) {
+      const win = state.windows[windowId];
+      if (!win) continue;
+      const seen = new Set<string>();
+      for (const command of Object.values(menus).flat()) {
+        if (command.disabled || command.palette === false || seen.has(command.id)) continue;
+        seen.add(command.id);
+        list.push({ id: `app-command:${windowId}:${command.id}`, title: command.label, group: windowTitle(win), keywords: `${APPS[win.appId].title} ${command.keywords ?? ''}`, run: () => { actions.focusApp(windowId); command.run(); } });
+      }
+    }
     return list;
-  }, [actions, services, source, desktopApps.catalog]);
+  }, [actions, services, source, desktopApps.catalog, nativeApps.apps, appMenus, state.windows]);
 
   const results = useMemo(() => {
     return allActions

@@ -223,3 +223,5 @@
 .dock-window[data-restoring='true'] .dock-window-preview,
 .dock-window[data-restoring='true'] .dock-label { opacity: 0; }
 .motion-reduced .dock-window .dock-window-preview { transition: none; }
+
+.dock-app-badge { position: absolute; top: 1px; right: 1px; padding: 2px 5px; max-width: 44px; overflow: hidden; text-overflow: ellipsis; border-radius: 8px; background: var(--text); color: var(--surface-raised); font-size: 10px; line-height: 14px; pointer-events: none; }

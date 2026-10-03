@@ -217,3 +217,46 @@ func TestBuilderBundlesAndRejectsIcon(t *testing.T) {
 		t.Fatal("invalid icon passed validation")
 	}
 }
+
+func TestBuilderDesktopConnectionsAndBackground(t *testing.T) {
+	home, project := fixture(t, false, false)
+	raw, err := os.ReadFile(filepath.Join(project, "lumo.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m appplugins.Manifest
+	if err = json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	m.Background = "src/background.tsx"
+	m.Window.Multiple = true
+	raw, _ = json.Marshal(m)
+	if err = os.WriteFile(filepath.Join(project, "lumo.plugin.json"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	frontend := `import {useAppMenus,useAppWindow,useAppState,FilePicker,AppModal} from '@lumo/sdk/app'; export default function App(){useAppWindow({title:'Draft',badge:'2'});useAppMenus({tools:[{id:'export',label:'Export',run(){}}]});return null;}`
+	if err = os.WriteFile(filepath.Join(project, "src/main.tsx"), []byte(frontend), 0600); err != nil {
+		t.Fatal(err)
+	}
+	background := `import {useEffect} from 'react'; export default function Background(){useEffect(()=>()=>{},[]);return null;}`
+	if err = os.WriteFile(filepath.Join(project, m.Background), []byte(background), 0600); err != nil {
+		t.Fatal(err)
+	}
+	result := Build(context.Background(), home, project, true)
+	requireOK(t, result)
+	if result.Release.Manifest.Background == "" || !result.Release.Manifest.Window.Multiple {
+		t.Fatal("missing desktop declarations")
+	}
+	requireOK(t, Install(context.Background(), home, appplugins.Change{Name: "builder-notes", Action: "install", Digest: result.Release.Digest, RequestID: "connections-install", Trust: true}))
+	edit(t, project, m.Background, "export default function", "export function")
+	failed := Build(context.Background(), home, project, false)
+	if failed.OK || failed.Diagnostics[0].Code != "entry" || failed.Diagnostics[0].File != m.Background {
+		t.Fatal(failed)
+	}
+	edit(t, project, m.Background, "export function", "export default function")
+	edit(t, project, m.Background, "from 'react'", "from 'unsupported'")
+	failed = Build(context.Background(), home, project, false)
+	if failed.OK || failed.Diagnostics[0].Code != "dependency" {
+		t.Fatal(failed)
+	}
+}

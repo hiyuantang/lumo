@@ -24,10 +24,11 @@ type AuthFlow struct {
 	Callback string `json:"callback"`
 }
 type Window struct {
-	Width     int `json:"width"`
-	Height    int `json:"height"`
-	MinWidth  int `json:"minWidth"`
-	MinHeight int `json:"minHeight"`
+	Multiple  bool `json:"multiple,omitempty"`
+	Width     int  `json:"width"`
+	Height    int  `json:"height"`
+	MinWidth  int  `json:"minWidth"`
+	MinHeight int  `json:"minHeight"`
 }
 type Terminal struct {
 	Candidates []string `json:"candidates"`

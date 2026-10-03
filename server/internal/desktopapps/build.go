@@ -38,7 +38,9 @@ const SDKTypes = `// SPDX-License-Identifier: AGPL-3.0-only
 interface LumoMetrics { cpuPercent: number; memoryUsedBytes: number; memoryTotalBytes: number; at: number }
 type LumoJSON = null | boolean | number | string | LumoJSON[] | { [key: string]: LumoJSON };
 interface LumoData { revision: string; value: LumoJSON }
-declare const lumo: { call(method: 'system.metrics.read'): Promise<LumoMetrics>; call(method: 'notifications.send', params: {requestId: string; title: string; body: string}): Promise<unknown>; call(method: 'app.storage.get'): Promise<LumoData>; call(method: 'app.storage.set', params: LumoData): Promise<LumoData>; setDirty(value: boolean): void; ready(): void };
+interface LumoCommand { id: string; label: string; disabled?: boolean; checked?: boolean; hint?: string; separatorAbove?: boolean; keywords?: string; palette?: boolean }
+type LumoMenus = Partial<Record<'app'|'file'|'edit'|'view'|'tools'|'window'|'help'|'dock'|'commands', LumoCommand[]>>;
+declare const lumo: { setMenus(value: LumoMenus): void; onCommand(handler: (id: string) => void): () => void; setPresentation(value: {title?: string; badge?: string}): void; call(method: 'system.metrics.read'): Promise<LumoMetrics>; call(method: 'notifications.send', params: {requestId: string; title: string; body: string}): Promise<unknown>; call(method: 'app.storage.get'): Promise<LumoData>; call(method: 'app.storage.set', params: LumoData): Promise<LumoData>; setDirty(value: boolean): void; ready(): void };
 `
 
 func Create(project, id, name string, template ...string) (any, error) {

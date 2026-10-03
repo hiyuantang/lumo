@@ -16,7 +16,8 @@ for (const width of [1440, 390]) {
     await login(page);
     await expect(page).toHaveTitle(/Lumo/);
     await page.getByTestId('dock-app-settings').click({ button: 'right' });
-    await expect(page.getByTestId('context-menu')).toHaveCount(0);
+    await expect(page.getByTestId('context-menu').getByRole('menuitem', { name: 'Open', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
     await page.locator('[data-menu-button=app]').click();
     await page.getByRole('menuitem', { name: 'System Settings…', exact: true }).click();
     await page.getByTestId('settings-section-appearance').click();

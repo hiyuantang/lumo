@@ -8,6 +8,8 @@ import { useCurrentWindow } from '../shell/WindowContext';
 import { useShell } from '../shell/ShellContext';
 import { useDesktopApps } from './catalog';
 import '../styles/desktop-apps.css';
+import { useAppMenus, type AppMenus } from '../shell/appMenus';
+import { frameMenus, framePresentation } from './appContributions';
 
 export function DesktopAppWindow() {
   const win = useCurrentWindow(); const { resolvedTheme, reducedMotion, actions } = useShell();
@@ -40,10 +42,15 @@ export function DesktopAppWindow() {
   const frame = useRef<HTMLIFrameElement>(null); const channel = useRef<MessagePort>();
   const [launch, setLaunch] = useState<DesktopLaunch>(); const [error, setError] = useState('');
   const [ready, setReady] = useState(false); const [retry, setRetry] = useState(0);
+  const [menus, setMenus] = useState<AppMenus>({});
+  useAppMenus(error || changed ? {} : menus);
+  const contributionsActive = useRef(true); contributionsActive.current = !error && !changed;
+  useEffect(() => { if (error || changed) actions.setWindowPresentation(win.id, {}); }, [error, changed, actions, win.id]);
   const theme = resolvedTheme;
   const settings = useRef({ theme, motion: reducedMotion ? 'reduced' : 'full' }); settings.current = { theme, motion: reducedMotion ? 'reduced' : 'full' };
   useEffect(() => {
-    setLaunch(undefined); setReady(false); setError('');
+    setLaunch(undefined); setReady(false); setError(''); setMenus({});
+    actions.setWindowPresentation(win.id, {});
     dirty.current = false; setHasEdits(false);
     if (!digest) return;
     let active = true; let token: string | undefined;
@@ -54,12 +61,22 @@ export function DesktopAppWindow() {
     if (!launch) return;
     let active = true; let connected = false; let lastID = 0; let pending = 0; let calls = 0; let lastReport = 0;
     const timeout = window.setTimeout(() => { if (active) setError('The app has not reported a successful render. Retry or inspect its diagnostics in Pi.'); }, 15000);
-    const stop = (message: string) => { if (!active) return; active = false; channel.current?.close(); setError(message); void source.desktopAppClose(launch.token).catch(() => {}); };
+    const stop = (message: string) => { if (!active) return; active = false; setMenus({}); actions.setWindowPresentation(win.id, {}); channel.current?.close(); setError(message); void source.desktopAppClose(launch.token).catch(() => {}); };
     const connect = (event: MessageEvent) => {
       if (!active || !event.source || event.source !== frame.current?.contentWindow || event.data?.type !== 'lumo-ready' || event.data.handshake !== launch.handshake || connected) return;
       connected = true; const ports = new MessageChannel(); channel.current = ports.port1;
       ports.port1.onmessage = async ({ data }) => {
         if (!active || !data || typeof data !== 'object') return;
+        if (data.type === 'menus' || data.type === 'presentation') {
+          if (!contributionsActive.current) return;
+          if (++calls > 30) { stop('The app sent too many UI updates.'); return; }
+          try {
+            if (JSON.stringify(data.value).length > 16384) throw new Error('UI contribution is too large.');
+            if (data.type === 'menus') setMenus(frameMenus(data.value, (id) => { if (active && contributionsActive.current) ports.port1.postMessage({ type: 'command', id }); }));
+            else actions.setWindowPresentation(win.id, framePresentation(data.value));
+          } catch (error) { stop(error instanceof Error ? error.message : 'Invalid UI contribution.'); }
+          return;
+        }
         if (data.type === 'dirty' && typeof data.value === 'boolean') { dirty.current = data.value; setHasEdits(data.value); return; }
         if (data.type === 'report') {
           if (!['ready', 'error'].includes(data.status) || typeof data.message !== 'string' || data.message.length > 2000 || Date.now() - lastReport < 250) return;

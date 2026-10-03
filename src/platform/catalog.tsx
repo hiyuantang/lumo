@@ -10,7 +10,7 @@ import { useShell } from '../shell/ShellContext';
 export function registerDesktopBuild(build: DesktopBuild, preview = false): AppId {
   const id: AppId = preview ? `app:preview.${build.digest}` : `app:${build.manifest.id}`;
   const { manifest } = build;
-  APPS[id] = { id, title: `${manifest.name}${preview ? ' Preview' : ''}`, icon: Icons[manifest.icon as keyof typeof Icons] ?? Icons.IconGrid, iconImage: manifest.iconImage, defaultSize: { w: manifest.window.width, h: manifest.window.height }, minSize: { w: manifest.window.minWidth, h: manifest.window.minHeight } };
+  APPS[id] = { id, multipleWindows: true, title: `${manifest.name}${preview ? ' Preview' : ''}`, icon: Icons[manifest.icon as keyof typeof Icons] ?? Icons.IconGrid, iconImage: manifest.iconImage, defaultSize: { w: manifest.window.width, h: manifest.window.height }, minSize: { w: manifest.window.minWidth, h: manifest.window.minHeight } };
   return id;
 }
 const Context = createContext<{ catalog: DesktopCatalog; error: string; refresh(): Promise<DesktopCatalog>; preview(build: DesktopBuild): void }>({ catalog: { apps: [], builds: [] }, error: '', refresh: async () => ({ apps: [], builds: [] }), preview: () => {} });

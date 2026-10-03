@@ -30,3 +30,19 @@ test('SDK preserves conflict codes and releases pending calls after an invalid m
   for (let i = 0; i < 10; i++) await assert.rejects(f.context.lumo.call('app.storage.set'), /Cannot clone/);
   assert.equal(f.timers.size, 0);
 });
+
+test('Menu and presentation contributions buffer until connection and commands unsubscribe', () => {
+  const f = fixture(); const calls = [];
+  f.context.lumo.setMenus({ tools: [{ id: 'export', label: 'Export' }] });
+  f.context.lumo.setPresentation({ title: 'Draft', badge: '2' });
+  const stop = f.context.lumo.onCommand((id) => calls.push(id));
+  f.connect();
+  assert.deepEqual(f.messages.map((m) => m.type), ['menus', 'presentation']);
+  f.port.onmessage({ data: { type: 'command', id: 'export' } });
+  stop(); f.port.onmessage({ data: { type: 'command', id: 'export' } });
+  assert.deepEqual(calls, ['export']);
+  f.context.lumo.setMenus({}); f.context.lumo.setPresentation({});
+  assert.deepEqual(f.messages.slice(-2).map((m) => Object.keys(m.value).length), [0, 0]);
+  assert.throws(() => f.context.lumo.setMenus(null), /object/);
+  assert.throws(() => f.context.lumo.onCommand(null), /function/);
+});

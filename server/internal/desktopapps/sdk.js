@@ -4,6 +4,9 @@ let port;
 let serial = 0;
 let rendered = false;
 let dirty = false;
+let menus = {};
+let presentation = {};
+const commands = new Set();
 function report(status, message = '') {
   if (port) port.postMessage({ type: 'report', status, message: String(message).slice(0, 2000) });
 }
@@ -19,6 +22,21 @@ globalThis.lumo = Object.freeze({
       catch (error) { clearTimeout(timer); pending.delete(id); reject(error); }
     });
   },
+  setMenus(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('setMenus expects an object.');
+    menus = value;
+    if (port) port.postMessage({ type: 'menus', value });
+  },
+  setPresentation(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('setPresentation expects an object.');
+    presentation = value;
+    if (port) port.postMessage({ type: 'presentation', value });
+  },
+  onCommand(handler) {
+    if (typeof handler !== 'function') throw new Error('onCommand expects a function.');
+    commands.add(handler);
+    return () => commands.delete(handler);
+  },
   setDirty(value) {
     if (typeof value !== 'boolean') throw new Error('setDirty expects a boolean.');
     if (dirty === value) return;
@@ -31,6 +49,7 @@ addEventListener('message', function connect(event) {
   if (event.source !== parent || event.data?.type !== 'lumo-connect' || !event.ports[0] || port) return;
   port = event.ports[0];
   port.onmessage = ({ data }) => {
+    if (data?.type === 'command' && typeof data.id === 'string') { for (const handler of commands) handler(data.id); return; }
     if (data?.type === 'theme') {
       document.documentElement.dataset.theme = data.theme;
       document.documentElement.dataset.motion = data.motion;
@@ -44,6 +63,8 @@ addEventListener('message', function connect(event) {
     else request.resolve(data.value);
   };
   port.start();
+  if (Object.keys(menus).length) port.postMessage({ type: 'menus', value: menus });
+  if (Object.keys(presentation).length) port.postMessage({ type: 'presentation', value: presentation });
   if (dirty) port.postMessage({ type: 'dirty', value: dirty });
   dispatchEvent(new Event('lumo-connected'));
   if (rendered) report('ready');

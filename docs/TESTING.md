@@ -359,3 +359,8 @@ plugins, Pi assistant/conversation location, Files, Terminal, Settings and App
 Library exercise loading through the host SDK and shared React instance.
 
 App services: `tests/ui/app-notifications.spec.ts` checks background inbox display, read/dismiss persistence and themes/sizes. `tests/docker/app-services.spec.ts` builds a real account plugin, sends through its frontend SDK and backend after window close, checks packaged PNG icons, reload and account isolation. Go tests cover notification locks, limits, duplicate IDs, launch revocation, permissions and icon validation at build/import.
+
+App/engine contracts are exercised by `tests/ui/app-connections.spec.ts`,
+`tests/app-contributions.test.mjs` and `tests/desktop-sdk.test.mjs`. The Ubuntu
+app-services workflow builds an SDK consumer with a background component, checks
+multiple windows and reload, then checks cleanup on window close and uninstall.

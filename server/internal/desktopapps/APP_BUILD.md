@@ -135,3 +135,34 @@ Set `icon` to a Lumo glyph such as `IconBell`, `IconCalendar`, `IconFolder`,
 Build validates and embeds it into the manifest. Embedded `data:image/png;base64,`
 values also work. Remote URLs and SVG are unsupported. The embedded icon takes
 precedence over the glyph. Check its appearance in the dock and App Library.
+
+## Desktop menus and window status
+
+Sandboxed apps can contribute desktop UI without new data capabilities:
+
+```js
+const stop = lumo.onCommand((id) => {
+  if (id === 'refresh-data') refreshData();
+});
+lumo.setMenus({ tools: [{ id: 'refresh-data', label: 'Refresh Data' }] });
+lumo.setPresentation({ title: 'My report', badge: '2' });
+```
+
+setMenus replaces this window's contributions. Categories are app, file, edit,
+view, tools, window, help, dock and commands (search only). Commands accept id,
+label, disabled, checked, hint, separatorAbove, keywords and palette. Enabled
+commands appear in Command Center unless palette:false. Use the same ID for the
+same action across categories. hint is display text, not a shortcut binding.
+The host invokes onCommand handlers only through the connected window's channel;
+call the returned unsubscribe function when a handler is no longer needed.
+
+Use at most 64 commands total, unique IDs per category (lowercase letter then
+lowercase letters, digits or hyphens, at most 64 characters), nonempty labels up
+to 80 characters, hints/keywords up to 120. Title allows 120 characters and badge
+8. setMenus({}) and setPresentation({}) clear contributions. Invalid values or
+excessive messages close the bridge and show an app error. These messages share
+the bridge's limit of 30 requests per 10 seconds; update on meaningful changes,
+not animation frames. Reload and close remove registrations. The app name stays
+visible beside a custom title. The dock uses its most recently focused window.
+No function, HTML, URL, other window ID or new system authority crosses this
+bridge. Existing capability checks still apply to every data request.

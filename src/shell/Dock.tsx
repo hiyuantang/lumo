@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useRegisteredAppMenus } from './appMenus';
 import { useNativeApps } from '../platform/nativeCatalog';
 import { pluginPackages } from '../platform/plugins';
 import { useDesktopApps } from '../platform/catalog';
@@ -22,6 +23,7 @@ export function Dock({ onOverview }: { onOverview: () => void }) {
   const drop = useFileDrop();
   const openContextMenu = useContextMenu();
   const { state, actions, reducedMotion } = useShell();
+  const registered = useRegisteredAppMenus();
   const minimized = Object.values(state.windows).filter((win): win is WindowState => !!win?.minimized);
   const [slots, setSlots] = useState<WindowId[]>(() => minimized.map((win) => win.id));
   const dockWindows = [...new Set([...slots, ...minimized.map((win) => win.id)])].map((id) => state.windows[id]).filter((win): win is WindowState => !!win);
@@ -87,14 +89,12 @@ export function Dock({ onOverview }: { onOverview: () => void }) {
               title={meta.title}
               aria-description="Drag to reorder, or use Alt and the left or right arrow key."
               {...reorder.bind(appId)}
-              onContextMenu={(event) => openContextMenu(event, !running && appId !== 'pi' && appId !== 'preview' ? [] : [
+              onContextMenu={(event) => openContextMenu(event, [
                 { label: minimized ? 'Restore' : running ? 'Show Window' : 'Open', run: () => onAppClick(appId) },
-                ...(appId.startsWith('app:') ? [{ label: 'New Window', run: () => actions.newDesktopAppWindow(appId) }] : []),
-                ...(appId === 'pi' ? [{ label: 'New Window', run: actions.newPiWindow }, ...appWindows.map((item) => ({ label: windowTitle(item), run: () => actions.focusApp(item.id) }))] : []),
-                ...(appId === 'preview' ? [{ label: 'New Window', run: actions.newPreviewWindow }, ...appWindows.map((item, index) => ({ label: `${windowTitle(item)}${item.filePath ? '' : ` ${index + 1}`}`, run: () => actions.focusApp(item.id) }))] : []),
-                ...(running ? [
-                  { label: 'Close Window', run: () => actions.closeApp(win.id) },
-                ] : []),
+                ...(meta.multipleWindows ? [{ label: 'New Window', run: () => actions.newAppWindow(appId) }] : []),
+                ...(win ? (registered.get(win.id)?.dock ?? []).map((command) => ({ label: command.label, disabled: command.disabled, separator: command.separatorAbove, run: () => { actions.focusApp(win.id); command.run(); } })) : []),
+                ...(appWindows.length > 1 ? appWindows.map((item) => ({ label: windowTitle(item), run: () => actions.focusApp(item.id) })) : []),
+                ...(running ? [{ label: 'Close Window', run: () => actions.closeApp(win.id) }] : []),
               ])}
               onClick={() => onAppClick(appId)}
             >
@@ -103,6 +103,7 @@ export function Dock({ onOverview }: { onOverview: () => void }) {
               </span>
 
               <span className="dock-label" aria-hidden="true">{meta.title}</span>
+              {win?.badge && <span className="dock-app-badge" data-testid={`dock-badge-${appId}`} aria-label={win.badge}>{win.badge}</span>}
               <span className={`dock-dot${running ? ' on' : ''}`} aria-hidden="true" />
             </button>
           );
