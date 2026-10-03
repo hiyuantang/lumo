@@ -156,6 +156,12 @@ interaction and accessibility requirements.
   content rows, aligned with the card's inner padding (normally 16px). Preserve
   existing inset lines. Keep structural window, toolbar and sidebar borders
   distinct from content dividers.
+- **Keep space between every clickable item.** Visible separation is essential,
+  including in compact layouts. Use explicit margins or gaps between adjacent
+  buttons, icon actions, links and clickable rows. Their hit areas and hover,
+  focus or selection backgrounds must not touch or overlap. Preserve usable
+  target sizes; never remove this spacing to fit more controls. Verify spacing
+  at normal and narrow sizes, including touch layouts.
 - **Give rounded row highlights breathing room.** Use small outer margins around
   hover and selection backgrounds so they do not touch headers, panel edges or
   neighboring highlighted rows. Files lists use 3px vertically and 8px
