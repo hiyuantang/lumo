@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { NativeApp, NativeBundle, NativeChange } from './app-plugins';
 import type { DesktopCatalog, DesktopChange, DesktopApp, DesktopLaunch } from './desktop-apps';
 import type { CalendarSnapshot, CalendarChange, CalendarItem, CalendarGoogleStatus, CalendarGoogleConfig, CalendarGoogleAction, CalendarGoogleResult, CalendarNotice } from './calendar';
 import { desktopClientId, type DesktopRequest, type PiExtensionSettings } from './lumo-use';
@@ -161,6 +162,10 @@ function resolveFilePath(homeDir: string, path: string[]): string {
 }
 
 export class LiveDataSource implements DataSource {
+  pluginRequest(name: string, body?: Record<string, unknown>): Promise<unknown> { const path = `/plugins/${encodeURIComponent(name)}`; return body ? apiPost(path, { ...body, requestId: crypto.randomUUID() }) : apiGet(path); }
+  nativeApps() { return apiGet<NativeApp[]>('/app-plugins'); }
+  importNativeApp(bundle: NativeBundle) { return apiPost<NativeApp[]>('/app-plugins/import', {requestId:crypto.randomUUID(),bundle}); }
+  changeNativeApp(change: NativeChange) { return apiPost<NativeApp[]>('/app-plugins/action',change); }
   desktopApps() { return apiGet<DesktopCatalog>('/desktop-apps'); }
   desktopAppChange(change: DesktopChange) { return apiPost<DesktopApp>('/desktop-apps/action', change); }
   desktopAppLaunch(digest: string, preview: boolean) { return apiPost<DesktopLaunch>('/desktop-apps/launch', { digest, preview }); }

@@ -19,5 +19,8 @@
       "GET /api/v1/skills/detail"
     ],
     "serial": false
-  }
+  },
+  "permissions": [
+    "account"
+  ]
 }

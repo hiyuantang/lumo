@@ -41,10 +41,10 @@ func writePiPluginExtension(app *appplugins.Package, dir, mode string) (string, 
 	return path, os.Rename(file.Name(), path)
 }
 
-func piPluginExtensions(settings piExtensionSettings) []*appplugins.Package {
+func piPluginExtensions(home string, settings piExtensionSettings) []*appplugins.Package {
 	result := []*appplugins.Package{}
-	for _, name := range appplugins.Names() {
-		app, err := appplugins.Load(name)
+	for _, name := range appplugins.NamesFor(home) {
+		app, err := appplugins.LoadFor(home, name)
 		if err != nil || app.Manifest.Pi == nil {
 			continue
 		}

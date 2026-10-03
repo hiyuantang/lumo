@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useNativeApps } from '../platform/nativeCatalog';
+import { pluginPackages } from '../platform/plugins';
 import { useDesktopApps } from '../platform/catalog';
 import { useFileDrop } from './fileDrag';
 import { useEffect, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
@@ -30,6 +32,8 @@ export function Dock({ onOverview }: { onOverview: () => void }) {
   }, [state.windows, reducedMotion]);
   const { catalog } = useAppCatalog();
   const desktop = useDesktopApps();
+  const native = useNativeApps();
+  useEffect(() => { if (!native.ready) return; const active = native.apps.filter((app) => app.installed && app.current).map((app) => app.current!.manifest.id as AppId); setOrder((previous) => [...new Set([...previous.filter((id) => (!(id in pluginPackages) && !id.startsWith('plugin:')) || active.includes(id)), ...active])]); }, [native.apps, native.ready]);
   const [order, setOrder] = useState(loadDockOrder);
   useEffect(() => { setOrder((previous) => { const installed = desktop.catalog.apps.filter((a) => a.enabled).map((a) => `app:${a.manifest.id}` as const); return [...new Set([...previous.filter((id) => !id.startsWith('app:') || installed.includes(id as `app:${string}`)), ...installed])]; }); }, [desktop.catalog]);
   const reorder = useReorder(order, setOrder, (id) => id, 'horizontal');

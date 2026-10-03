@@ -59,6 +59,10 @@ func NewServer(deps Deps) *Server {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/app-plugins", s.handlePluginCatalog)
+	mux.HandleFunc("POST /api/v1/app-plugins/import", s.handlePluginImport)
+	mux.HandleFunc("POST /api/v1/app-plugins/action", s.handlePluginChange)
+	mux.HandleFunc("GET /api/v1/app-plugins/assets/{asset...}", s.handlePluginAsset)
 	mux.HandleFunc("GET /api/v1/desktop-apps", s.handleDesktopApps)
 	mux.HandleFunc("POST /api/v1/desktop-apps/action", s.handleDesktopApps)
 	mux.HandleFunc("POST /api/v1/desktop-apps/launch", s.handleDesktopLaunch)
@@ -161,6 +165,9 @@ func (s *Server) wrap(next http.Handler) http.Handler {
 			}
 		}()
 		limit := int64(maxBodyBytes)
+		if r.URL.Path == "/api/v1/app-plugins/import" {
+			limit = maxPluginBody
+		}
 		if r.URL.Path == "/api/v1/files/write" || r.URL.Path == "/api/v1/pi/images" {
 			limit = maxWriteBodyBytes
 		} else if r.URL.Path == "/api/v1/files/write-privileged" {

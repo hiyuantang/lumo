@@ -280,7 +280,7 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, err)
 			return
 		}
-		pluginExtensions := piPluginExtensions(settings)
+		pluginExtensions := piPluginExtensions(s.pi.home, settings)
 		pluginReadTools := []string{}
 		pluginTools := []string{}
 		for _, app := range pluginExtensions {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { AppBoundary } from '../platform/PluginApp';
+import { useNativeApps } from '../platform/nativeCatalog';
+import { AppBoundary, PluginApp } from '../platform/PluginApp';
 import { APP_COMPONENTS } from '../apps';
 import { WindowContext, windowTitle } from './WindowContext';
 import { DesktopAppWindow } from '../platform/DesktopAppWindow';
@@ -16,9 +17,10 @@ const RESIZE_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
 const SNAP_LABELS: Record<SnapTarget, string> = { left: 'Tile left', right: 'Tile right', maximize: 'Maximize' };
 
 export function Window({ win }: { win: WindowState }) {
+  useNativeApps();
   const { state, actions, reducedMotion } = useShell();
   const meta = APPS[win.appId];
-  const Body = win.appId.startsWith('app:') ? DesktopAppWindow : APP_COMPONENTS[win.appId as ShippedAppId];
+  const Body = win.appId.startsWith('app:') ? DesktopAppWindow : win.appId.startsWith('plugin:') ? PluginApp : APP_COMPONENTS[win.appId as ShippedAppId];
   const focused = state.focused === win.id;
   const minimize = useWindowMinimize(win, state.viewport, reducedMotion);
   const [interacting, setInteracting] = useState<'drag' | 'resize' | null>(null);

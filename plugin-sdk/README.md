@@ -23,3 +23,8 @@ process access; the SDK is not an isolation sandbox.
 
 See [App plugins](../docs/SHIPPED_APP_PLUGINS.md) for packaging, deployment,
 compatibility boundaries, complete-package rollback and verification.
+
+Account plugins receive `LUMO_APP_DATA`, an app-specific private directory path.
+Create it when needed and keep app-owned settings, caches and data beneath it.
+Normal package removal preserves it; clean removal moves it to recoverable Trash.
+Backend routes for new apps use `/api/v1/plugins/<package-name>`.

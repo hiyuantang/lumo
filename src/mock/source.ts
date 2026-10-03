@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { NativeBundle, NativeChange } from '../api/app-plugins';
+import * as nativePlugins from './app-plugins';
 import { mockDesktopApps } from './desktop-apps';
 import type { DesktopCatalog, DesktopChange, DesktopApp, DesktopLaunch } from '../api/desktop-apps';
 import { MockCalendar } from './calendar';
@@ -80,6 +82,10 @@ import {
 const TICK_MS = 2000;
 
 export class MockDataSource implements DataSource {
+  pluginRequest(): Promise<unknown> { return Promise.reject(new Error('Native app backends require a live server.')); }
+  nativeApps() { return nativePlugins.nativeApps(); }
+  importNativeApp(bundle: NativeBundle) { return nativePlugins.importNativeApp(bundle); }
+  changeNativeApp(change: NativeChange) { return nativePlugins.changeNativeApp(change); }
   desktopApps(): Promise<DesktopCatalog> { return mockDesktopApps.catalog(); }
   desktopAppChange(change: DesktopChange): Promise<DesktopApp> { return mockDesktopApps.change(change); }
   desktopAppLaunch(digest: string, preview: boolean): Promise<DesktopLaunch> { return mockDesktopApps.launch(digest, preview); }

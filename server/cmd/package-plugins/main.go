@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"lumo/server/internal/appplugins"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -132,6 +133,28 @@ func build(source, apps, output, selected string) error {
 			return err
 		}
 		if err = os.Rename(temp, filepath.Join(destination, "manifest.json")); err != nil {
+			return err
+		}
+		bundle := appplugins.Bundle{Name: name, Manifest: raw, Files: map[string][]byte{}}
+		p, err := appplugins.Parse(name, destination, raw)
+		if err != nil {
+			return err
+		}
+		if err = p.Validate(); err != nil {
+			return err
+		}
+		for _, filename := range p.Assets() {
+			bytes, err := p.Asset(filename)
+			if err != nil {
+				return err
+			}
+			bundle.Files[filename] = bytes
+		}
+		archive, err := json.Marshal(bundle)
+		if err != nil {
+			return err
+		}
+		if err = os.WriteFile(filepath.Join(output, name+".lumoplugin"), archive, 0644); err != nil {
 			return err
 		}
 		fmt.Printf("Packaged %s %v (%s/%s)\n", name, manifest["version"], runtime.GOOS, runtime.GOARCH)

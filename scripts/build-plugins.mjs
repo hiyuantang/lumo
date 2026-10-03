@@ -3,13 +3,17 @@ import { build } from 'esbuild';
 import ts from 'typescript';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
-const names = ['calendar', 'skills', 'git', 'docker', 'nginx', 'monitor'];
+const names = [];
+for (const entry of await readdir(path.join(root, 'apps'), {withFileTypes:true})) {
+  if (!entry.isDirectory()) continue;
+  try { await readFile(path.join(root, 'apps', entry.name, 'lumo.plugin.json')); names.push(entry.name); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+}
 const chosen = process.argv[2];
 if (chosen && !names.includes(chosen)) throw new Error(`Choose a plugin: ${names.join(', ')}`);
 const output = path.resolve(root, process.argv[3] || 'public/plugins');

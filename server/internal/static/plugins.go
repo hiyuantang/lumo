@@ -9,7 +9,7 @@ import (
 )
 
 var pluginAsset = regexp.MustCompile(`^[a-f0-9]{64}\.(js|css)$`)
-var pluginNames = map[string]bool{"calendar": true, "skills": true, "git": true, "docker": true, "nginx": true, "monitor": true}
+var pluginName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,47}$`)
 
 func WithPlugins(fallback http.Handler, directory string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +18,7 @@ func WithPlugins(fallback http.Handler, directory string) http.Handler {
 			return
 		}
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/plugins/"), "/")
-		if len(parts) != 2 || !pluginNames[parts[0]] || (parts[1] != "manifest.json" && !pluginAsset.MatchString(parts[1])) {
+		if len(parts) != 2 || !pluginName.MatchString(parts[0]) || (parts[1] != "manifest.json" && !pluginAsset.MatchString(parts[1])) {
 			http.NotFound(w, r)
 			return
 		}

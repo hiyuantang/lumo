@@ -21,5 +21,8 @@
       "POST /api/v1/git/action"
     ],
     "serial": true
-  }
+  },
+  "permissions": [
+    "account"
+  ]
 }

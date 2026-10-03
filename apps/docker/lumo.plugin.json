@@ -25,5 +25,12 @@
     ],
     "serial": false,
     "privileged": true
-  }
+  },
+  "permissions": [
+    "account",
+    "broker.containers.start",
+    "broker.containers.stop",
+    "broker.containers.restart",
+    "broker.docker.resource"
+  ]
 }

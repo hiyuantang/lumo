@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.native-import { margin-bottom: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.native-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.native-actions:empty { display: none; }
+.native-permissions { margin: 16px 0; padding: 16px; border-radius: var(--radius-m); background: var(--surface-raised); }
+.native-permissions ul { margin: 8px 0 0; padding-left: 20px; }
+.native-permissions li + li { margin-top: 6px; }
+.native-clean { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 16px 0; }

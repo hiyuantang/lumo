@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { NativeAppDetails, NativeAppUpdates, NativeImport } from '../platform/NativeAppLibrary';
+import { useNativeApps } from '../platform/nativeCatalog';
+import type { AppId } from './registry';
 import { usePluginCatalog } from '../platform/usePluginCatalog';
-import { pluginPackages, type PluginId } from '../platform/plugins';
+import { type PluginId } from '../platform/plugins';
 import { LibraryCard } from './LibraryCard';
 import { DesktopAppLibrary } from '../platform/DesktopAppLibrary';
 import { useDesktopApps } from '../platform/catalog';
@@ -32,8 +35,8 @@ const INCLUDED_APPS = [
   { id: 'skills' as const, appId: 'skills' as const, name: APPS.skills.title, description: 'Browse your skills and edit their instructions.' },
   { id: 'monitor' as const, appId: 'home' as const, name: APPS.home.title, description: 'Inspect server resources, services and logs.' },
 ];
-const DISCOVERY = [...INCLUDED_APPS, ...CATALOG];
-type LibraryPage = `custom:${string}` | 'All Apps' | 'Updates' | ServerAppID | typeof INCLUDED_APPS[number]['id'];
+
+type LibraryPage = `native:${string}` | `custom:${string}` | 'All Apps' | 'Updates' | ServerAppID | typeof INCLUDED_APPS[number]['id'];
 const managedPage = (page: LibraryPage): page is ServerAppID => CATALOG.some((app) => app.id === page);
 type Job = { app: ServerAppID; requestId: string; operation?: AppOperation };
 type Review = { app: ServerAppID; operation: AppOperation; plan: UpdatePlan };
@@ -45,6 +48,7 @@ const size = (bytes: number) => bytes > 0 ? `${(bytes / 1024 / 1024).toFixed(1)}
 export function AppLibrary() {
   const source = getDataSource();
   const desktopApps = useDesktopApps();
+  const native = useNativeApps();
   const [sidebarCollapsed, setSidebarCollapsed] = useAppPreference<boolean>('library', 'sidebar-collapsed', false);
   const { actions, state } = useShell();
   const reauth = useReauth();
@@ -60,7 +64,8 @@ export function AppLibrary() {
   const page = navigation.pages[navigation.index];
   const isDetail = page !== 'All Apps' && page !== 'Updates';
   const customId = page.startsWith('custom:') ? page.slice(7) : undefined;
-  const includedApp = INCLUDED_APPS.find((item) => item.id === page);
+  const nativeName = page.startsWith('native:') ? page.slice(7) : page;
+  const nativeApp = native.apps.find((app) => app.name === nativeName);
   const section = page === 'Updates' ? 'Updates' : 'All Apps';
   const canBack = navigation.index > 0;
   const canForward = navigation.index < navigation.pages.length - 1;
@@ -94,6 +99,7 @@ export function AppLibrary() {
   const [retry, setRetry] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const plugins = usePluginCatalog(refresh);
+  useEffect(() => { void native.refresh().catch(() => {}); }, [refresh, native.refresh]);
   const [confirm, setConfirm] = useState<Review | null>(null);
   const [cleanUninstall, setCleanUninstall] = useState(false);
   useEffect(() => { setCleanUninstall(false); }, [confirm]);
@@ -236,25 +242,20 @@ export function AppLibrary() {
       <main ref={content} className="app-library-detail">
         <header className="library-page-heading"><nav className="app-history" aria-label="Page history"><button type="button" className="app-history-back" aria-label="Back" title="Back" data-testid="library-back" disabled={!canBack} onClick={() => travel(-1)}><IconChevronRight size={18}/></button><button type="button" aria-label="Forward" title="Forward" data-testid="library-forward" disabled={!canForward} onClick={() => travel(1)}><IconChevronRight size={18}/></button></nav>{!isDetail && <div><h1>{section}</h1><p>{section === 'All Apps' ? 'Find apps for your server.' : 'Keep your installed apps current.'}</p></div>}</header>
         {page === 'All Apps' && <>
-          <section className="library-app-group" aria-label="Lumo Apps" data-testid="library-lumo-apps"><div className="library-section-heading"><h2>Lumo Apps</h2></div>
-          <div className="library-discovery-grid">{DISCOVERY.map((item) => {
-            const plugin = item.appId in pluginPackages ? plugins[item.appId as PluginId] : undefined;
-            const included = INCLUDED_APPS.some((app) => app.id === item.id);
-            const ready = catalog?.apps.find((entry) => entry.id === item.id)?.installed;
-            return <LibraryCard key={item.id} appId={item.appId} name={item.name} description={item.description} status={plugin?.error ? 'App unavailable' : included ? plugin?.version ? `Installed · ${plugin.version}` : 'Checking…' : ready ? plugin?.version ? `Installed · ${plugin.version}` : 'Installed' : catalog ? 'Available' : 'Checking…'} testId={`library-${item.id}`} onClick={() => { navigate(item.id); setError(null); }} />;
-          })}</div></section>
+          <section className="library-app-group" aria-label="Lumo Apps" data-testid="library-lumo-apps"><div className="library-section-heading"><h2>Lumo Apps</h2><NativeImport onSelect={(name) => navigate(`native:${name}`)}/></div>
+          <div className="library-discovery-grid">{native.apps.map((item) => {
+            const manifest = item.current?.manifest ?? item.releases[0]?.manifest;
+            if (!manifest) return null;
+            const description = manifest.description ?? [...INCLUDED_APPS, ...CATALOG].find((app) => app.id === item.name)?.description ?? '';
+            return <LibraryCard key={item.name} appId={manifest.id as AppId} name={manifest.name} description={description} status={item.error || item.installed && plugins[manifest.id]?.error ? 'App unavailable' : item.installed ? `Installed · ${plugins[manifest.id]?.version ?? manifest.version}` : 'Available'} testId={`library-${item.name}`} onClick={() => { navigate(CATALOG.some((app) => app.id === item.name) ? item.name as ServerAppID : `native:${item.name}`); setError(null); }} />;
+          })}</div>{native.error && <p className="server-app-error" role="alert">{native.error}</p>}</section>
         </>}
         {(page === 'All Apps' || page === 'Updates' || customId !== undefined) && <DesktopAppLibrary selected={customId} updates={page === 'Updates'} onSelect={(id) => navigate(`custom:${id}`)} />}
-        {includedApp && <section className="library-app-overview" aria-label={`${includedApp.name} details`}>
-          <header className="library-hero"><span className="library-icon library-hero-icon"><AppIcon appId={includedApp.appId}/></span><div><h1>{includedApp.name}</h1><p>{includedApp.description}</p></div><div className="library-action"><button type="button" className="btn btn-primary" data-testid="library-open" disabled={!plugins[includedApp.appId]?.version} onClick={() => actions.openApp(includedApp.appId)}>Open</button></div></header>
-          <p className="library-description" data-testid="library-description">Included with Lumo.</p>
-          <div className="library-information"><span>App version</span><strong>{plugins[includedApp.appId]?.version ?? (plugins[includedApp.appId]?.error ? 'Unavailable' : 'Checking…')}</strong></div>
-          {plugins[includedApp.appId]?.error && <p className="server-app-error" role="alert">{plugins[includedApp.appId]?.error}</p>}
-        </section>}
-        {managedPage(page) && <section className="library-app-overview" aria-label={`${app.name} details`}>
-            <header className="library-hero"><span className="library-icon library-hero-icon"><AppIcon appId={app.appId}/></span><div><h1>{app.name}</h1><p>{app.description}</p></div>
+        {nativeApp && <NativeAppDetails key={nativeApp.name} app={nativeApp} status={plugins[nativeApp.current?.manifest.id ?? '']} description={[...INCLUDED_APPS,...CATALOG].find((app) => app.id === nativeApp.name)?.description}/>}
+        {page === 'Updates' && <NativeAppUpdates onSelect={(name) => navigate(`native:${name}`)}/>}
+        {managedPage(page) && <section className="library-app-overview" aria-label={`${app.name} server software`}>
+            <header className="library-hero"><div><h2>Server software</h2><p>{app.packages}</p></div>
               <div className="library-action library-managed-actions">
-                {installed && <button className="btn" type="button" data-testid="library-open" disabled={locked || !plugins[app.appId as PluginId]?.version} onClick={() => actions.openApp(app.appId)}>Open</button>}
                 {activeHere ? <div className="library-action-progress" data-testid="library-progress" role="progressbar" aria-label={`${operationLabel} ${app.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={error ? 'Connection interrupted' : progress?.message || `${operationLabel}…`} title={progress?.message}>
                   <span aria-hidden="true">{error ? 'Interrupted' : progress?.done ? 'Finishing…' : `${operationLabel}…`}{percent !== undefined && !error && <small>{Math.round(percent)}%</small>}</span>
                   <progress max={100} value={percent}/>

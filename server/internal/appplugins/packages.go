@@ -19,15 +19,30 @@ type AuthFlow struct {
 	Start    string `json:"start"`
 	Callback string `json:"callback"`
 }
+type Window struct {
+	Width     int `json:"width"`
+	Height    int `json:"height"`
+	MinWidth  int `json:"minWidth"`
+	MinHeight int `json:"minHeight"`
+}
 type Manifest struct {
-	Auth           *AuthFlow  `json:"auth,omitempty"`
-	SchemaVersion  int        `json:"schemaVersion"`
-	HostAPIVersion int        `json:"hostApiVersion"`
-	ID             string     `json:"id"`
-	Version        string     `json:"version"`
-	License        string     `json:"license"`
-	Backend        *Backend   `json:"backend,omitempty"`
-	Pi             *Extension `json:"pi,omitempty"`
+	Name            string     `json:"name"`
+	Description     string     `json:"description,omitempty"`
+	Icon            string     `json:"icon"`
+	Window          Window     `json:"window"`
+	Entry           string     `json:"entry"`
+	Styles          string     `json:"styles,omitempty"`
+	Background      string     `json:"background,omitempty"`
+	RequiredPackage string     `json:"requiredPackage,omitempty"`
+	Permissions     []string   `json:"permissions,omitempty"`
+	Auth            *AuthFlow  `json:"auth,omitempty"`
+	SchemaVersion   int        `json:"schemaVersion"`
+	HostAPIVersion  int        `json:"hostApiVersion"`
+	ID              string     `json:"id"`
+	Version         string     `json:"version"`
+	License         string     `json:"license"`
+	Backend         *Backend   `json:"backend,omitempty"`
+	Pi              *Extension `json:"pi,omitempty"`
 }
 type Backend struct {
 	Privileged      bool     `json:"privileged,omitempty"`
@@ -49,8 +64,20 @@ type Package struct {
 	Manifest  Manifest
 }
 
-var names = map[string]string{"calendar": "calendar", "skills": "skills", "git": "git", "docker": "containers", "nginx": "websites", "monitor": "home"}
-var assetName = regexp.MustCompile(`^[a-f0-9]{64}\.(bin|mjs)$`)
+var legacyIDs = map[string]string{"calendar": "calendar", "skills": "skills", "git": "git", "docker": "containers", "nginx": "websites", "monitor": "home"}
+var assetName = regexp.MustCompile(`^[a-f0-9]{64}\.(bin|mjs|js|css)$`)
+var packageName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,47}$`)
+
+func ValidName(name string) bool {
+	return packageName.MatchString(name) && !map[string]bool{"pi": true, "files": true, "preview": true, "terminal": true, "settings": true, "library": true, "trash": true, "home": true, "containers": true, "websites": true}[name]
+}
+func AppID(name string) string {
+	if id, ok := legacyIDs[name]; ok {
+		return id
+	}
+	return "plugin:" + name
+}
+
 var version = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
 func Roots() []string {
@@ -70,71 +97,118 @@ func Roots() []string {
 	}
 	return []string{override, bundled}
 }
-func Load(name string) (*Package, error) {
-	if _, ok := names[name]; !ok {
-		return nil, errors.New("unknown app plugin")
+func Load(name string) (*Package, error) { return loadRoots(name, Roots()) }
+func loadRoots(name string, roots []string) (*Package, error) {
+	if !ValidName(name) {
+		return nil, errors.New("invalid app plugin name")
 	}
-	for _, directory := range Roots() {
-		root, err := os.OpenRoot(directory)
+	for _, directory := range roots {
+		raw, err := os.ReadFile(filepath.Join(directory, name, "manifest.json"))
 		if os.IsNotExist(err) {
 			continue
 		}
 		if err != nil {
 			return nil, err
 		}
-		raw, err := root.ReadFile(name + "/manifest.json")
-		root.Close()
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		var manifest Manifest
-		if err = json.Unmarshal(raw, &manifest); err != nil {
-			return nil, err
-		}
-		if manifest.ID != names[name] || manifest.SchemaVersion != 1 || manifest.HostAPIVersion != 1 || manifest.License != "AGPL-3.0-only" || !version.MatchString(manifest.Version) {
-			return nil, errors.New("incompatible app plugin")
-		}
-		if name != "monitor" && manifest.Backend == nil {
-			return nil, errors.New("incomplete app package")
-		}
-		if b := manifest.Backend; b != nil {
-			if b.ProtocolVersion != 1 || b.Platform != runtime.GOOS+"/"+runtime.GOARCH || !assetName.MatchString(b.Entry) || !strings.HasSuffix(b.Entry, ".bin") {
-				return nil, errors.New("incompatible app backend")
-			}
-			for _, route := range b.Routes {
-				if !AllowedRoute(name, route) {
-					return nil, errors.New("app route is outside its namespace")
-				}
-			}
-		}
-		if a := manifest.Auth; a != nil {
-			if !AllowedRoute(name, "POST "+a.Start) || !AllowedRoute(name, "GET "+a.Callback) {
-				return nil, errors.New("invalid app authentication paths")
-			}
-		}
-		if p := manifest.Pi; p != nil {
-			if p.Setting != name || !assetName.MatchString(p.Entry) || !strings.HasSuffix(p.Entry, ".mjs") {
-				return nil, errors.New("invalid app extension")
-			}
-			for _, tool := range append(append([]string{}, p.ReadTools...), p.WriteTools...) {
-				if !regexp.MustCompile(`^lumo_` + name + `_[a-z0-9_]+$`).MatchString(tool) {
-					return nil, errors.New("invalid app tool name")
-				}
-			}
-		}
-		return &Package{Name: name, Directory: filepath.Join(directory, name), Manifest: manifest}, nil
+		return Parse(name, filepath.Join(directory, name), raw)
 	}
 	return nil, os.ErrNotExist
+}
+func Parse(name, directory string, raw []byte) (*Package, error) {
+	var m Manifest
+	if !ValidName(name) || len(raw) > 65536 || json.Unmarshal(raw, &m) != nil {
+		return nil, errors.New("invalid app manifest")
+	}
+	if m.ID != AppID(name) || m.SchemaVersion != 1 || m.HostAPIVersion != 1 || m.License != "AGPL-3.0-only" || !version.MatchString(m.Version) {
+		return nil, errors.New("incompatible app plugin")
+	}
+	if b := m.Backend; b != nil {
+		if b.ProtocolVersion != 1 || b.Platform != runtime.GOOS+"/"+runtime.GOARCH || !assetName.MatchString(b.Entry) || !strings.HasSuffix(b.Entry, ".bin") {
+			return nil, errors.New("incompatible app backend")
+		}
+		for _, route := range b.Routes {
+			if !AllowedRoute(name, route) {
+				return nil, errors.New("app route is outside its namespace")
+			}
+		}
+	}
+	if a := m.Auth; a != nil {
+		if !AllowedRoute(name, "POST "+a.Start) || !AllowedRoute(name, "GET "+a.Callback) {
+			return nil, errors.New("invalid app authentication paths")
+		}
+	}
+	if p := m.Pi; p != nil {
+		if p.Setting != name || !assetName.MatchString(p.Entry) || !strings.HasSuffix(p.Entry, ".mjs") {
+			return nil, errors.New("invalid app extension")
+		}
+		for _, tool := range append(append([]string{}, p.ReadTools...), p.WriteTools...) {
+			if !regexp.MustCompile(`^lumo_` + strings.ReplaceAll(name, "-", "_") + `_[a-z0-9_]+$`).MatchString(tool) {
+				return nil, errors.New("invalid app tool name")
+			}
+		}
+	}
+	for _, permission := range m.Permissions {
+		if permission != "account" && (!strings.HasPrefix(permission, "broker.") || !supportedBroker[strings.TrimPrefix(permission, "broker.")]) {
+			return nil, errors.New("unsupported app permission")
+		}
+	}
+	return &Package{Name: name, Directory: directory, Manifest: m}, nil
+}
+
+var supportedBroker = map[string]bool{"containers.start": true, "containers.stop": true, "containers.restart": true, "docker.resource": true, "websites.save": true}
+
+func (p *Package) AllowsBroker(action string) bool {
+	for _, permission := range p.Manifest.Permissions {
+		if permission == "broker."+action && supportedBroker[action] {
+			return true
+		}
+	}
+	return false
+}
+func (p *Package) Validate() error {
+	m := p.Manifest
+	if m.Name == "" || len(m.Name) > 80 || len(m.Description) > 1000 || m.Window.MinWidth < 280 || m.Window.MinHeight < 200 || m.Window.Width < m.Window.MinWidth || m.Window.Height < m.Window.MinHeight || m.Window.Width > 4096 || m.Window.Height > 4096 {
+		return errors.New("invalid app display information")
+	}
+	if m.RequiredPackage != "" && m.RequiredPackage != "git" && m.RequiredPackage != "docker" && m.RequiredPackage != "nginx" {
+		return errors.New("unsupported system dependency")
+	}
+	if m.Entry == "" || !strings.HasSuffix(m.Entry, ".js") || m.Styles != "" && !strings.HasSuffix(m.Styles, ".css") || m.Background != "" && !strings.HasSuffix(m.Background, ".js") {
+		return errors.New("invalid frontend assets")
+	}
+	for _, name := range p.Assets() {
+		if _, err := p.Asset(name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (p *Package) Assets() []string {
+	m := p.Manifest
+	files := []string{m.Entry}
+	if m.Styles != "" {
+		files = append(files, m.Styles)
+	}
+	if m.Background != "" {
+		files = append(files, m.Background)
+	}
+	if m.Backend != nil {
+		files = append(files, m.Backend.Entry)
+	}
+	if m.Pi != nil {
+		files = append(files, m.Pi.Entry)
+	}
+	return files
 }
 func AllowedRoute(name, route string) bool {
 	parts := strings.Split(route, " ")
 	if len(parts) != 2 || (parts[0] != "GET" && parts[0] != "POST") {
 		return false
 	}
-	prefixes := []string{"/api/v1/" + name}
+	prefixes := []string{"/api/v1/plugins/" + name}
+	if _, ok := legacyIDs[name]; ok {
+		prefixes = append(prefixes, "/api/v1/"+name)
+	}
 	if name == "docker" {
 		prefixes = append(prefixes, "/api/v1/containers")
 	}
@@ -152,10 +226,14 @@ func AllowedRoute(name, route string) bool {
 	return false
 }
 func Owner(path string) string {
-	for name := range names {
+	for name := range legacyIDs {
 		if AllowedRoute(name, "GET "+path) {
 			return name
 		}
+	}
+	parts := strings.Split(strings.TrimPrefix(path, "/api/v1/plugins/"), "/")
+	if strings.HasPrefix(path, "/api/v1/plugins/") && ValidName(parts[0]) {
+		return parts[0]
 	}
 	return ""
 }
@@ -199,19 +277,20 @@ func (p *Package) HasRoute(method, path string) bool {
 	}
 	return false
 }
-func AllowsBroker(name, action string) bool {
-	switch name {
-	case "docker":
-		return action == "containers.start" || action == "containers.stop" || action == "containers.restart" || action == "docker.resource"
-	case "nginx":
-		return action == "websites.save"
-	}
-	return false
-}
 
-func Names() []string {
-	result := make([]string, 0, len(names))
-	for name := range names {
+func Names() []string { return namesIn(Roots()) }
+func namesIn(roots []string) []string {
+	found := map[string]bool{}
+	for _, root := range roots {
+		entries, _ := os.ReadDir(root)
+		for _, entry := range entries {
+			if entry.IsDir() && ValidName(entry.Name()) {
+				found[entry.Name()] = true
+			}
+		}
+	}
+	result := make([]string, 0, len(found))
+	for name := range found {
 		result = append(result, name)
 	}
 	sort.Strings(result)

@@ -2,13 +2,15 @@
 import { Component, useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { useCurrentWindow } from '../shell/WindowContext';
 import { APPS } from '../apps/registry';
-import { pluginPackages, pluginManifests } from './plugins';
+import { useNativeApps } from './nativeCatalog';
+import { pluginPackages, pluginBases, pluginSession } from './plugins';
 import { readPluginManifest, pluginAsset as asset } from './pluginManifest';
 import type { PluginId } from './plugins';
 import './host';
 
 const loading = new Map<string, Promise<ComponentType>>();
 const styleLoads = new Map<string, Promise<void>>();
+window.addEventListener('lumo:plugin-session', () => { loading.clear(); styleLoads.clear(); for (const link of document.querySelectorAll('link[data-lumo-plugin-style]')) link.remove(); });
 
 function loadStyle(href: string, name: string) {
   let pending = styleLoads.get(href);
@@ -27,10 +29,10 @@ function loadStyle(href: string, name: string) {
 }
 
 async function loadPlugin(name: string, id: string, background = false): Promise<ComponentType> {
-  const base = `/plugins/${name}/`;
+  const base = pluginBases[id] ?? `/plugins/${name}/`;
   const manifest = await readPluginManifest(id as PluginId);
   if (background && (!manifest.background || !asset.test(manifest.background) || !manifest.background.endsWith('.js'))) throw new Error('App background service is missing.');
-  const key = base + (background ? manifest.background : manifest.entry);
+  const key = base + (background ? manifest.background : manifest.entry) + `?session=${pluginSession}`;
   let pending = loading.get(key);
   if (!pending) {
     pending = (async () => {
@@ -42,9 +44,10 @@ async function loadPlugin(name: string, id: string, background = false): Promise
     void pending.catch(() => loading.delete(key));
   }
   const Body = await pending;
-  if (!background && manifest.styles) await loadStyle(base + manifest.styles, name);
+  const style = base + manifest.styles + `?session=${pluginSession}`;
+  if (!background && manifest.styles) await loadStyle(style, name);
   if (!background) for (const link of document.querySelectorAll<HTMLLinkElement>('link[data-lumo-plugin-style]')) {
-    if (link.dataset.lumoPluginStyle === name && link.getAttribute('href') !== base + manifest.styles) {
+    if (link.dataset.lumoPluginStyle === name && link.getAttribute('href') !== style) {
       styleLoads.delete(link.getAttribute('href')!);
       link.remove();
     }
@@ -62,16 +65,21 @@ export class AppBoundary extends Component<{ children: ReactNode; name: string }
 
 export function PluginApp() {
   const { appId } = useCurrentWindow();
+  const native = useNativeApps();
+  const available = !native.ready || native.apps.some((app) => app.installed && app.current?.manifest.id === appId);
   const name = pluginPackages[appId as keyof typeof pluginPackages];
   const [Body, setBody] = useState<ComponentType | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    if (!available || !native.ready) return;
     let alive = true;
     setError('');
     void loadPlugin(name, appId).then((component) => { if (alive) setBody(() => component); }, (err: unknown) => { if (alive) setError(err instanceof Error ? err.message : 'App could not load.'); });
     return () => { alive = false; };
-  }, [name, appId, attempt]);
+  }, [name, appId, attempt, available, native.ready]);
+  if (!native.ready && native.error) return <div className="app" data-testid="plugin-load-error"><p role="alert">{native.error}</p><button className="btn" onClick={() => void native.refresh().catch(() => {})}>Try again</button></div>;
+  if (!available) return <div className="app" role="status">This app is not installed. Open App Library to install it.</div>;
   if (error) return <div className="app" data-testid="plugin-load-error"><p role="alert">{error}</p><button type="button" className="btn" onClick={() => setAttempt((value) => value + 1)}>Try again</button></div>;
   if (!Body) return <div className="app" role="status">Opening {APPS[appId].title}…</div>;
   return <Body />;
@@ -90,5 +98,6 @@ function PluginService({ name, id }: { name: string; id: string }) {
 }
 
 export function PluginServices() {
-  return <>{pluginManifests.filter((manifest) => 'background' in manifest && manifest.background).map((manifest) => <PluginService key={manifest.id} name={pluginPackages[manifest.id as keyof typeof pluginPackages]} id={manifest.id} />)}</>;
+  const native = useNativeApps();
+  return <>{native.apps.filter((app) => app.installed && app.current?.manifest.background).map((app) => <PluginService key={app.name + app.current!.digest} name={app.name} id={app.current!.manifest.id} />)}</>;
 }

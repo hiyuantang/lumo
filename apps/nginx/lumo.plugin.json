@@ -22,5 +22,9 @@
     ],
     "serial": false,
     "privileged": true
-  }
+  },
+  "permissions": [
+    "account",
+    "broker.websites.save"
+  ]
 }

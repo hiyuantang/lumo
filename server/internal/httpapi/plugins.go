@@ -30,10 +30,13 @@ func (b *pluginOutput) Write(data []byte) (int, error) {
 	return b.Buffer.Write(data)
 }
 func (s *Server) handlePlugin(w http.ResponseWriter, r *http.Request, name string) {
-	loaded, err := appplugins.Load(name)
+	loaded, err := appplugins.LoadFor(s.pi.home, name)
 	if err != nil {
 		WriteError(w, NewError(CodeUnavailable, "The app package is unavailable. Reinstall its complete package."))
 		return
+	}
+	if loaded.Manifest.Auth != nil && r.URL.Path == loaded.Manifest.Auth.Start {
+		w.Header().Set("X-Lumo-Plugin-OAuth", loaded.Manifest.Auth.Callback)
 	}
 	if !loaded.HasRoute(r.Method, r.URL.Path) {
 		s.handleNotFound(w, r)
@@ -116,7 +119,7 @@ func (s *Server) handlePlugin(w http.ResponseWriter, r *http.Request, name strin
 		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 		cmd.WaitDelay = time.Second
 		cmd.Stdin = &input
-		cmd.Env = append(os.Environ(), "HOME="+s.pi.home)
+		cmd.Env = append(os.Environ(), "HOME="+s.pi.home, "LUMO_APP_DATA="+appplugins.DataDirectory(s.pi.home, name))
 		output := &pluginOutput{limit: 32 << 20}
 		diagnostic := &pluginOutput{limit: 64 << 10}
 		cmd.Stdout = output
@@ -131,7 +134,7 @@ func (s *Server) handlePlugin(w http.ResponseWriter, r *http.Request, name strin
 			return
 		}
 		if reply.Broker != nil {
-			if !appplugins.AllowsBroker(name, reply.Broker.Action) {
+			if !loaded.AllowsBroker(reply.Broker.Action) {
 				WriteError(target, NewError(CodeForbidden, "The app cannot use this system operation."))
 				return
 			}

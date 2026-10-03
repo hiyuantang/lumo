@@ -260,6 +260,11 @@ func (g *Gateway) requireSession(r *http.Request) (*sessionInfo, *httpapi.Error)
 			cookie, err = r.Cookie("lumo_" + app.Name + "_oauth")
 		}
 	}
+	if err != nil && r.Method == http.MethodGet {
+		if name := appplugins.Owner(r.URL.Path); name != "" {
+			cookie, err = r.Cookie("lumo_" + name + "_oauth")
+		}
+	}
 	if err != nil || cookie.Value == "" {
 		return nil, httpapi.NewError(httpapi.CodeUnauthorized, "No session.")
 	}
@@ -380,7 +385,7 @@ func (g *Gateway) proxyREST(w http.ResponseWriter, r *http.Request, sess *sessio
 	req2.Header = r.Header.Clone()
 	req2.Header.Set("X-Lumo-Session", sess.Token)
 	client := g.agentClient(sess.AgentSocket)
-	if appplugins.AuthForPath(r.URL.Path, true) != nil {
+	if appplugins.Owner(r.URL.Path) != "" {
 		copy := *client
 		copy.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
 		client = &copy
@@ -396,6 +401,10 @@ func (g *Gateway) proxyREST(w http.ResponseWriter, r *http.Request, sess *sessio
 			g.pluginOAuthCookie(w, r, app, sess.Token, 600)
 		}
 	}
+	if callback := resp.Header.Get("X-Lumo-Plugin-OAuth"); r.Method == http.MethodPost && resp.StatusCode == http.StatusOK && appplugins.Owner(callback) != "" {
+		http.SetCookie(w, &http.Cookie{Name: "lumo_" + appplugins.Owner(callback) + "_oauth", Value: sess.Token, Path: callback, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil, MaxAge: 600})
+	}
+	resp.Header.Del("X-Lumo-Plugin-OAuth")
 	copyHeader(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)

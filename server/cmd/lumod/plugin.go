@@ -13,7 +13,8 @@ func runPlugin(args []string) {
 		fmt.Fprintln(os.Stderr, "Usage: lumod plugin <app> <command>")
 		os.Exit(2)
 	}
-	app, err := appplugins.Load(args[0])
+	home, _ := os.UserHomeDir()
+	app, err := appplugins.LoadFor(home, args[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "App package unavailable.")
 		os.Exit(1)
@@ -24,6 +25,7 @@ func runPlugin(args []string) {
 		os.Exit(1)
 	}
 	command := exec.Command(executable, args[1:]...)
+	command.Env = append(os.Environ(), "LUMO_APP_DATA="+appplugins.DataDirectory(home, args[0]))
 	command.Stdin = os.Stdin
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import calendar from '../../apps/calendar/lumo.plugin.json';
-import skills from '../../apps/skills/lumo.plugin.json';
-import git from '../../apps/git/lumo.plugin.json';
-import docker from '../../apps/docker/lumo.plugin.json';
-import nginx from '../../apps/nginx/lumo.plugin.json';
-import monitor from '../../apps/monitor/lumo.plugin.json';
+import type { NativeManifest } from '../api/app-plugins';
 
-export const pluginPackages = { calendar: 'calendar', skills: 'skills', git: 'git', containers: 'docker', websites: 'nginx', home: 'monitor' } as const;
-export type PluginId = keyof typeof pluginPackages;
-export const pluginManifests = [calendar, skills, git, docker, nginx, monitor];
+const definitions = import.meta.glob('../../apps/*/lumo.plugin.json', { eager: true, import: 'default' });
+export const pluginManifests = Object.values(definitions) as NativeManifest[];
+export const pluginPackages: Record<string, string> = Object.fromEntries(Object.entries(definitions).map(([path, value]) => [(value as NativeManifest).id, path.split('/')[3]]));
+export type PluginId = string;
+export const pluginBases: Record<string, string> = {};
+
+export let pluginSession = crypto.randomUUID();
+export function resetPluginSession() { pluginSession = crypto.randomUUID(); window.dispatchEvent(new Event('lumo:plugin-session')); }

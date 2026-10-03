@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { NativeApp, NativeBundle, NativeChange } from './app-plugins';
 import type { DesktopCatalog, DesktopChange, DesktopApp, DesktopLaunch } from './desktop-apps';
 import type { CalendarSnapshot, CalendarChange, CalendarItem, CalendarGoogleStatus, CalendarGoogleConfig, CalendarGoogleAction, CalendarGoogleResult, CalendarNotice } from './calendar';
 import type { DesktopRequest, PiExtensionSettings } from './lumo-use';
@@ -346,6 +347,10 @@ export interface SessionUser {
 export type Unsubscribe = () => void;
 
 export interface DataSource {
+  pluginRequest(name: string, body?: Record<string, unknown>): Promise<unknown>;
+  nativeApps(): Promise<NativeApp[]>;
+  importNativeApp(bundle: NativeBundle): Promise<NativeApp[]>;
+  changeNativeApp(change: NativeChange): Promise<NativeApp[]>;
   desktopApps(): Promise<DesktopCatalog>;
   desktopAppChange(change: DesktopChange): Promise<DesktopApp>;
   desktopAppLaunch(digest: string, preview: boolean): Promise<DesktopLaunch>;

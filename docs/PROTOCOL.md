@@ -2368,3 +2368,44 @@ and retains dirty frames across catalog activation changes. The existing server
 revocation checks still apply. `lumo.setDirty(false)` clears the guard; apps must
 not clear it merely because a save was attempted. Browser unload warnings are
 best effort and do not replace durable saves.
+
+## Native app packages
+
+Native packages are installed per authenticated account. The per-user agent owns
+package selection; the gateway authenticates requests and requires CSRF for
+mutations. Core app identities cannot be replaced by an imported package.
+
+- `GET /api/v1/app-plugins` returns `{ok:true,data:[...]}`. Each entry contains
+  `name`, `installed`, optional `current`, available `releases`, `revision`,
+  optional `previous`, and update `history`. A release contains `digest` and
+  `manifest`. Invalid active packages report an `error`.
+- `POST /api/v1/app-plugins/import` accepts `{requestId,bundle}`. The bundle has
+  `name`, `manifest` and `files` (hashed filenames mapped to base64 bytes).
+  The complete body is limited to 90 MiB; referenced files total at most 64 MiB.
+  Import validates compatibility, assets and namespaces and stages the package.
+  It does not execute or activate it. The response is the refreshed catalog.
+- `POST /api/v1/app-plugins/action` accepts `requestId`, `name`, `action`,
+  `digest`, `revision`, `trust`, and optional `clean`. Actions are `install`,
+  `update`, `rollback`, `uninstall`. Installation, update and rollback require
+  `trust:true`, granting the displayed native account access. `revision` is the
+  last catalog selection revision; stale writes return `conflict`. Rollback
+  selects `previous`; normal uninstall preserves data. Clean uninstall moves
+  only the app-owned data directory to recoverable Trash. The response is the
+  refreshed catalog. Repeating a request ID replays its result.
+- `GET /api/v1/app-plugins/assets/<name>/manifest.json` serves the selected
+  manifest. Other asset requests serve only hashed frontend `.js` and `.css`
+  files for that installed account package. These routes require authentication;
+  backend executables and Pi source are never served.
+- `/api/v1/plugins/<name>` and its subpaths belong to the named native package.
+  Its manifest declares exact GET/POST routes. POSTs require request IDs. The
+  host dispatches requests through process protocol 1 as the account, without
+  forwarding session credentials to the child. Supported declared broker
+  requests receive the original session only inside the host's broker bridge.
+  Existing shipped package routes retain their original paths.
+
+A selected package supplies its frontend, backend and Pi extension together.
+Backend requests use the current selection. Open frontend windows retain loaded
+code until closed, and existing Pi processes retain their loaded extensions
+until they exit. New Pi chats discover installed tools from the manifests.
+Native code is administrator/user-trusted account code, not a sandbox. Custom
+iframe apps retain their separate isolated runtime and capability protocol.

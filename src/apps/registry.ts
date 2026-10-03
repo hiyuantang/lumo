@@ -5,7 +5,7 @@ import type { ComponentType, SVGProps } from 'react';
 import { IconTrash, IconCode, IconEye, IconFolder, IconGear, IconGrid, IconTerminal } from '../shell/icons';
 
 export type ShippedAppId = 'calendar' | 'git' | 'skills' | 'trash' | 'pi' | 'preview' | 'home' | 'files' | 'terminal' | 'settings' | 'containers' | 'websites' | 'library';
-export type AppId = ShippedAppId | `app:${string}`;
+export type AppId = ShippedAppId | `app:${string}` | `plugin:${string}`;
 export type SettingsSection = 'system' | 'folders' | 'time' | 'network' | 'appearance' | 'updates' | 'about';
 
 export interface AppMeta {
@@ -55,7 +55,7 @@ const builtinApps = {
 
 export const APPS = new Proxy(builtinApps as Record<AppId, AppMeta>, {
   get(target, key) {
-    if (typeof key === 'string' && key.startsWith('app:') && !target[key as AppId]) return { id: key, title: 'Desktop app', icon: IconGrid, defaultSize: { w: 720, h: 480 }, minSize: { w: 390, h: 320 } };
+    if (typeof key === 'string' && (key.startsWith('app:') || key.startsWith('plugin:')) && !target[key as AppId]) return { id: key, title: 'Desktop app', icon: IconGrid, defaultSize: { w: 720, h: 480 }, minSize: { w: 390, h: 320 } };
     return Reflect.get(target, key);
   },
 });

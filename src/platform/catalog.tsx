@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { NativeAppsProvider } from './nativeCatalog';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { getDataSource } from '../api/source';
 import type { DesktopBuild, DesktopCatalog } from '../api/desktop-apps';
@@ -36,6 +37,6 @@ export function DesktopAppsProvider({ children }: { children: ReactNode }) {
     window.addEventListener('focus', load); document.addEventListener('visibilitychange', load);
     return () => { generation.current++; clearInterval(timer); window.removeEventListener('focus', load); document.removeEventListener('visibilitychange', load); APP_ORDER.splice(0, APP_ORDER.length, ...APP_ORDER.filter((id) => !id.startsWith('app:'))); for (const id of Object.keys(APPS)) if (id.startsWith('app:')) delete APPS[id as AppId]; };
   }, [refresh, state.user]);
-  return <Context.Provider value={{ catalog, error, refresh, preview }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ catalog, error, refresh, preview }}><NativeAppsProvider>{children}</NativeAppsProvider></Context.Provider>;
 }
 export const useDesktopApps = () => useContext(Context);

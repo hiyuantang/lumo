@@ -29,7 +29,7 @@ func TestPluginOverlay(t *testing.T) {
 		{"/plugins/skills/manifest.json", 200, `{"version":"1.0.1"}`},
 		{"/plugins/calendar/manifest.json", 418, "/plugins/calendar/manifest.json"},
 		{"/plugins/skills/" + strings.Repeat("a", 64) + ".js", 418, "/plugins/skills/"},
-		{"/plugins/unknown/manifest.json", 404, "404"},
+		{"/plugins/unknown/manifest.json", 418, "/plugins/unknown/manifest.json"},
 		{"/plugins/skills/../../secret", 404, "404"},
 		{"/plugins/skills/source.ts", 404, "404"},
 		{"/plugins/skills/" + strings.Repeat("a", 64) + ".bin", 404, "404"},
