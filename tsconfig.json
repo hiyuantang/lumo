@@ -20,13 +20,21 @@
     "types": [
       "vite/client",
       "node"
-    ]
+    ],
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@lumo/sdk/*": [
+        "src/platform/sdk/*"
+      ]
+    }
   },
   "include": [
     "src",
     "tests",
     "vite.config.ts",
     "playwright.config.ts",
-    "playwright.docker.config.ts"
+    "playwright.docker.config.ts",
+    "apps"
   ]
 }

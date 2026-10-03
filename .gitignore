@@ -14,3 +14,5 @@ __pycache__/
 *.pyc
 server/internal/desktopapps/toolchain/*.cjs
 server/internal/desktopapps/toolchain/*.js
+
+/public/plugins/

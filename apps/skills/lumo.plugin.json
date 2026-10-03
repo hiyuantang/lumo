@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "skills",
+  "name": "Skills",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "hostApiVersion": 1,
+  "icon": "IconSkills",
+  "window": {
+    "width": 960,
+    "height": 650,
+    "minWidth": 390,
+    "minHeight": 380
+  }
+}

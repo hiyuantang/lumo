@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { CalendarChange, CalendarCollection, CalendarGoogleAction, CalendarGoogleConfig, CalendarItem, CalendarSnapshot } from '../api/calendar';
-import { dateKey, expandMock, localDate, repeatDate, zonedParts, zonedISO } from '../apps/calendar-model';
+import { dateKey, expandMock, localDate, repeatDate, zonedParts, zonedISO } from '../../apps/calendar/src/calendar-model';
 const initialCollections: CalendarCollection[] = [{ id: 'personal', name: 'Personal', color: '#487ccc', kind: 'event', provider: 'local', readOnly: false }, { id: 'work', name: 'Work', color: '#b183c8', kind: 'event', provider: 'local', readOnly: false }, { id: 'reminders', name: 'Reminders', color: '#c28245', kind: 'reminder', provider: 'local', readOnly: false }];
 export class MockCalendar {
   private collections = initialCollections;

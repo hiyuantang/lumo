@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "calendar",
+  "name": "Calendar",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "hostApiVersion": 1,
+  "icon": "IconCalendar",
+  "window": {
+    "width": 1100,
+    "height": 720,
+    "minWidth": 390,
+    "minHeight": 380
+  },
+  "background": true
+}

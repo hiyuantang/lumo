@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 )
 
 func DirHandler(dir string) http.Handler {
@@ -19,6 +20,10 @@ func SPAHandler(fsys http.FileSystem) http.Handler {
 		if err == nil {
 			_ = f.Close()
 			fileServer.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(clean, "/plugins/") {
+			http.NotFound(w, r)
 			return
 		}
 		r2 := new(http.Request)

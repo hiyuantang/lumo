@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { DesktopAppsProvider } from './platform/catalog';
-import { CalendarNotifications } from './apps/Calendar';
+import { PluginServices } from './platform/PluginApp';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ServerClockProvider } from './shell/ServerClockContext';
 import { WindowOverview } from './shell/WindowOverview';
@@ -42,7 +42,7 @@ function Desktop() {
       {overview && <WindowOverview onClose={() => setOverview(false)}/>}
       <CommandCenter />
       <NotificationCenter />
-      <CalendarNotifications />
+      <PluginServices />
       <ShortcutsDialog />
       <DesktopPet />
       <LumoUseCursor />

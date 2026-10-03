@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "containers",
+  "name": "Docker",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "hostApiVersion": 1,
+  "icon": "IconBoxes",
+  "window": {
+    "width": 920,
+    "height": 610,
+    "minWidth": 390,
+    "minHeight": 380
+  },
+  "requiredPackage": "docker"
+}

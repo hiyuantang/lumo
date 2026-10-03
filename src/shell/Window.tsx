@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { AppBoundary } from '../platform/PluginApp';
 import { APP_COMPONENTS } from '../apps';
 import { WindowContext, windowTitle } from './WindowContext';
 import { DesktopAppWindow } from '../platform/DesktopAppWindow';
-import { APPS, type BuiltinAppId } from '../apps/registry';
+import { APPS, type ShippedAppId } from '../apps/registry';
 import { IconMinus, IconX, IconZoom } from './icons';
 import { useShell, type WindowState } from './ShellContext';
 import { useWindowPlacement } from './useWindowPlacement';
@@ -17,7 +18,7 @@ const SNAP_LABELS: Record<SnapTarget, string> = { left: 'Tile left', right: 'Til
 export function Window({ win }: { win: WindowState }) {
   const { state, actions, reducedMotion } = useShell();
   const meta = APPS[win.appId];
-  const Body = win.appId.startsWith('app:') ? DesktopAppWindow : APP_COMPONENTS[win.appId as BuiltinAppId];
+  const Body = win.appId.startsWith('app:') ? DesktopAppWindow : APP_COMPONENTS[win.appId as ShippedAppId];
   const focused = state.focused === win.id;
   const minimize = useWindowMinimize(win, state.viewport, reducedMotion);
   const [interacting, setInteracting] = useState<'drag' | 'resize' | null>(null);
@@ -236,7 +237,7 @@ export function Window({ win }: { win: WindowState }) {
           </span>
         </header>
         <div className="window-body">
-          <WindowContext.Provider value={win}><Body /></WindowContext.Provider>
+          <WindowContext.Provider value={win}><AppBoundary name={meta.title}><Suspense fallback={<div className="app" role="status">Opening {meta.title}…</div>}><Body /></Suspense></AppBoundary></WindowContext.Provider>
         </div>
         {!win.maximized &&
           RESIZE_DIRS.map((dir) => (

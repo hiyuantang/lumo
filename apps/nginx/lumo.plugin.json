@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "websites",
+  "name": "Nginx",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "hostApiVersion": 1,
+  "icon": "IconGlobe",
+  "window": {
+    "width": 960,
+    "height": 650,
+    "minWidth": 390,
+    "minHeight": 380
+  },
+  "requiredPackage": "nginx"
+}

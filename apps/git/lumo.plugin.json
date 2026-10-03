@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "git",
+  "name": "Git",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "hostApiVersion": 1,
+  "icon": "IconBranch",
+  "window": {
+    "width": 1060,
+    "height": 680,
+    "minWidth": 390,
+    "minHeight": 400
+  },
+  "requiredPackage": "git"
+}

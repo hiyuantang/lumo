@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "home",
+  "name": "Monitor",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "hostApiVersion": 1,
+  "icon": "IconMonitor",
+  "window": {
+    "width": 980,
+    "height": 640,
+    "minWidth": 420,
+    "minHeight": 380
+  }
+}

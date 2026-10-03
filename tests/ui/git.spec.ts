@@ -109,13 +109,13 @@ test('Git creates branches after a clean commit and explicitly confirms publishi
   await expect(page.getByTestId('git-sync-options')).toBeVisible();
   await page.getByTestId('git-sync-options').click();
   await page.getByTestId('git-fetch-menu').click();
-  await expect(page.getByRole('status')).toContainText('Fetched origin.');
+  await expect(page.getByTestId('app-git').getByRole('status')).toContainText('Fetched origin.');
   await page.getByTestId('git-push').click();
   await expect(page.getByRole('alertdialog')).toContainText('origin/feature/new-work');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByTestId('git-push').click();
   await page.getByTestId('server-app-confirm-ok').click();
-  await expect(page.getByRole('status')).toContainText('Push completed.');
+  await expect(page.getByTestId('app-git').getByRole('status')).toContainText('Push completed.');
 });
 
 test('Git protects a draft and keeps controls reachable on a narrow screen', async ({ page }) => {
@@ -210,7 +210,7 @@ test('A stale live repository preserves the commit draft and refreshes before re
   await expect(page.getByTestId('git-commit')).toBeEnabled();
   await page.getByTestId('git-commit').click();
   await expect(page.getByTestId('git-summary')).toHaveValue('');
-  await expect(page.getByRole('status')).toContainText('Commit created.');
+  await expect(page.getByTestId('app-git').getByRole('status')).toContainText('Commit created.');
   expect(called).toBe(2);
 });
 
@@ -254,7 +254,7 @@ test('Git branch panel searches, tracks remote branches, and confirms merges', a
   await mergePanel.getByRole('button', { name: 'Merge feature/metrics', exact: true }).click();
   await expect(page.getByRole('alertdialog')).toContainText('Merge feature/metrics into feature/logs');
   await page.getByTestId('server-app-confirm-ok').click();
-  await expect(page.getByRole('status')).toContainText('Branch merged.');
+  await expect(page.getByTestId('app-git').getByRole('status')).toContainText('Branch merged.');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByTestId('git-branch').click();
   const box = (await panel.boundingBox())!;
@@ -292,7 +292,7 @@ test('Git exposes abort after a conflicted merge and confirms discarding resolut
   await page.getByRole('button', { name: 'Merge feature', exact: true }).click();
   await page.getByTestId('server-app-confirm-ok').click();
   await expect(page.getByTestId('git-abort-merge')).toBeEnabled();
-  await expect(page.getByRole('status')).toContainText('Merge needs attention');
+  await expect(page.getByTestId('app-git').getByRole('status')).toContainText('Merge needs attention');
   await page.getByTestId('git-abort-merge').click();
   await expect(page.getByRole('alertdialog')).toContainText('conflict-resolution edits');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -300,7 +300,7 @@ test('Git exposes abort after a conflicted merge and confirms discarding resolut
   await page.getByTestId('git-abort-merge').click();
   await page.getByTestId('server-app-confirm-ok').click();
   await expect(page.getByTestId('git-abort-merge')).toHaveCount(0);
-  await expect(page.getByRole('status')).toHaveText('Merge aborted.');
+  await expect(page.getByTestId('app-git').getByRole('status')).toHaveText('Merge aborted.');
   expect(calls).toEqual(['merge', 'abort-merge']);
 });
 
@@ -383,11 +383,11 @@ test('Sync defaults to the tracking remote and offers a choice only for multiple
   await page.goto('http://localhost:5200'); await page.getByTestId('dock-app-git').click();
   await page.getByTestId('git-repository').click(); await page.getByRole('menuitemradio', { name: 'project', exact: true }).click();
   await expect(page.getByTestId('git-pull')).toHaveAttribute('title', 'Pull from upstream/main');
-  await page.getByTestId('git-sync-options').click(); await page.getByTestId('git-fetch-menu').click(); await expect(page.getByRole('status')).toHaveText('Fetched upstream.');
+  await page.getByTestId('git-sync-options').click(); await page.getByTestId('git-fetch-menu').click(); await expect(page.getByTestId('app-git').getByRole('status')).toHaveText('Fetched upstream.');
   await page.getByTestId('git-sync-options').click();
   await expect(page.getByRole('menuitemradio', { name: 'Use upstream' })).toHaveAttribute('aria-checked', 'true');
   await page.getByRole('menuitemradio', { name: 'Use origin' }).click();
-  await page.getByTestId('git-sync-options').click(); await page.getByTestId('git-fetch-menu').click(); await expect(page.getByRole('status')).toHaveText('Fetched origin.');
+  await page.getByTestId('git-sync-options').click(); await page.getByTestId('git-fetch-menu').click(); await expect(page.getByTestId('app-git').getByRole('status')).toHaveText('Fetched origin.');
   await page.getByTestId('git-push').click();
   await expect(page.getByRole('alertdialog')).toContainText('origin/work');
   expect(calls).toEqual(['upstream', 'origin']);

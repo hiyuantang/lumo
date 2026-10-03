@@ -1,5 +1,9 @@
 # Lumo App Platform
 
+Calendar, Skills, Git, Docker, Nginx and Monitor are also independently built,
+administrator-deployed [shipped app plugins](SHIPPED_APP_PLUGINS.md). They use
+the trusted host SDK. The local apps described below use the isolated runtime.
+
 Lumo supports local desktop apps that Pi can create, build, preview, install and
 update without rebuilding Lumo. Apps run independently of the Pi conversation.
 Apps use JavaScript or a fixed React/TypeScript SDK with CSS, optional read-only
@@ -313,8 +317,7 @@ Pi/CLI activation changes reload clean windows when the catalog refreshes and
 preserve dirty windows for recovery by the user.
 
 Further extensions should add richer capabilities driven by real apps, then
-multiple source modules and full type checking for larger app projects. Built-in app
-migration should follow proven API boundaries. Core Lumo edits still require the
+multiple source modules and full type checking for larger app projects. Migration of further built-in apps should follow proven API boundaries. Core Lumo edits still require the
 normal build, test and deployment process.
 
 ## Verification and design references
