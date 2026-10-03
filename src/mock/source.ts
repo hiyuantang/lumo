@@ -120,7 +120,7 @@ export class MockDataSource implements DataSource {
   piStart = mockPi.start;
   piCommand = mockPi.command;
   piEvents = mockPi.events;
-  private piExtensionSettings: import('../api/lumo-use').PiExtensionSettings = { lumoUse: true, questions: true, calendar: true, revision: 'initial', extensions: [] };
+  private piExtensionSettings: import('../api/lumo-use').PiExtensionSettings = { lumoUse: true, questions: true, calendar: true, appBuilder: true, revision: 'initial', extensions: [] };
   piExtensions = async () => this.piExtensionSettings;
   piSaveExtensions = async (value: typeof this.piExtensionSettings) => { this.piExtensionSettings = { ...value, revision: crypto.randomUUID() }; return this.piExtensionSettings; };
   piDesktopClaim = async (): Promise<never> => { throw new Error('Lumo Use needs a live Pi chat.'); };

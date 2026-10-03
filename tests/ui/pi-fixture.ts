@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 import type { DesktopRequest, PiExtensionSettings } from '../../src/api/lumo-use';
 import type { PiImageSettings, PiTemplate, PiRetry, PiSessionMetrics, PiPermissionMode, PiQuestion, PiAnswer, PiAuthState, PiCommand, PiEvent, PiMessage } from '../../src/api/pi';
 export async function piFixture(page: Page) {
-  let extensionSettings: PiExtensionSettings = { lumoUse: true, questions: true, calendar: true, revision: 'initial', extensions: [] };
+  let extensionSettings: PiExtensionSettings = { lumoUse: true, questions: true, calendar: true, appBuilder: true, revision: 'initial', extensions: [] };
   const desktop: DesktopRequest[] = [];
   const desktopResults: { desktopId: string; text: string; error: boolean }[] = [];
   const desktopClaims = new Set<string>();
@@ -36,7 +36,7 @@ export async function piFixture(page: Page) {
       if (route.request().method() === 'POST') {
         const value = route.request().postDataJSON();
         if (value.revision !== extensionSettings.revision) return route.fulfill({ status: 409, json: { ok: false, error: { code: 'conflict', message: 'Pi settings changed on the server. Reload before saving.' } } });
-        extensionSettings = { lumoUse: value.lumoUse, calendar: value.calendar ?? extensionSettings.calendar, questions: value.questions ?? extensionSettings.questions, revision: crypto.randomUUID(), extensions: extensionSettings.extensions?.map((item) => ({ ...item, enabled: value.extensions?.find((choice: { id: string }) => choice.id === item.id)?.enabled ?? item.enabled })) };
+        extensionSettings = { lumoUse: value.lumoUse, calendar: value.calendar ?? extensionSettings.calendar, appBuilder: value.appBuilder ?? extensionSettings.appBuilder, questions: value.questions ?? extensionSettings.questions, revision: crypto.randomUUID(), extensions: extensionSettings.extensions?.map((item) => ({ ...item, enabled: value.extensions?.find((choice: { id: string }) => choice.id === item.id)?.enabled ?? item.enabled })) };
         if (!value.lumoUse) desktop.length = 0;
       }
       return reply(extensionSettings);

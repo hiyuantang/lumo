@@ -2143,11 +2143,11 @@ or state. They explain the correction to make before retrying and confirm when
 no action was performed. Browser errors are delivered to the model through the
 native tool result.
 
-`GET /api/v1/pi/extensions` returns `{lumoUse, questions, extensions, revision}`. Lumo Use
+`GET /api/v1/pi/extensions` returns `{lumoUse, questions, calendar, appBuilder, extensions, revision}`. Lumo Use
 is enabled by default. Each optional local extension has `{id, name, enabled}`;
 paths stay on the server. The inventory reads the account extensions directory
 and local paths in Pi settings without running the CLI or downloading packages.
-`POST /api/v1/pi/extensions` accepts `{requestId, lumoUse, questions, extensions, revision}`,
+`POST /api/v1/pi/extensions` accepts `{requestId, lumoUse, questions, calendar, appBuilder, extensions, revision}`,
 where each extension choice is `{id, enabled}`. It validates the current inventory
 and stores disabled IDs as `lumoDisabledExtensions` in Pi settings. It preserves
 other Pi settings through the existing atomic settings writer. The revision
@@ -2167,6 +2167,13 @@ an idle restart. The account-wide `questions` preference defaults to enabled and
 is stored as `lumoQuestions`. Disabling it removes the `ask_user` tool on the next
 idle restart while retaining approval enforcement, response metrics and dialogs
 requested by other extensions. Approval handling follows the chat permission mode.
+The account-wide `appBuilder` preference defaults to enabled and is stored as
+`lumoAppBuilder`. Its switch is labeled Lumo App Builder. Disabled chats omit the
+bundled app extension and every `lumo_app_*` tool, including preview, on the next
+idle restart. Changes participate in the extension revision and use the same
+safe restart flow. Omitted fields preserve the existing choice for older clients.
+This setting controls Pi tool availability, not the app platform: installed apps,
+App Library and app data remain available. Preview still requires Lumo Use.
 The Extensions pane also contains an Image compression toggle: enabled selects
 `quality90`, disabled selects `original` through the existing image-settings API.
 It retains the recorded representation of earlier images and applies the choice

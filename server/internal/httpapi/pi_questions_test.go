@@ -146,7 +146,7 @@ func TestPiModesRejectInvalidAndMismatchedResume(t *testing.T) {
 			t.Fatalf("mode=%s status=%d %s", tc.mode, response.Code, response.Body.String())
 		}
 	}
-	if strings.Contains(piToolsForMode("read-only"), "bash") || strings.Contains(piToolsForMode("read-only"), "write") || strings.Contains(piToolsForMode("read-only"), "edit") {
+	if strings.Contains(piToolsForMode("read-only", false, true), "bash") || strings.Contains(piToolsForMode("read-only", false, true), "write") || strings.Contains(piToolsForMode("read-only", false, true), "edit") {
 		t.Fatal("read only exposes mutating tools")
 	}
 }

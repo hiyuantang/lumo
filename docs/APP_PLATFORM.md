@@ -10,7 +10,11 @@ CPU and memory access, and private saved data.
 Deploy the updated Lumo frontend and `lumod` together. Pi must already be
 installed and configured. App builds use Pi's private Node.js runtime when installed, or system Node.js;
 the build command never downloads it. Enable **Lumo Use** in Pi to open previews from the
-chat, and use a permission mode that permits app changes.
+chat, and use a permission mode that permits app changes. **Lumo App Builder** in
+**Pi → Settings → Extensions** controls Pi's app tools and is enabled by default.
+Disabling it removes those tools when each chat next becomes idle, preserving its
+conversation and draft. Installed apps, App Library and saved app data remain
+available independently of Pi.
 
 Ask Pi:
 

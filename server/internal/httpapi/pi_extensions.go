@@ -22,6 +22,7 @@ type piOptionalExtension struct {
 }
 
 type piExtensionSettings struct {
+	AppBuilder bool                  `json:"appBuilder"`
 	Calendar   bool                  `json:"calendar"`
 	Extensions []piOptionalExtension `json:"extensions"`
 	Questions  bool                  `json:"questions"`
@@ -31,9 +32,16 @@ type piExtensionSettings struct {
 
 func readPiExtensionSettings(dir string) (piExtensionSettings, error) {
 	settings, _, err := readPiSettingsJSON(dir)
-	value := piExtensionSettings{Calendar: true, LumoUse: true, Questions: true, Extensions: []piOptionalExtension{}, Revision: piSettingsRevision(dir, settings, "lumoCalendar", "lumoUse", "lumoQuestions", "lumoDisabledExtensions", "extensions")}
+	value := piExtensionSettings{AppBuilder: true, Calendar: true, LumoUse: true, Questions: true, Extensions: []piOptionalExtension{}, Revision: piSettingsRevision(dir, settings, "lumoAppBuilder", "lumoCalendar", "lumoUse", "lumoQuestions", "lumoDisabledExtensions", "extensions")}
 	if err != nil {
 		return value, err
+	}
+	if raw, ok := settings["lumoAppBuilder"]; ok {
+		var enabled *bool
+		if json.Unmarshal(raw, &enabled) != nil || enabled == nil {
+			return value, NewError(CodeValidationFailed, "Invalid Lumo App Builder setting.")
+		}
+		value.AppBuilder = *enabled
 	}
 	if raw, ok := settings["lumoUse"]; ok {
 		var enabled *bool
@@ -201,6 +209,7 @@ func (s *Server) handlePiExtensions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
+		AppBuilder *bool  `json:"appBuilder"`
 		Calendar   *bool  `json:"calendar"`
 		RequestID  string `json:"requestId"`
 		Revision   string `json:"revision"`
@@ -257,6 +266,9 @@ func (s *Server) handlePiExtensions(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.Questions != nil {
 			settings["lumoQuestions"], _ = json.Marshal(*req.Questions)
+		}
+		if req.AppBuilder != nil {
+			settings["lumoAppBuilder"], _ = json.Marshal(*req.AppBuilder)
 		}
 		if req.Calendar != nil {
 			settings["lumoCalendar"], _ = json.Marshal(*req.Calendar)
