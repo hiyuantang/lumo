@@ -1,133 +1,157 @@
-# Shipped app plugins
+# App plugins
 
-Lumo ships Calendar, Skills, Git, Docker, Nginx and Monitor as independently
-built app plugins. Files, Preview, Terminal, Pi, Settings, App Library and Trash
-remain built in. All window apps use the same registration and window lifecycle,
-with an error boundary around each window. Built-in renderers load on demand.
-The desktop, authentication, authorization and recovery remain host services.
+Calendar, Skills, Git, Docker, Nginx and Monitor are trusted Lumo app packages.
+Each package owns its frontend, any app-specific backend, and any Pi extension.
+One manifest selects their version together. Files, Preview, Terminal, Pi,
+Settings, App Library and Trash are core apps.
 
-## Package ownership
+## Ownership
 
-Each `apps/<name>/` directory contains `lumo.plugin.json` and its own source and
-app-specific styles. The manifest declares the stable app ID, name, version,
-window sizes, host API version and optional underlying Ubuntu package.
-Existing IDs are preserved: Docker uses `containers`, Nginx uses `websites`,
-and Monitor uses `home`, so saved layouts and navigation continue to work.
+| App | Frontend | App backend | Pi extension |
+| --- | --- | --- | --- |
+| Calendar | Views, editing, reminders | SQLite store, recurrence, Google integration, notices, CLI | List and change tools |
+| Skills | Browser and details | Account skill discovery and reading | None required |
+| Git | Repository, changes and history | Git operations, revisions and validation | None required |
+| Docker | Containers and resources | Docker reads and typed action requests | None required |
+| Nginx | Sites, editing and logs | Website reads and typed save requests | None required |
+| Monitor | Metrics, processes, services and logs | Uses shared host capabilities | None required |
 
-Packages import only their own relative modules, React and `@lumo/sdk/*`.
-The offline builder rejects other runtime imports, including relative paths
-outside the package. The SDK shares the host's React instance, controls, file
-picker, menus, state, notifications, authentication prompts and typed data API.
-The explicit adapter modules live in `src/platform/sdk/`; add new host exports
-there rather than importing desktop implementation files into an app.
-`tsconfig.json` checks both host and plugin sources together.
+An optional component is omitted when the app does not need it. Monitor does
+not need a duplicate metrics sampler or service manager. Pi remains Lumo's core
+assistant engine. Its setup and updates are in Pi → Settings → Engine; App
+Library has no Pi entry or uninstall control.
 
-The source manifest is part of host registration. Changing an app's identity,
-icon, default window dimensions, dependency or background registration requires
-a host release. Changing the existing app's screens, styles and behavior within
-host API v1 requires only its own build and deployment.
+App source lives in `apps/<name>/`, including `lumo.plugin.json`, `src/`, and
+optional `backend/` and `pi/` directories. The Go apps module builds each backend
+separately. `plugin-sdk/` defines the versioned process protocol and shared API
+response format. Calendar, Skills and Git implementations are not linked into
+the production host binary. Calendar keeps its existing account database and
+Google configuration paths. Git uses the account's existing repositories and
+configuration; Skills reads existing skill folders.
 
-Calendar owns a separate background entry for reminder notifications. The host
-starts it after login even when the Calendar window is closed. Server-side
-calendar storage and synchronization retain their existing lifecycle. The
-background entry updates on the next desktop reload; window entries update on
-close and reopen. Open windows continue using their loaded code and drafts.
+Docker and Nginx also own their system-operation implementation and validation
+source. Their privileged operations are compiled into the broker as reviewed,
+typed capabilities. Updating unprivileged app code does not replace root code.
+Changing a privileged capability or its authorization contract requires a host
+release. This is a deliberate boundary: installed plugins cannot execute
+arbitrary code as root.
 
-These packages are trusted Lumo code with desktop access. They are deployed by
-the server administrator, like a frontend release. This SDK is a compatibility
-contract, not a permission sandbox. Ubuntu actions still go through the same
-authenticated server APIs and privileged broker. No arbitrary server code or
-root command endpoint is added. Pi-created `local.*` apps retain the isolated
-iframe runtime, declared capabilities and per-account App Library lifecycle.
-Do not install unreviewed generated code as a trusted shipped plugin.
+The host owns authentication, sessions, the desktop, windows, shared controls,
+notifications, system sampling and the privileged broker. Apps use the typed
+host SDK. Frontend builds reject imports outside the app except React and
+`@lumo/sdk/*`. React is shared with the host. The supported app identities and
+host capabilities remain registered by a host release; this is not an
+unrestricted native plugin marketplace.
 
-## App Library
+## Backend lifecycle
 
-All Apps groups the six shipped apps and Pi under Lumo Apps. Locally created
-apps appear under Custom Apps. Empty groups are hidden, and core built-in apps
-such as Files, Terminal and Settings are not listed. Both groups use the same
-compact cards. Selecting a card opens its details in App Library; custom app
-preview, installation, version selection and management controls live there.
-Updates retains direct per-app and bulk update actions.
-Each shipped app has one entry and a details page with its active app version and Open.
-Calendar, Skills and Monitor are included with Lumo. Git, Docker and Nginx retain
-their existing Ubuntu package installation controls; Open is available when
-the required package is installed. Their app version comes from the deployed
-frontend manifest, independently of the Ubuntu package version.
-View → Refresh rereads these manifests without loading the apps themselves.
-A failed or incompatible manifest is shown as unavailable, and Open is disabled
-until a successful refresh. Other apps remain usable.
+The authenticated per-user agent dispatches app-owned HTTP routes to the
+selected backend executable. Each request starts a short-lived process under
+the same Linux account, with private standard-input/output transport. There is
+no public backend port and no idle backend process. Requests have body limits,
+response limits and a deadline. A crash produces an app error while core apps
+remain available. Git operations are serialized. Mutations retain host request
+replay protection, and reuse of a successful request ID with different content
+is rejected.
 
-## Build one app
+Backend responses can request only the app's allowed typed broker actions. The
+host supplies the original authenticated session; it does not send session
+credentials to plugin processes. The broker still validates, authorizes and
+audits each privileged operation.
 
-From the repository root, with the locked dependencies already installed:
+The manifest selects hashed executable and Pi-extension assets. The host checks
+platform, protocol, paths, namespaces and checksums before use. Pi loads tool
+names and source from the app package when a chat starts. Read tools and write
+tools remain subject to Lumo's permission mode. Removing an optional app package
+does not prevent the Pi engine from starting.
+
+These are administrator-trusted native packages, not a security sandbox. Custom
+apps made by Pi retain the isolated iframe runtime and declared host capabilities
+described in `APP_PLATFORM.md`. They cannot install arbitrary native backends or
+root code through the custom-app installer.
+
+## Build
+
+With the locked Node dependencies, local Go toolchain and Go dependency cache
+prepared, run from the repository root:
 
 ```sh
-npm run build:plugins -- skills
+npm run build:plugins -- calendar
+npm run build:packages -- -app calendar
 ```
 
-The output is `public/plugins/skills/manifest.json` plus content-addressed
-JavaScript and CSS files. Calendar also has a separate background bundle.
-The builder does not install dependencies or contact external services.
-`npm run build` builds all six plugins and the host. Vite copies their artifacts
-into `dist/plugins/`, which the normal Docker and embedded builds include.
-`npm run dev` prepares all plugins before starting. After editing an app during
-development, rebuild that app and close and reopen its window.
+The first command builds the frontend. The second produces the complete package
+in `.tools/plugin-packages/calendar/`, including a backend for the build
+machine's platform and the optional Pi extension. It does not download tools or
+dependencies. A package for Ubuntu must be built on Linux with the target
+architecture. `docker/Dockerfile.ubuntu24` does this with the cached build image.
 
-Built artifacts use the host's React and SDK exports instead of bundling a
-second React instance or copying host implementation code. `hostApiVersion: 1`
-is required. Keep existing exports compatible; incompatible SDK changes need a
-new host API version and corresponding package rebuilds.
+`npm run build` checks TypeScript and builds the host and all frontend packages.
+`npm run build:packages` builds all complete packages. `scripts/build-with-web.sh`
+builds both and places `lumod` with a sibling `plugins/` directory in `server/bin`.
+The installer accepts this complete distribution and validates every package
+before activating the host and plugin files transactionally.
+
+Frontend assets also appear in `public/plugins/` for local Vite development.
+Executable and Pi assets are kept out of public web output. The gateway serves
+only approved frontend assets and manifests, never backend executables or Pi
+extension files.
 
 ## Deploy and recover
 
-The gateway checks `/var/lib/lumo/plugins` for overrides, then falls back to the
-bundled version. `lumod gateway -plugins <directory>` changes that directory.
-Only the six registered package names, manifests and hashed JS/CSS assets are
-served. Escaping symbolic links and other paths cannot expose outside files.
-Keep this directory administrator-owned and readable by the gateway user.
+The default bundled directory is `/usr/local/lib/lumo/plugins`. A distribution
+can instead have a `plugins/` directory beside `lumod`. Administrator overrides
+live in `/usr/local/lib/lumo/plugin-overrides`. `LUMO_PLUGIN_BUNDLED_DIR` and `LUMO_PLUGIN_DIR`
+can change these paths; configure the same values for the gateway and sessiond.
+The legacy gateway `-plugins` option changes only its web directory and must
+match the agent's override directory. Keep native package directories owned by
+the administrator and readable by the gateway and authenticated users.
 
-On the machine holding the built artifacts and the gateway's plugin directory,
-run with the permissions needed to write that directory:
-
-```sh
-npm run deploy:plugin -- skills /var/lib/lumo/plugins
-```
-
-The deployer validates asset hashes and compatibility before changing the active
-manifest, retains the preceding manifest and publishes the new one atomically.
-No gateway restart or desktop rebuild is needed. Close and reopen Skills to
-load the update. Data stays in the existing server storage and app preferences.
-App Library's Git/Docker/Nginx installation controls still manage their Ubuntu
-packages; they do not deploy these frontend bundles.
-
-Restore the preceding override or return to the version shipped with Lumo:
+On the machine holding the complete package for the target platform:
 
 ```sh
-npm run deploy:plugin -- skills /var/lib/lumo/plugins --rollback
-npm run deploy:plugin -- skills /var/lib/lumo/plugins --bundled
+npm run deploy:plugin -- calendar /usr/local/lib/lumo/plugin-overrides
+npm run deploy:plugin -- calendar /usr/local/lib/lumo/plugin-overrides --rollback
+npm run deploy:plugin -- calendar /usr/local/lib/lumo/plugin-overrides --bundled
 ```
 
-Keep old hashed assets while clients may still use them. Code rollback does not
-reverse data changes; updates must preserve existing data formats. A missing or
-incompatible window package shows an in-window error and retry action. Built-in
-Files, Terminal, Settings and App Library remain available for recovery.
+Deployment validates every component before atomically replacing `manifest.json`.
+The preceding manifest is retained for rollback. Old hashed files stay available
+for open windows and in-flight requests. Backend requests use the selected
+package immediately. Reopen the app window for frontend changes, reload the
+desktop for frontend background services, and start a new Pi chat for extension
+changes. Existing windows, drafts and chats are not forcibly closed.
+
+Rollback switches the whole package, not just its frontend. It does not reverse
+data changes. Plugin versions must retain compatible storage formats and host
+API contracts; incompatible migrations require a separate recovery design.
+
+## App Library
+
+All Apps groups the six shipped apps under Lumo Apps and locally created apps
+under Custom Apps. Empty groups are hidden. Both groups use the same cards and
+detail navigation. Git, Docker and Nginx's Install/Uninstall controls manage the
+underlying Ubuntu software. They do not remove the app plugin or deploy native
+code. Calendar, Skills and Monitor are included with Lumo. App package updates
+use the administrator deployment flow above. Custom apps retain their existing
+per-account install, update, rollback and uninstall flow.
 
 ## Verification
 
 ```sh
 npm run build
-node --test tests/plugin-packages.test.mjs
-npx playwright test tests/ui/plugins.spec.ts tests/ui/calendar.spec.ts tests/ui/skills.spec.ts tests/ui/git.spec.ts tests/ui/monitor.spec.ts tests/ui/server-apps.spec.ts tests/ui/server-apps-states.spec.ts
+npm run test:unit
+npx playwright test tests/ui/plugins.spec.ts tests/ui/app-library.spec.ts tests/ui/pi.spec.ts
+npm run test:docker
 ```
 
-`server/internal/static/plugins_test.go` checks live asset overrides, atomic
-manifest replacement, invalid paths and escaping symlinks. Package tests cover
-all six artifacts, validation before deployment, rollback and bundled recovery.
-Browser checks cover independent update/reopen/rollback, failure containment,
-on-demand loading and existing app workflows. Shared integration tests remain
-under `tests/ui` because they also exercise the desktop, Files and App Library.
+Offline checks cover app backend logic, host HTTP contracts, request replay,
+manifest replacement without a host restart, crash containment, denied broker
+capabilities, corrupt assets, package deployment and rollback, Calendar tool
+permissions, Pi setup and updates, and browser workflows. The Docker build also
+runs the Linux Go suites and builds all native packages for its architecture.
 
 The design follows Lumo's App Platform, Protocol, Privilege Model and Desktop
-Style specifications. It preserves server authorization and existing app data,
-while separating frontend release artifacts from the desktop binary.
+Style specifications. The process protocol uses standard HTTP request framing
+and a bounded JSON response over private pipes. No third-party implementation
+was used as a reference.

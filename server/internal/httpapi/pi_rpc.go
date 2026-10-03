@@ -258,7 +258,7 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 		}
 		binary := s.pi.path()
 		if binary == "" {
-			WriteError(w, NewError(CodeUnavailable, "Install Pi from App Library first."))
+			WriteError(w, NewError(CodeUnavailable, "Set up the Pi engine in Pi first."))
 			return
 		}
 		s.piRPC.mu.Lock()
@@ -280,7 +280,17 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, err)
 			return
 		}
-		extension, err := writePiQuestionsExtension(dir, req.PermissionMode, settings.Questions)
+		pluginExtensions := piPluginExtensions(settings)
+		pluginReadTools := []string{}
+		pluginTools := []string{}
+		for _, app := range pluginExtensions {
+			pluginReadTools = append(pluginReadTools, app.Manifest.Pi.ReadTools...)
+			pluginTools = append(pluginTools, app.Manifest.Pi.ReadTools...)
+			if req.PermissionMode != "read-only" {
+				pluginTools = append(pluginTools, app.Manifest.Pi.WriteTools...)
+			}
+		}
+		extension, err := writePiQuestionsWithPlugins(dir, req.PermissionMode, settings.Questions, pluginReadTools)
 		if err != nil {
 			WriteError(w, err)
 			return
@@ -307,23 +317,20 @@ func (s *Server) handlePiStart(w http.ResponseWriter, r *http.Request) {
 			args = append(args, "--extension", appsExtension)
 		}
 		optionalArgs := piExtensionArgs(settings)
-		if settings.Calendar {
-			calendarExtension, err := writePiCalendarExtension(dir, req.PermissionMode)
+		for _, app := range pluginExtensions {
+			path, err := writePiPluginExtension(app, dir, req.PermissionMode)
 			if err != nil {
 				WriteError(w, err)
 				return
 			}
-			args = append(args, "--extension", calendarExtension)
+			args = append(args, "--extension", path)
 		}
 		args = append(args, optionalArgs...)
 		args = append(args, "--extension", extension, "--extension", imagesExtension)
 		if len(optionalArgs) == 0 {
 			tools := piToolsForMode(req.PermissionMode, desktopEnabled, settings.AppBuilder)
-			if settings.Calendar {
-				tools += ",lumo_calendar_list"
-				if req.PermissionMode != "read-only" {
-					tools += ",lumo_calendar_change"
-				}
+			if len(pluginTools) > 0 {
+				tools += "," + strings.Join(pluginTools, ",")
 			}
 			if !settings.Questions {
 				tools = strings.Replace(tools, ",ask_user", "", 1)

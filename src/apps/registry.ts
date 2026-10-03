@@ -21,7 +21,7 @@ export const APP_ORDER: AppId[] = ['home', 'files', 'preview', 'terminal', 'git'
 
 const builtinApps = {
   trash: { id: 'trash', title: 'Trash', icon: IconTrash, defaultSize: { w: 860, h: 590 }, minSize: { w: 390, h: 320 } },
-  pi: { id: 'pi', requiredPackage: 'pi', title: 'Pi', icon: IconCode, defaultSize: { w: 980, h: 680 }, minSize: { w: 460, h: 360 } },
+  pi: { id: 'pi', title: 'Pi', icon: IconCode, defaultSize: { w: 980, h: 680 }, minSize: { w: 460, h: 360 } },
   preview: { id: 'preview', title: 'Preview', icon: IconEye, defaultSize: { w: 840, h: 620 }, minSize: { w: 380, h: 300 } },
   library: { id: 'library', title: 'App Library', icon: IconGrid, defaultSize: { w: 900, h: 630 }, minSize: { w: 390, h: 380 } },
   files: {

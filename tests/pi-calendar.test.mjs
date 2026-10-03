@@ -2,8 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import extension from '../server/internal/httpapi/pi_calendar.mjs';
-const file = new URL('../server/internal/httpapi/pi_calendar.mjs', import.meta.url);
+import extension from '../apps/calendar/pi/extension.mjs';
+const file = new URL('../apps/calendar/pi/extension.mjs', import.meta.url);
 test('Calendar tools use typed actions and expose no Google credential operation', () => {
  const tools=[];extension({registerTool(tool){tools.push(tool)}});
  assert.deepEqual(tools.map(t=>t.name),['lumo_calendar_list','lumo_calendar_change']);
@@ -19,7 +19,7 @@ test('Read only fails closed before starting any mutating process', async () => 
  assert.throws(()=>module.calendarRequest('list',{},AbortSignal.abort()),/interrupted/);
 });
 test('Ask approves exact Calendar mutations but listing needs no approval', async () => {
- const source=await readFile(new URL('../server/internal/httpapi/pi_questions.mjs',import.meta.url),'utf8');
+ const source=(await readFile(new URL('../server/internal/httpapi/pi_questions.mjs',import.meta.url),'utf8')).replace('const pluginReadTools = [];', 'const pluginReadTools = ["lumo_calendar_list"];');
  const module=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
  const handlers={};module.default({on(name,fn){handlers[name]=fn},registerTool(){}});
  assert.equal(await handlers.tool_call({toolName:'lumo_calendar_list',input:{from:'2026-10-01T00:00:00Z'}},{}),undefined);
@@ -28,7 +28,7 @@ test('Ask approves exact Calendar mutations but listing needs no approval', asyn
  assert.deepEqual(seen,input);assert.equal(result.block,true);
 });
 test('Disabling the extension leaves its tools out of the active set', async () => {
- const source=await readFile(new URL('../server/internal/httpapi/pi_questions.mjs',import.meta.url),'utf8');
+ const source=(await readFile(new URL('../server/internal/httpapi/pi_questions.mjs',import.meta.url),'utf8')).replace('const pluginReadTools = [];', 'const pluginReadTools = ["lumo_calendar_list"];');
  const module=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
  const handlers={};let active=['read'];module.default({on(name,fn){handlers[name]=fn},registerTool(){},getAllTools:()=>[{name:'read'}],getActiveTools:()=>active,setActiveTools:(tools)=>{active=tools}});
  await handlers.session_start({},{sessionManager:{getBranch:()=>[]},ui:{setStatus(){}}});

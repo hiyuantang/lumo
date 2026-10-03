@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"lumo/server/internal/containers"
 	"lumo/server/internal/hostsettings"
 	"lumo/server/internal/httpapi"
 	"lumo/server/internal/journal"
@@ -19,7 +18,6 @@ import (
 	"lumo/server/internal/services"
 	"lumo/server/internal/system"
 	"lumo/server/internal/terminal"
-	"lumo/server/internal/websites"
 	"lumo/server/internal/wsapi"
 )
 
@@ -93,8 +91,6 @@ func runAgent(args []string) {
 		Journal:      jb,
 		Network:      networkReader,
 		Settings:     settingsReader,
-		Containers:   containers.NewClient(),
-		Websites:     websites.NewStore(),
 		WS:           hub,
 		BrokerSocket: *brokerSock,
 	})

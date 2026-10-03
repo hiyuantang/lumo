@@ -99,13 +99,21 @@ type piQuestion struct {
 }
 
 func writePiQuestionsExtension(dir, mode string, questions ...bool) (string, error) {
+	return writePiQuestionsWithPlugins(dir, mode, len(questions) == 0 || questions[0], nil)
+}
+func writePiQuestionsWithPlugins(dir, mode string, questions bool, readTools []string) (string, error) {
+	raw, _ := json.Marshal(readTools)
+	if readTools == nil {
+		raw = []byte("[]")
+	}
 	file, err := os.CreateTemp(dir, ".lumo-questions-*.mjs")
 	if err != nil {
 		return "", err
 	}
 	defer os.Remove(file.Name())
 	code := strings.Replace(piQuestionsExtension, "const permissionMode = 'ask';", "const permissionMode = "+strconv.Quote(mode)+";", 1)
-	if len(questions) > 0 && !questions[0] {
+	code = strings.Replace(code, "const pluginReadTools = [];", "const pluginReadTools = "+string(raw)+";", 1)
+	if !questions {
 		code = strings.Replace(code, "const questionsEnabled = true;", "const questionsEnabled = false;", 1)
 	}
 	_, err = file.WriteString(code)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, stat } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -9,11 +9,22 @@ import { createHash } from 'node:crypto';
 
 const names = { calendar: 'calendar', skills: 'skills', git: 'git', docker: 'containers', nginx: 'websites', monitor: 'home' };
 for (const [name, id] of Object.entries(names)) test(`${name} has a standalone package with intact assets`, async () => {
-  const directory = path.join('public/plugins', name);
+  const directory = path.join('.tools/plugin-packages', name);
   const manifest = JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8'));
   assert.equal(manifest.id, id);
   assert.equal(manifest.hostApiVersion, 1);
   assert.equal(manifest.license, 'AGPL-3.0-only');
+  if (name !== 'monitor') {
+    assert.equal(manifest.backend.protocolVersion, 1);
+    const executable = await readFile(path.join(directory, manifest.backend.entry));
+    assert.equal(createHash('sha256').update(executable).digest('hex'), manifest.backend.entry.slice(0,64));
+    assert.equal(Boolean((await stat(path.join(directory, manifest.backend.entry))).mode & 0o111), true);
+  }
+  if (name === 'calendar') {
+    const extension = await readFile(path.join(directory, manifest.pi.entry));
+    assert.equal(createHash('sha256').update(extension).digest('hex'), manifest.pi.entry.slice(0,64));
+    assert.deepEqual(manifest.pi.readTools, ['lumo_calendar_list']);
+  }
   for (const field of ['entry','styles','background']) {
     if (!manifest[field] && field !== 'entry') continue;
     const bytes = await readFile(path.join(directory, manifest[field]));
@@ -42,6 +53,11 @@ test('deployment validates before activation and supports rollback and bundled r
     const asset = 'a'.repeat(64)+'.js';
     await writeFile(path.join(destination,'skills',asset),'wrong digest');
     await writeFile(path.join(destination,'skills/previous.json'),JSON.stringify({...JSON.parse(original),entry:asset}));
+    assert.notEqual(run('--rollback').status,0);
+    assert.equal(await readFile(file,'utf8'),original);
+    const wrongBackend = 'b'.repeat(64)+'.bin';
+    await writeFile(path.join(destination,'skills',wrongBackend),'invalid executable');
+    await writeFile(path.join(destination,'skills/previous.json'),JSON.stringify({...JSON.parse(original),backend:{...JSON.parse(original).backend,entry:wrongBackend}}));
     assert.notEqual(run('--rollback').status,0);
     assert.equal(await readFile(file,'utf8'),original);
     const bundled = run('--bundled'); assert.equal(bundled.status,0,bundled.stderr);

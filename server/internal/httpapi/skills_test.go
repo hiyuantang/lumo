@@ -19,7 +19,9 @@ func TestSkillsAccountRoutes(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(path, "SKILL.md"), []byte("---\nname: daily\ndescription: Review daily health\n---\n# Health"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewServer(Deps{}).Handler()
+	server := NewServer(Deps{})
+	server.pi.home = home
+	handler := server.Handler()
 	for _, test := range []struct {
 		path     string
 		status   int

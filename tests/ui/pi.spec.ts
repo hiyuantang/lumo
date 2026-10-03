@@ -77,7 +77,7 @@ test('Pi stop clears queued work and closing a running task needs confirmation',
 });
 
 for (const appearance of [{ theme: 'light', width: 1440, height: 900 }, { theme: 'dark', width: 800, height: 650 }]) {
-test(`App Library installs Pi directly and updates it without APT (${appearance.theme})`, async ({ page }) => {
+test(`Pi sets up its core engine and updates it without App Library or APT (${appearance.theme})`, async ({ page }) => {
   await page.setViewportSize({ width: appearance.width, height: appearance.height });
   await page.emulateMedia({ colorScheme: appearance.theme as 'light' | 'dark' });
   let version = '';
@@ -109,28 +109,26 @@ test(`App Library installs Pi directly and updates it without APT (${appearance.
   });
   await page.goto('http://localhost:5200');
   await page.getByTestId('dock-app-library').click();
-  await page.getByTestId('library-pi').click();
-  await expect(page.getByTestId('library-primary')).toBeEnabled();
-  await expect(page.getByText('Pi and its runtime', { exact: true })).toBeVisible();
-  await expect(page.getByText('Installs Pi and everything it needs for your Linux account.', { exact: true })).toBeVisible();
-  await page.screenshot({ path: `/tmp/lumo-pi-install-${appearance.theme}.png` });
-  await page.getByTestId('library-primary').click();
-  await expect(page.getByTestId('library-progress')).toHaveAttribute('aria-valuenow', '20');
-  await expect(page.getByTestId('server-app-confirm')).toHaveCount(0);
-  await expect(page.getByTestId('library-plan')).toHaveCount(0);
-  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall');
-  await expect(page.getByTestId('library-progress')).toHaveCount(0);
-  await expect(page.getByTestId('dock-app-pi')).toBeVisible();
-  await page.getByTestId('library-updates').click();
-  await expect(page.getByTestId('library-update-pi')).toContainText('1.2.0 → 1.2.1');
-  await page.getByTestId('library-update-all').click();
+  await expect(page.getByTestId('library-pi')).toHaveCount(0);
   await page.getByTestId('window-close-library').click();
-  await page.getByTestId('dock-app-library').click();
-  await page.getByTestId('library-updates').click();
-  await expect(page.getByTestId('library-update-pi')).toHaveCount(0);
-  await expect(page.getByTestId('library-history')).toContainText('1.2.0 → 1.2.1');
-  await expect(page.getByText('Package management unavailable.', { exact: false })).toHaveCount(0);
-  await page.screenshot({ animations: 'disabled', path: '/tmp/lumo-pi-update-history.png' });
+  await page.getByTestId('dock-app-pi').click();
+  await expect(page.getByTestId('pi-engine-action')).toHaveText('Set up Pi');
+  await page.getByTestId('pi-engine-action').click();
+  await expect(page.getByTestId('pi-engine-progress')).toContainText('Installing Pi');
+  await expect(page.getByTestId('pi-engine-progress')).toHaveCount(0);
+  await page.getByTestId('pi-settings-button').click();
+  await page.getByRole('tab', { name: 'Engine', exact: true }).click();
+  await page.getByTestId('pi-engine-action').click();
+  await expect(page.getByTestId('pi-engine')).toContainText('1.2.0 → 1.2.1');
+  await page.getByTestId('pi-engine-action').click();
+  await page.getByTestId('window-close-pi').click();
+  await page.getByTestId('dock-app-pi').click();
+  await page.getByTestId('pi-settings-button').click();
+  await page.getByRole('tab', { name: 'Engine', exact: true }).click();
+  await expect(page.getByTestId('pi-engine-progress')).toHaveCount(0);
+  await page.getByTestId('pi-engine-action').click();
+  await expect(page.getByTestId('pi-engine')).toContainText('Pi is up to date.');
+  await page.screenshot({ animations: 'disabled', path: `/tmp/lumo-pi-engine-${appearance.theme}.png` });
   expect(commands).toEqual(['install', 'update']);
 });
 }

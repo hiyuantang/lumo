@@ -32,7 +32,7 @@ The current permission mode applies to these operations. Ask mode presents the
 exact tool input for approval. Read-only mode permits API discovery, listing and
 status checks, but blocks creation, builds, previews and installation.
 
-Validated builds appear in **App Library → Discovery → Your desktop apps**.
+Validated builds appear in **App Library → All Apps → Custom Apps**.
 Preview opens the selected build with declared access and separate temporary
 app data. Install adds it to
 the dock and app search. App Library also provides Open, Disable, Enable,

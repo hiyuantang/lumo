@@ -5,6 +5,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY index.html tsconfig.json vite.config.ts playwright.config.ts playwright.docker.config.ts ./
 COPY src/ src/
+COPY apps/ apps/
+COPY scripts/build-plugins.mjs scripts/build-plugins.mjs
 COPY scripts/build-app-toolchain.mjs scripts/build-app-toolchain.mjs
 COPY scripts/app-toolchain/ scripts/app-toolchain/
 COPY tests/ tests/
@@ -12,12 +14,16 @@ RUN VITE_LUMO_LIVE=1 npm run build
 
 FROM golang:1.26-bookworm AS build
 RUN apt-get update && apt-get install -y --no-install-recommends libpam0g-dev gcc
-WORKDIR /src
+WORKDIR /src/server
 COPY server/go.mod server/go.sum ./
+COPY apps/ ../apps/
+COPY plugin-sdk/ ../plugin-sdk/
 RUN go mod download
 COPY server/ ./
+COPY --from=web /src/public/plugins ../public/plugins
 COPY --from=web /src/dist ./internal/static/dist
 COPY --from=web /src/server/internal/desktopapps/toolchain ./internal/desktopapps/toolchain
+RUN go run ./cmd/package-plugins -output /out/plugins
 RUN CGO_ENABLED=1 go build -tags pam,webdist -o /out/lumod ./cmd/lumod
 
 FROM ubuntu:24.04
@@ -27,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends systemd systemd
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/lumo-test
 COPY --from=build /out/lumod ./lumod
+COPY --from=build /out/plugins/ ./plugins/
 COPY scripts/install.py scripts/install.sh scripts/install-container-check.py scripts/uninstall-container-check.py ./scripts/
 COPY docker/os.lumo.policy ./docker/
 COPY deploy/ ./deploy/

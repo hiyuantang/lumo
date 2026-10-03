@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-package httpapi
+package main
 
 import (
 	"errors"
+	. "lumo/plugin"
 	"net/http"
 	"os"
 
-	"lumo/server/internal/skills"
+	"lumo/apps/skills/backend/skills"
 )
 
 func (s *Server) handleSkills(w http.ResponseWriter, r *http.Request) {

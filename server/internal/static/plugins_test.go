@@ -32,6 +32,8 @@ func TestPluginOverlay(t *testing.T) {
 		{"/plugins/unknown/manifest.json", 404, "404"},
 		{"/plugins/skills/../../secret", 404, "404"},
 		{"/plugins/skills/source.ts", 404, "404"},
+		{"/plugins/skills/" + strings.Repeat("a", 64) + ".bin", 404, "404"},
+		{"/plugins/calendar/" + strings.Repeat("a", 64) + ".mjs", 404, "404"},
 		{"/", 418, "/"},
 	} {
 		t.Run(tc.path, func(t *testing.T) {

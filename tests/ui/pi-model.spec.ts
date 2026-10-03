@@ -7,12 +7,9 @@ test('Pi remembers model, effort and approval per chat and uses the last choices
   await page.getByRole('textbox', { name: 'Username' }).fill('demo');
   await page.getByLabel('Password', { exact: true }).fill('demo');
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
-  await page.getByTestId('dock-app-library').click();
-  await page.getByTestId('library-pi').click();
-  await page.getByTestId('library-primary').click();
-  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall', { timeout: 20000 });
-  await page.getByTestId('window-close-library').click();
   await page.getByTestId('dock-app-pi').click();
+  await page.getByTestId('pi-engine-action').click();
+  await expect(page.getByTestId('pi-prompt')).toBeEnabled({ timeout: 20000 });
   const trigger = page.getByTestId('pi-model');
   const chats = page.getByRole('navigation', { name: 'Pi projects', exact: true });
   const mode = page.getByTestId('pi-permission-mode');

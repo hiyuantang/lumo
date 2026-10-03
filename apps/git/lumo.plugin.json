@@ -12,5 +12,14 @@
     "minWidth": 390,
     "minHeight": 400
   },
-  "requiredPackage": "git"
+  "requiredPackage": "git",
+  "backend": {
+    "protocolVersion": 1,
+    "routes": [
+      "GET /api/v1/git/repository",
+      "GET /api/v1/git/diff",
+      "POST /api/v1/git/action"
+    ],
+    "serial": true
+  }
 }

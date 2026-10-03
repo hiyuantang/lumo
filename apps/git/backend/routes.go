@@ -1,30 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-package httpapi
+package main
 
 import (
 	"errors"
+	. "lumo/plugin"
 	"net/http"
 
-	"lumo/server/internal/gitrepo"
-	"lumo/server/internal/strictjson"
+	"lumo/apps/git/backend/gitrepo"
+	"lumo/plugin/strictjson"
 )
 
 func (s *Server) handleGit(w http.ResponseWriter, r *http.Request) {
-	if !s.gitMu.TryLock() {
-		WriteError(w, NewError(CodeBusy, "Git is busy. Wait for the current operation to finish."))
-		return
-	}
-	defer s.gitMu.Unlock()
 	if r.Method == http.MethodPost {
 		var req struct {
 			RequestID string `json:"requestId"`
 			gitrepo.Action
 		}
-		if err := strictjson.Decode(w, r, maxBodyBytes, &req); err != nil || !validRequestID(req.RequestID) {
+		if err := strictjson.Decode(w, r, MaxBodyBytes, &req); err != nil || !ValidRequestID(req.RequestID) {
 			WriteError(w, NewError(CodeValidationFailed, "Provide a valid Git action."))
 			return
 		}
-		s.mutate(w, "git:"+req.RequestID, func(w http.ResponseWriter) {
+		func() {
 			if err := gitrepo.Run(r.Context(), req.Action); err != nil {
 				code := CodeConflict
 				if errors.Is(err, gitrepo.ErrStale) {
@@ -34,7 +30,7 @@ func (s *Server) handleGit(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			WriteData(w, map[string]bool{"done": true})
-		})
+		}()
 		return
 	}
 	query := r.URL.Query()

@@ -162,7 +162,7 @@ func (d *Daemon) stopAgentIfIdle(uid uint32) {
 
 func agentEnv(u *user.User) []string {
 	shell := shellFor(u.Username)
-	return []string{
+	env := []string{
 		"HOME=" + u.HomeDir,
 		"USER=" + u.Username,
 		"LOGNAME=" + u.Username,
@@ -170,6 +170,12 @@ func agentEnv(u *user.User) []string {
 		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 		"LANG=C.UTF-8",
 	}
+	for _, key := range []string{"LUMO_PLUGIN_DIR", "LUMO_PLUGIN_BUNDLED_DIR"} {
+		if value := os.Getenv(key); filepath.IsAbs(value) {
+			env = append(env, key+"="+value)
+		}
+	}
+	return env
 }
 
 func shellFor(username string) string {

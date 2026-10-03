@@ -11,5 +11,13 @@
     "height": 650,
     "minWidth": 390,
     "minHeight": 380
+  },
+  "backend": {
+    "protocolVersion": 1,
+    "routes": [
+      "GET /api/v1/skills",
+      "GET /api/v1/skills/detail"
+    ],
+    "serial": false
   }
 }

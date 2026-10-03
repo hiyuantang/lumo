@@ -9,7 +9,7 @@ import { useAppPreference, useAppState } from '../shell/useAppState';
 import { useAppUpdates } from './useAppUpdates';
 import { useEffect, useRef, useState } from 'react';
 import { getDataSource, isReauthRequired, type UpdatePlan, type UpdateProgress, type AppUpdateHistoryEntry } from '../api/source';
-import type { AppOperation, LibraryAppID } from '../api/server-apps';
+import type { AppOperation, ServerAppID } from '../api/server-apps';
 import { useAppCatalog } from '../shell/AppCatalogContext';
 import { useShell } from '../shell/ShellContext';
 import { useReauth } from '../shell/ReauthSheet';
@@ -25,7 +25,6 @@ const CATALOG = [
   { id: 'git' as const, name: APPS.git.title, appId: 'git' as const, description: 'Review changes and manage repositories.', overview: 'Browse changes and commit history, stage files, create branches and sync repositories using your Linux account’s Git configuration.', packages: 'Git' },
   { id: 'docker' as const, name: APPS.containers.title, appId: 'containers' as const, description: 'Run apps in isolated containers.', overview: 'Docker runs applications in isolated containers. Manage containers, view logs and connect persistent storage.', packages: 'Docker Engine · Compose' },
   { id: 'nginx' as const, name: APPS.websites.title, appId: 'websites' as const, description: 'Serve websites and route web traffic.', overview: 'Nginx serves websites and directs web traffic to your apps. Manage domains, static sites and reverse proxies.', packages: 'Nginx' },
-  { id: 'pi' as const, name: APPS.pi.title, appId: 'pi' as const, description: 'A coding agent with a native workspace.', overview: 'Work with Pi in a native conversation. Follow file edits and commands, choose a model, and return to saved project sessions.', packages: 'Pi and its runtime' },
 ];
 const JOB_KEY = 'lumo-app-install';
 const INCLUDED_APPS = [
@@ -34,12 +33,12 @@ const INCLUDED_APPS = [
   { id: 'monitor' as const, appId: 'home' as const, name: APPS.home.title, description: 'Inspect server resources, services and logs.' },
 ];
 const DISCOVERY = [...INCLUDED_APPS, ...CATALOG];
-type LibraryPage = `custom:${string}` | 'All Apps' | 'Updates' | LibraryAppID | typeof INCLUDED_APPS[number]['id'];
-const managedPage = (page: LibraryPage): page is LibraryAppID => CATALOG.some((app) => app.id === page);
-type Job = { app: LibraryAppID; requestId: string; operation?: AppOperation };
-type Review = { app: LibraryAppID; operation: AppOperation; plan: UpdatePlan };
+type LibraryPage = `custom:${string}` | 'All Apps' | 'Updates' | ServerAppID | typeof INCLUDED_APPS[number]['id'];
+const managedPage = (page: LibraryPage): page is ServerAppID => CATALOG.some((app) => app.id === page);
+type Job = { app: ServerAppID; requestId: string; operation?: AppOperation };
+type Review = { app: ServerAppID; operation: AppOperation; plan: UpdatePlan };
 function readJob(): Job | null {
-  try { const value = JSON.parse(localStorage.getItem(JOB_KEY) || 'null'); return value && (value.app === 'git' || value.app === 'docker' || value.app === 'nginx' || value.app === 'pi') && typeof value.requestId === 'string' ? value : null; } catch { return null; }
+  try { const value = JSON.parse(localStorage.getItem(JOB_KEY) || 'null'); return value && (value.app === 'git' || value.app === 'docker' || value.app === 'nginx') && typeof value.requestId === 'string' ? value : null; } catch { return null; }
 }
 const size = (bytes: number) => bytes > 0 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : '0 MB';
 
@@ -52,7 +51,7 @@ export function AppLibrary() {
   const updates = useAppUpdates(state.user ?? '');
   const updating = updates.phase !== 'idle';
   const { catalog, refresh: refreshCatalog } = useAppCatalog();
-  const [selected, setSelected] = useAppState<LibraryAppID>('library', 'selection', () => state.navigation?.target === 'library' ? state.navigation.appId : readJob()?.app ?? 'docker', ['docker', 'nginx', 'pi', 'git']);
+  const [selected, setSelected] = useAppState<ServerAppID>('library', 'selection', () => state.navigation?.target === 'library' ? state.navigation.appId : readJob()?.app ?? 'docker', ['docker', 'nginx', 'git']);
   const [navigation, setNavigation] = useState<{ pages: LibraryPage[]; index: number }>(() => {
     const job = readJob();
     const page: LibraryPage = updating ? 'Updates' : job ? job.operation === 'update' ? 'Updates' : job.app : 'All Apps';
@@ -80,7 +79,7 @@ export function AppLibrary() {
     setNavigation((current) => ({ ...current, index }));
   }
   useEffect(() => { content.current?.scrollTo({ top: 0 }); }, [page]);
-  const [checks, setChecks] = useState<Partial<Record<LibraryAppID, { plan?: UpdatePlan; error?: string }>>>({});
+  const [checks, setChecks] = useState<Partial<Record<ServerAppID, { plan?: UpdatePlan; error?: string }>>>({});
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [history, setHistory] = useState<AppUpdateHistoryEntry[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -89,21 +88,21 @@ export function AppLibrary() {
   const checkedNavigation = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'plan' | 'apply' | 'refresh' | null>(null);
-  const [pending, setPending] = useState<{ app: LibraryAppID; operation: AppOperation } | null>(null);
+  const [pending, setPending] = useState<{ app: ServerAppID; operation: AppOperation } | null>(null);
   const [job, setJob] = useState<Job | null>(readJob);
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
   const [retry, setRetry] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const plugins = usePluginCatalog(refresh);
-  const [confirm, setConfirm] = useState<Review | 'pi' | null>(null);
+  const [confirm, setConfirm] = useState<Review | null>(null);
   const [cleanUninstall, setCleanUninstall] = useState(false);
   useEffect(() => { setCleanUninstall(false); }, [confirm]);
   const app = CATALOG.find((item) => item.id === selected)!;
   const entry = catalog?.apps.find((item) => item.id === selected);
   const installed = entry?.installed;
-  const canManage = app.id === 'pi' ? (installed ? entry?.canUninstall : entry?.canInstall) : catalog?.canInstall;
+  const canManage = catalog?.canInstall;
 
-  const canCheckUpdates = Boolean(catalog?.canInstall || catalog?.apps.some((item) => item.id === 'pi' && item.installed && item.canUpdate));
+  const canCheckUpdates = Boolean(catalog?.canInstall);
 
   useEffect(() => { if (state.navigation?.target === 'library') { setSelected(state.navigation.appId); navigate(state.navigation.checkUpdates ? 'Updates' : state.navigation.appId); } }, [state.navigation]);
 
@@ -117,7 +116,7 @@ export function AppLibrary() {
     if (section !== 'Updates') return;
     let alive = true;
     setHistoryLoading(true); setHistoryError(null);
-    void source.getAppUpdateHistory().then((items) => { if (alive) setHistory(items); }).catch((err) => { if (alive) setHistoryError(errorText(err)); }).finally(() => { if (alive) setHistoryLoading(false); });
+    void source.getAppUpdateHistory().then((items) => { if (alive) setHistory(items.filter((item) => CATALOG.some((app) => app.id === item.appId))); }).catch((err) => { if (alive) setHistoryError(errorText(err)); }).finally(() => { if (alive) setHistoryLoading(false); });
     return () => { alive = false; };
   }, [source, section, refresh]);
 
@@ -147,7 +146,7 @@ export function AppLibrary() {
     setRefresh((n) => n + 1);
     setChecks((current) => {
       const next = { ...current };
-      for (const id of completedUpdates.split(',') as LibraryAppID[]) {
+      for (const id of completedUpdates.split(',') as ServerAppID[]) {
         const plan = next[id]?.plan;
         if (plan) next[id] = { plan: { ...plan, packages: [], downloadBytes: 0 } };
       }
@@ -156,7 +155,7 @@ export function AppLibrary() {
   }, [completedUpdates]);
   useEffect(() => { if (updates.phase === 'auth') reauth(updates.queue.resume); }, [updates.phase, updates.queue, reauth]);
 
-  async function prepare(id: LibraryAppID, operation: 'install' | 'uninstall') {
+  async function prepare(id: ServerAppID, operation: 'install' | 'uninstall') {
     setBusy('plan'); setPending({ app: id, operation }); setError(null); setProgress(null);
     try {
       const plan = await source.planAppInstall(id, operation);
@@ -189,18 +188,6 @@ export function AppLibrary() {
     catch (err) { setPending(null); setBusy(null); if (isReauthRequired(err)) reauth(() => { void apply(value, clean); }); else setError(errorText(err)); }
   }
 
-  async function uninstallPi(clean = false) {
-    setConfirm(null); setBusy('apply'); setPending({ app: 'pi', operation: 'uninstall' }); setProgress(null); setError(null);
-    try {
-      await source.uninstallPi(clean);
-      actions.filesChanged();
-      const next = await refreshCatalog();
-      if (next.apps.some((item) => item.id === 'pi' && item.installed)) setError('This copy was removed. Another Pi installation is still available on this server.');
-      else actions.notify('Pi uninstalled', clean ? 'Settings, caches and stored data moved to Trash. Projects were kept.' : 'Projects, conversations and settings were kept.');
-    } catch (err) { setError(errorText(err)); }
-    finally { setPending(null); setBusy(null); }
-  }
-
   async function checkUpdates() {
     if (checking.current || busy !== null || job || updates.queue.getSnapshot().phase !== 'idle') return;
     checking.current = true;
@@ -211,9 +198,9 @@ export function AppLibrary() {
       const current = await refreshCatalog();
       const next: typeof checks = {};
       for (const item of current.apps) {
-        if (!item.installed || (item.id === 'pi' ? !item.canUpdate : !current.canInstall)) continue;
-        try { next[item.id] = { plan: await source.planAppInstall(item.id, 'update') }; }
-        catch (err) { if (isReauthRequired(err)) throw err; next[item.id] = { error: errorText(err) }; }
+        if (!item.installed || (!CATALOG.some((app) => app.id === item.id) || !current.canInstall)) continue;
+        try { next[item.id as ServerAppID] = { plan: await source.planAppInstall(item.id, 'update') }; }
+        catch (err) { if (isReauthRequired(err)) throw err; next[item.id as ServerAppID] = { error: errorText(err) }; }
       }
       setChecks(next); setCheckedAt(refreshed);
     } catch (err) { if (isReauthRequired(err)) reauth(() => { void checkUpdates(); }); else setError(errorText(err)); }
@@ -227,7 +214,7 @@ export function AppLibrary() {
     setError('Status unavailable. Check installed apps before trying again.');
   }
 
-  const confirmedApp = confirm ? CATALOG.find((item) => item.id === (confirm === 'pi' ? confirm : confirm.app))! : null;
+  const confirmedApp = confirm ? CATALOG.find((item) => item.id === confirm.app)! : null;
 
   const updateCount = Object.values(checks).filter((item) => item.plan?.packages.length).length;
   const active = job ?? pending;
@@ -267,18 +254,17 @@ export function AppLibrary() {
         {managedPage(page) && <section className="library-app-overview" aria-label={`${app.name} details`}>
             <header className="library-hero"><span className="library-icon library-hero-icon"><AppIcon appId={app.appId}/></span><div><h1>{app.name}</h1><p>{app.description}</p></div>
               <div className="library-action library-managed-actions">
-                {installed && <button className="btn" type="button" data-testid="library-open" disabled={locked || app.id !== 'pi' && !plugins[app.appId as PluginId]?.version} onClick={() => actions.openApp(app.appId)}>Open</button>}
+                {installed && <button className="btn" type="button" data-testid="library-open" disabled={locked || !plugins[app.appId as PluginId]?.version} onClick={() => actions.openApp(app.appId)}>Open</button>}
                 {activeHere ? <div className="library-action-progress" data-testid="library-progress" role="progressbar" aria-label={`${operationLabel} ${app.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={error ? 'Connection interrupted' : progress?.message || `${operationLabel}…`} title={progress?.message}>
                   <span aria-hidden="true">{error ? 'Interrupted' : progress?.done ? 'Finishing…' : `${operationLabel}…`}{percent !== undefined && !error && <small>{Math.round(percent)}%</small>}</span>
                   <progress max={100} value={percent}/>
-                </div> : <button className={`btn ${installed ? 'btn-danger' : 'btn-primary'}`} type="button" data-testid="library-primary" disabled={!catalog || locked || !canManage} onClick={() => { if (app.id === 'pi' && installed) setConfirm('pi'); else void prepare(app.id, installed ? 'uninstall' : 'install'); }}>{installed ? 'Uninstall' : 'Install'}</button>}
+                </div> : <button className={`btn ${installed ? 'btn-danger' : 'btn-primary'}`} type="button" data-testid="library-primary" disabled={!catalog || locked || !canManage} onClick={() => { void prepare(app.id, installed ? 'uninstall' : 'install'); }}>{installed ? 'Uninstall' : 'Install'}</button>}
               </div>
             </header>
             <p className="library-description" data-testid="library-description">{app.overview}</p>
-            {app.id !== 'pi' && <div className="library-information"><span>App version</span><strong>{plugins[app.appId as PluginId]?.version ?? (plugins[app.appId as PluginId]?.error ? 'Unavailable' : 'Checking…')}</strong></div>}
-            {app.id !== 'pi' && plugins[app.appId as PluginId]?.error && <p className="server-app-error" role="alert">{plugins[app.appId as PluginId]?.error}</p>}
+            {<div className="library-information"><span>App version</span><strong>{plugins[app.appId as PluginId]?.version ?? (plugins[app.appId as PluginId]?.error ? 'Unavailable' : 'Checking…')}</strong></div>}
+            {plugins[app.appId as PluginId]?.error && <p className="server-app-error" role="alert">{plugins[app.appId as PluginId]?.error}</p>}
             <div className="library-information"><span>Includes</span><strong>{app.packages}</strong></div>
-            {app.id === 'pi' && (!installed || !canManage) && <p className="server-app-muted">{installed ? 'This installation is managed outside Lumo. Use the package manager that installed it to uninstall.' : 'Installs Pi and everything it needs for your Linux account.'}</p>}
           </section>}
         {page === 'Updates' && <section className="library-update-section" aria-label="Available updates">
           <div className="library-update-heading"><h2>Available updates</h2><button type="button" className="btn" data-testid="library-update-all" disabled={locked || !updateCount || !canCheckUpdates} onClick={() => startUpdates(Object.values(checks).flatMap((check) => check.plan?.packages.length ? [check.plan] : []))}>{updating ? 'Updating…' : 'Update all'}</button></div>
@@ -291,18 +277,18 @@ export function AppLibrary() {
               return Boolean(checks[item.id]?.plan?.packages.length || checks[item.id]?.error || update);
             }).map((item) => {
               const update = updates.items.find((update) => update.app === item.id);
-              const check = checks[item.id as LibraryAppID];
+              const check = checks[item.id as ServerAppID];
               const plan = check?.plan ?? update?.plan;
               const pkg = plan?.packages[0];
               const active = update?.status === 'updating';
               const pending = update?.status === 'pending';
               const needsAuth = active && updates.phase === 'auth';
               const disconnected = active && updates.phase === 'disconnected';
-              return <article className="library-update-row" key={item.id} data-testid={`library-update-${item.id}`}><span className="library-icon"><AppIcon appId={item.appId}/></span><div className="library-update-copy"><h3>{item.name}</h3><p>{check?.error ? 'Could not check for updates' : pkg ? `${pkg.fromVersion || 'Not installed'} → ${pkg.toVersion}` : 'Update status unavailable'}</p>{check?.error ? <p className="server-app-error">{check.error}</p> : pkg && item.id !== 'pi' && <small>{size(plan!.downloadBytes)} · {plan!.packages.length} {plan!.packages.length === 1 ? 'package' : 'packages'}</small>}{(active || pending) && <div className="library-update-progress" role="status"><small>{pending ? 'Waiting…' : needsAuth ? 'Confirm your password to continue.' : disconnected ? 'Connection interrupted' : update?.progress?.message || 'Preparing update…'}</small>{active && <div className="meter" role="progressbar" aria-label={`${item.name} update`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={update?.progress?.percent ?? 0}><div className="meter-fill" style={{ width: `${update?.progress?.percent ?? 0}%` }}/></div>}</div>}{update?.error && <p className="server-app-error" role="alert">{update.error}</p>}</div>{(pkg || check?.error || active) && <button type="button" className="btn" disabled={needsAuth || disconnected ? false : locked || !canCheckUpdates} onClick={() => { if (needsAuth) reauth(updates.queue.resume); else if (disconnected) void updates.queue.reconnect(); else if (check?.error) void checkUpdates(); else if (plan) startUpdates([plan]); }}>{needsAuth ? 'Continue' : disconnected ? 'Reconnect' : active ? 'Updating…' : pending ? 'Waiting…' : check?.error ? 'Try again' : 'Update'}</button>}{disconnected && <button type="button" className="btn" onClick={() => { updates.queue.forget(); void checkUpdates(); }}>Check status</button>}</article>;
+              return <article className="library-update-row" key={item.id} data-testid={`library-update-${item.id}`}><span className="library-icon"><AppIcon appId={item.appId}/></span><div className="library-update-copy"><h3>{item.name}</h3><p>{check?.error ? 'Could not check for updates' : pkg ? `${pkg.fromVersion || 'Not installed'} → ${pkg.toVersion}` : 'Update status unavailable'}</p>{check?.error ? <p className="server-app-error">{check.error}</p> : pkg && <small>{size(plan!.downloadBytes)} · {plan!.packages.length} {plan!.packages.length === 1 ? 'package' : 'packages'}</small>}{(active || pending) && <div className="library-update-progress" role="status"><small>{pending ? 'Waiting…' : needsAuth ? 'Confirm your password to continue.' : disconnected ? 'Connection interrupted' : update?.progress?.message || 'Preparing update…'}</small>{active && <div className="meter" role="progressbar" aria-label={`${item.name} update`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={update?.progress?.percent ?? 0}><div className="meter-fill" style={{ width: `${update?.progress?.percent ?? 0}%` }}/></div>}</div>}{update?.error && <p className="server-app-error" role="alert">{update.error}</p>}</div>{(pkg || check?.error || active) && <button type="button" className="btn" disabled={needsAuth || disconnected ? false : locked || !canCheckUpdates} onClick={() => { if (needsAuth) reauth(updates.queue.resume); else if (disconnected) void updates.queue.reconnect(); else if (check?.error) void checkUpdates(); else if (plan) startUpdates([plan]); }}>{needsAuth ? 'Continue' : disconnected ? 'Reconnect' : active ? 'Updating…' : pending ? 'Waiting…' : check?.error ? 'Try again' : 'Update'}</button>}{disconnected && <button type="button" className="btn" onClick={() => { updates.queue.forget(); void checkUpdates(); }}>Check status</button>}</article>;
             })}</div>
           </>}
         </section>}
-        {managedPage(page) && !catalog?.canInstall && catalog && selected !== 'pi' && <p className="server-app-error">Package management unavailable. Check the package manager and Lumo service.</p>}
+        {managedPage(page) && !catalog?.canInstall && catalog && <p className="server-app-error">Package management unavailable. Check the package manager and Lumo service.</p>}
         {error && <div className="server-app-error" role="alert">{error}{job && <><button type="button" className="btn" onClick={() => { setError(null); setRetry((n) => n + 1); }}>Reconnect</button><button type="button" className="btn" onClick={checkInstalledApps}>Check installed apps</button></>}</div>}
         {section === 'Updates' && <section className="library-update-section library-history" data-testid="library-history"><h2>Update history</h2><p className="library-history-note">Recent app updates made through Lumo by your account.</p>{historyError ? <p className="server-app-error" role="alert">{historyError}</p> : historyLoading ? <p className="server-app-muted">Loading history…</p> : !history.length ? <p className="server-app-muted">No updates recorded yet.</p> : history.map((item) => {
           const app = CATALOG.find((app) => app.id === item.appId)!;
@@ -313,13 +299,13 @@ export function AppLibrary() {
 
       </main>
     </div>
-    {confirm && confirmedApp && <AppConfirmation title={`Uninstall ${confirmedApp.name}?`} confirm={cleanUninstall ? 'Clean uninstall' : 'Uninstall'} onCancel={() => setConfirm(null)} onConfirm={() => { if (confirm === 'pi') void uninstallPi(cleanUninstall); else void apply(confirm, cleanUninstall); }}>
+    {confirm && confirmedApp && <AppConfirmation title={`Uninstall ${confirmedApp.name}?`} confirm={cleanUninstall ? 'Clean uninstall' : 'Uninstall'} onCancel={() => setConfirm(null)} onConfirm={() => { void apply(confirm, cleanUninstall); }}>
         <div className="library-uninstall-options" role="radiogroup" aria-label="Uninstall options">
           <label className={!cleanUninstall ? 'selected' : ''}><span><strong>Uninstall</strong><small>Remove the app. Keep settings and stored data.</small></span><input type="radio" name="uninstall-mode" checked={!cleanUninstall} onChange={() => setCleanUninstall(false)} data-testid="uninstall-normal"/></label>
           <label className={cleanUninstall ? 'selected' : ''}><span><strong>Clean uninstall</strong><small>Also move settings, caches and stored app data to Trash.</small></span><input type="radio" name="uninstall-mode" checked={cleanUninstall} onChange={() => setCleanUninstall(true)} data-testid="uninstall-clean"/></label>
         </div>
         {confirmedApp.id === 'git' && <p>Repositories, SSH keys and account Git settings are preserved. Clean uninstall moves system Git settings to Trash.</p>}
-        {confirm !== 'pi' && confirm.plan.packages.length > 1 && <p className="library-uninstall-note">Packages to remove: {confirm.plan.packages.map((pkg) => pkg.name).join(', ')}.</p>}
+        {confirm.plan.packages.length > 1 && <p className="library-uninstall-note">Packages to remove: {confirm.plan.packages.map((pkg) => pkg.name).join(', ')}.</p>}
 
     </AppConfirmation>}
   </div>;

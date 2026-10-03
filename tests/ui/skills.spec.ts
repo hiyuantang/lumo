@@ -48,7 +48,7 @@ test('App Library keeps refresh in the View menu', async ({ page }) => {
   await page.getByRole('menuitem', { name: 'Refresh', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 780 });
   await expect(refresh).toHaveCount(0);
-  await expect(page.getByTestId('library-pi')).toBeVisible();
+  await expect(page.getByTestId('library-pi')).toHaveCount(0);
 });
 
 

@@ -10,6 +10,7 @@ export GOPATH="$ROOT/.tools/gopath"
 
 cd "$ROOT"
 npm run build
+npm run build:packages
 
 rm -rf server/internal/static/dist
 cp -R dist server/internal/static/dist
@@ -17,4 +18,6 @@ cp -R dist server/internal/static/dist
 mkdir -p server/bin
 (cd server && "$GO" build -tags webdist -o bin/lumod ./cmd/lumod)
 
-echo "built server/bin/lumod with embedded frontend"
+mkdir -p server/bin/plugins
+cp -R .tools/plugin-packages/. server/bin/plugins/
+echo "built server/bin/lumod and server/bin/plugins"

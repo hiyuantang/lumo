@@ -1,10 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 FROM lumo-test-build:deps AS build
-WORKDIR /lumo-test-src
+WORKDIR /lumo-test-src/server
 COPY server/ ./
+COPY apps/ ../apps/
+COPY plugin-sdk/ ../plugin-sdk/
+COPY public/plugins/ ../public/plugins/
 COPY dist/ ./internal/static/dist/
 ENV GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local
-RUN CGO_ENABLED=1 go test -tags pam ./...
+RUN go run ./cmd/package-plugins -output /out/plugins
+ENV LUMO_PLUGIN_BUNDLED_DIR=/out/plugins
+RUN (cd ../apps && go test ./...) && (cd ../plugin-sdk && go test ./...) && CGO_ENABLED=1 go test -tags pam ./...
 RUN CGO_ENABLED=1 go build -tags pam,webdist -o /out/lumod ./cmd/lumod
 
 FROM lumo-test-runtime:deps
@@ -16,6 +21,7 @@ RUN (id lumo-gw >/dev/null 2>&1 || useradd --system --no-create-home --shell /us
     && echo 'alice:alice-pass' | chpasswd
 
 COPY --from=build /out/lumod /usr/local/bin/lumod
+COPY --from=build /out/plugins/ /usr/local/lib/lumo/plugins/
 COPY docker/lumod-gateway.service docker/lumod-sessiond.service docker/lumod-broker.service /etc/systemd/system/
 COPY docker/pam.d-lumod /etc/pam.d/lumod
 COPY docker/os.lumo.policy /usr/share/polkit-1/actions/os.lumo.policy

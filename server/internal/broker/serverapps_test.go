@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"lumo/server/internal/containers"
-	"lumo/server/internal/websites"
+	"lumo/apps/docker/backend/containers"
+	"lumo/apps/nginx/backend/websites"
 )
 
 type fakeContainers struct {

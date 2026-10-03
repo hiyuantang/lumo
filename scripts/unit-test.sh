@@ -8,10 +8,16 @@ export GOMODCACHE="$ROOT/.tools/gomodcache"
 export GOCACHE="$ROOT/.tools/gocache"
 export GOPATH="$ROOT/.tools/gopath"
 
+cd "$ROOT"
+npm run build:plugins
+npm run build:packages
+cd "$ROOT/apps"
+"$ROOT/.tools/go/bin/go" test ./...
+cd "$ROOT/plugin-sdk"
+"$ROOT/.tools/go/bin/go" test ./...
 cd "$ROOT/server"
 "$ROOT/.tools/go/bin/go" test ./...
 cd "$ROOT"
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v
 
-npm run build:plugins
 node --test tests/plugin-packages.test.mjs tests/desktop-sdk.test.mjs tests/pi-apps.test.mjs tests/pi-calendar.test.mjs tests/pi-questions.test.mjs tests/pi-model-images.test.mjs tests/lumo-use.test.mjs

@@ -13,7 +13,7 @@ test('All Apps uses adaptive cards and keeps details separate from launch', asyn
   await expect(page.getByRole('heading', { name: 'Lumo Apps', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Custom Apps', exact: true })).toBeVisible();
   const cards = page.getByTestId('library-lumo-apps').locator('.library-discovery-grid');
-  await expect(cards.getByRole('button')).toHaveCount(7);
+  await expect(cards.getByRole('button')).toHaveCount(6);
   const columns = () => cards.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);
   expect(await columns()).toBe(2);
   await page.getByTestId('library-nginx').click();
@@ -90,15 +90,16 @@ test('App details have independent back and forward history', async ({ page }) =
   await page.getByTestId('library-nginx').click();
   await expect(page.getByRole('region', { name: 'Nginx details' })).toBeVisible();
   await page.getByTestId('library-back').click();
-  await page.getByTestId('library-pi').click();
-  await expect(page.getByRole('region', { name: 'Pi details' })).toBeVisible();
+  await expect(page.getByTestId('library-pi')).toHaveCount(0);
+  await page.getByTestId('library-git').click();
+  await expect(page.getByRole('region', { name: 'Git details' })).toBeVisible();
   await expect(page.getByTestId('library-forward')).toBeDisabled();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByTestId('library-back')).toBeInViewport();
   await page.getByTestId('library-back').click();
-  await expect(page.getByTestId('library-pi')).toBeVisible();
+  await expect(page.getByTestId('library-git')).toBeVisible();
   await page.getByTestId('library-forward').click();
-  await expect(page.getByRole('region', { name: 'Pi details' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Git details' })).toBeVisible();
 });
 
 test('Update all runs apps in order and continues while the window is closed', async ({ page }) => {

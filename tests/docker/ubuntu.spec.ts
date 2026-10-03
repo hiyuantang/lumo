@@ -238,7 +238,7 @@ test('App Library uninstalls Nginx after review and preserves site configuration
   }
 });
 
-test('Pi uninstall keeps user data and moves only the executable to Trash', async ({ page, request }) => {
+test('Legacy Pi maintenance API preserves data while Pi stays a core app', async ({ page, request }) => {
   const binary = '/home/alice/.local/share/lumo/pi/bin/pi';
   const installed = ubuntu('sh', '-c', 'test ! -e "$1" || printf installed', 'fixture', binary);
   test.skip(installed === 'installed', 'An existing Pi installation must not be replaced by a test fixture.');
@@ -247,14 +247,10 @@ test('Pi uninstall keeps user data and moves only the executable to Trash', asyn
   ubuntu('runuser', '-u', 'alice', '--', 'sh', '-c', 'printf "keep user settings" > /home/alice/.pi/agent/lumo-test-settings');
   await login(page);
   await page.getByTestId('dock-app-library').click();
-  await page.getByTestId('library-pi').click();
-  await expect(page.getByTestId('app-pi')).toHaveCount(0);
-  await expect(page.getByTestId('library-primary')).toHaveText('Uninstall');
-  await page.getByTestId('library-primary').click();
-  await expect(page.getByTestId('server-app-confirm')).toContainText('Keep settings and stored data.');
-  await page.getByTestId('server-app-confirm-ok').click();
-  await expect(page.getByTestId('library-primary')).toHaveText('Install');
-  await expect(page.getByTestId('dock-app-pi')).toHaveCount(0);
+  await expect(page.getByTestId('library-pi')).toHaveCount(0);
+  const csrf = (await page.context().cookies()).find((cookie) => cookie.name === 'lumo_csrf')!.value;
+  expect((await page.request.post('/api/v1/apps/pi/uninstall', { headers: { 'X-Lumo-CSRF': csrf }, data: { requestId: crypto.randomUUID() } })).status()).toBe(200);
+  await expect(page.getByTestId('dock-app-pi')).toBeVisible();
   ubuntu('test', '!', '-e', binary);
   ubuntu('test', '-x', '/home/alice/.local/share/Trash/files/pi/bin/pi');
   expect(ubuntu('cat', '/home/alice/.pi/agent/lumo-test-settings')).toBe('keep user settings');
@@ -467,19 +463,16 @@ test('Clean uninstall moves Nginx configuration and data to recoverable protecte
   ubuntu('env', 'DEBIAN_FRONTEND=noninteractive', 'apt-get', '-y', 'install', 'nginx');
 });
 
-test('Pi clean uninstall trashes settings and conversations and restores them', async ({ page }) => {
+test('Legacy Pi clean maintenance API keeps recoverable conversations', async ({ page }) => {
   const paths = ['/home/alice/.local/share/lumo/pi/bin', '/home/alice/.pi/agent', '/home/alice/.local/state/lumo/pi-sessions'];
   ubuntu('runuser', '-u', 'alice', '--', 'mkdir', '-p', ...paths);
   ubuntu('runuser', '-u', 'alice', '--', 'cp', '/usr/bin/true', '/home/alice/.local/share/lumo/pi/bin/pi');
   ubuntu('runuser', '-u', 'alice', '--', 'sh', '-c', 'printf "saved conversation" > /home/alice/.pi/agent/lumo-conversation');
   await login(page);
   await page.getByTestId('dock-app-library').click();
-  await page.getByTestId('library-pi').click();
-  await page.getByTestId('library-primary').click();
-  await expect(page.getByTestId('uninstall-normal')).toBeChecked();
-  await page.getByTestId('uninstall-clean').check();
-  await page.getByTestId('server-app-confirm-ok').click();
-  await expect(page.getByTestId('library-primary')).toHaveText('Install');
+  await expect(page.getByTestId('library-pi')).toHaveCount(0);
+  const csrf = (await page.context().cookies()).find((cookie) => cookie.name === 'lumo_csrf')!.value;
+  expect((await page.request.post('/api/v1/apps/pi/uninstall', { headers: { 'X-Lumo-CSRF': csrf }, data: { requestId: crypto.randomUUID(), clean: true } })).status()).toBe(200);
   for (const path of paths.slice(1)) ubuntu('test', '!', '-e', path);
   await page.getByTestId('dock-app-trash').click();
   const conversations = page.getByRole('option').filter({ hasText: '/home/alice/.pi/agent' });

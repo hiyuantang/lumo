@@ -8,7 +8,7 @@ export function calendarRequest(operation, params, signal) {
  if (signal?.aborted) throw new Error('Calendar action interrupted.');
  if (operation !== 'list' && permissionMode === 'read-only') throw new Error('Read only mode allows listing calendar events and reminders.');
  return new Promise((resolve,reject) => {
-  const child = execFile(executable,['calendar',operation],{signal,timeout:60000,maxBuffer:2*1024*1024},(error,stdout,stderr) => {
+  const child = execFile(executable,['plugin','calendar',operation],{signal,timeout:60000,maxBuffer:2*1024*1024},(error,stdout,stderr) => {
    if (error) { reject(new Error(signal?.aborted ? 'Calendar action interrupted.' : stderr.trim() || 'Calendar action failed.')); return; }
    try { const value=JSON.parse(stdout);resolve({content:[{type:'text',text:JSON.stringify(value)}],details:{operation}}); } catch { reject(new Error('Calendar returned an invalid response.')); }
   });

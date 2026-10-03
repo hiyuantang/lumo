@@ -6,8 +6,10 @@ COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpam0g-dev gcc \
     && rm -rf /var/lib/apt/lists/*
-WORKDIR /src
+WORKDIR /src/server
 COPY server/go.mod server/go.sum ./
+COPY apps/go.mod apps/go.sum ../apps/
+COPY plugin-sdk/go.mod ../plugin-sdk/
 RUN go mod download
 
 FROM ubuntu:24.04 AS runtime-deps

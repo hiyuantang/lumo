@@ -106,7 +106,7 @@ func (s *Server) piAgentDir() (string, error) {
 func (s *Server) piAuthCommand(ctx context.Context, operation, provider, method string) (*exec.Cmd, error) {
 	binary, err := filepath.EvalSymlinks(s.pi.path())
 	if err != nil {
-		return nil, NewError(CodeUnavailable, "Install Pi from App Library first.")
+		return nil, NewError(CodeUnavailable, "Set up the Pi engine in Pi first.")
 	}
 	root := filepath.Dir(binary)
 	entry := ""
@@ -125,7 +125,7 @@ func (s *Server) piAuthCommand(ctx context.Context, operation, provider, method 
 		root = filepath.Dir(root)
 	}
 	if info, err := os.Stat(entry); err != nil || !info.Mode().IsRegular() {
-		return nil, NewError(CodeUnavailable, "Update Pi in App Library to use provider settings.")
+		return nil, NewError(CodeUnavailable, "Update the engine in Pi settings to use provider settings.")
 	}
 	dir, err := s.piAgentDir()
 	if err != nil {

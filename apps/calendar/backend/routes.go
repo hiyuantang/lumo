@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-package httpapi
+package main
 
 import (
 	"context"
 	"errors"
+	. "lumo/plugin"
 	"net/http"
 	"time"
 
-	"lumo/server/internal/calendar"
-	"lumo/server/internal/strictjson"
+	"lumo/apps/calendar/backend/calendar"
+	"lumo/plugin/strictjson"
 )
 
 func calendarError(w http.ResponseWriter, err error) {
@@ -19,7 +20,7 @@ func calendarError(w http.ResponseWriter, err error) {
 	}
 }
 func (s *Server) handleCalendar(w http.ResponseWriter, r *http.Request) {
-	store, err := calendar.Open(s.pi.home)
+	store, err := calendar.Open(s.Home)
 	if err != nil {
 		WriteError(w, NewError(CodeUnavailable, "Calendar storage is unavailable."))
 		return
@@ -55,29 +56,29 @@ func (s *Server) handleCalendar(w http.ResponseWriter, r *http.Request) {
 		RequestID string `json:"requestId"`
 		calendar.Change
 	}
-	if strictjson.Decode(w, r, maxBodyBytes, &req) != nil || !validRequestID(req.RequestID) {
+	if strictjson.Decode(w, r, MaxBodyBytes, &req) != nil || !ValidRequestID(req.RequestID) {
 		calendarError(w, calendar.ErrInvalid)
 		return
 	}
-	s.mutate(w, req.RequestID, func(w http.ResponseWriter) {
+	func() {
 		value, err := store.Change(ctx, req.Change)
 		if err != nil {
 			calendarError(w, err)
 			return
 		}
 		WriteData(w, value)
-	})
+	}()
 }
 func (s *Server) handleCalendarNotices(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RequestID string `json:"requestId"`
 	}
-	if strictjson.Decode(w, r, maxBodyBytes, &req) != nil || !validRequestID(req.RequestID) {
+	if strictjson.Decode(w, r, MaxBodyBytes, &req) != nil || !ValidRequestID(req.RequestID) {
 		calendarError(w, calendar.ErrInvalid)
 		return
 	}
-	s.mutate(w, req.RequestID, func(w http.ResponseWriter) {
-		store, err := calendar.Open(s.pi.home)
+	func() {
+		store, err := calendar.Open(s.Home)
 		if err != nil {
 			WriteError(w, NewError(CodeUnavailable, "Calendar storage is unavailable."))
 			return
@@ -89,10 +90,10 @@ func (s *Server) handleCalendarNotices(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		WriteData(w, map[string]any{"notices": notices})
-	})
+	}()
 }
 func (s *Server) handleCalendarGoogle(w http.ResponseWriter, r *http.Request) {
-	store, err := calendar.Open(s.pi.home)
+	store, err := calendar.Open(s.Home)
 	if err != nil {
 		WriteError(w, NewError(CodeUnavailable, "Calendar storage is unavailable."))
 		return
@@ -114,11 +115,11 @@ func (s *Server) handleCalendarGoogle(w http.ResponseWriter, r *http.Request) {
 		Action    string                 `json:"action"`
 		Config    *calendar.GoogleConfig `json:"config,omitempty"`
 	}
-	if strictjson.Decode(w, r, maxBodyBytes, &req) != nil || !validRequestID(req.RequestID) {
+	if strictjson.Decode(w, r, MaxBodyBytes, &req) != nil || !ValidRequestID(req.RequestID) {
 		calendarError(w, calendar.ErrInvalid)
 		return
 	}
-	s.mutate(w, req.RequestID, func(w http.ResponseWriter) {
+	func() {
 		switch req.Action {
 		case "configure":
 			if req.Config == nil {
@@ -148,10 +149,10 @@ func (s *Server) handleCalendarGoogle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		WriteData(w, map[string]any{"status": status})
-	})
+	}()
 }
 func (s *Server) handleCalendarGoogleCallback(w http.ResponseWriter, r *http.Request) {
-	store, err := calendar.Open(s.pi.home)
+	store, err := calendar.Open(s.Home)
 	if err != nil {
 		WriteError(w, NewError(CodeUnavailable, "Calendar storage is unavailable."))
 		return

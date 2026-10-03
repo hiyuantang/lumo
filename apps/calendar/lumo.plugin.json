@@ -12,5 +12,31 @@
     "minWidth": 390,
     "minHeight": 380
   },
-  "background": true
+  "background": true,
+  "backend": {
+    "protocolVersion": 1,
+    "routes": [
+      "GET /api/v1/calendar",
+      "POST /api/v1/calendar",
+      "POST /api/v1/calendar/notices",
+      "GET /api/v1/calendar/google",
+      "POST /api/v1/calendar/google",
+      "GET /api/v1/calendar/google/callback"
+    ],
+    "serial": false
+  },
+  "pi": {
+    "entry": "pi/extension.mjs",
+    "setting": "calendar",
+    "readTools": [
+      "lumo_calendar_list"
+    ],
+    "writeTools": [
+      "lumo_calendar_change"
+    ]
+  },
+  "auth": {
+    "start": "/api/v1/calendar/google",
+    "callback": "/api/v1/calendar/google/callback"
+  }
 }

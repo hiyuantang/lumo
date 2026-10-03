@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"lumo/server/internal/apptrash"
-	"lumo/server/internal/containers"
+	"lumo/apps/docker/backend/containers"
 	"lumo/server/internal/files"
 	"lumo/server/internal/hostsettings"
 	"lumo/server/internal/ipc"
@@ -30,7 +30,7 @@ import (
 	"lumo/server/internal/privfiles"
 	"lumo/server/internal/strictjson"
 	"lumo/server/internal/updates"
-	"lumo/server/internal/websites"
+	"lumo/apps/nginx/backend/websites"
 )
 
 const (

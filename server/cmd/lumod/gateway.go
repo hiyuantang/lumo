@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"lumo/server/internal/appplugins"
 	"lumo/server/internal/gateway"
 	"lumo/server/internal/static"
 )
@@ -21,7 +22,7 @@ func runGateway(args []string) {
 	fs := flag.NewFlagSet("gateway", flag.ContinueOnError)
 	addr := fs.String("addr", "127.0.0.1:8080", "listen address")
 	web := fs.String("web", "", "serve the frontend from this directory instead of the embedded assets")
-	plugins := fs.String("plugins", "/var/lib/lumo/plugins", "administrator-managed app plugin directory")
+	plugins := fs.String("plugins", appplugins.Roots()[0], "administrator-managed app plugin directory")
 	runDir := fs.String("run-dir", "/run/lumo", "runtime directory")
 	certFile := fs.String("tls-cert", "", "PEM certificate chain")
 	keyFile := fs.String("tls-key", "", "PEM private key")
@@ -46,7 +47,7 @@ func runGateway(args []string) {
 	gw := gateway.New(gateway.Config{
 		Addr:           *addr,
 		SessiondSocket: filepath.Join(*runDir, "sessiond.sock"),
-		Static:         static.WithPlugins(staticHandler, *plugins),
+		Static:         static.WithPlugins(static.WithPlugins(staticHandler, appplugins.Roots()[1]), *plugins),
 		Version:        version,
 	})
 

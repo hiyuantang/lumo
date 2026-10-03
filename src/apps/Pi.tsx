@@ -11,7 +11,7 @@ import { useAppCatalog } from '../shell/AppCatalogContext';
 import { useAppPreference, useAppState } from '../shell/useAppState';
 import { useShell } from '../shell/ShellContext';
 import { useCurrentWindow } from '../shell/WindowContext';
-import { IconFolder, IconGear, IconHome, IconPlus, IconRefresh, IconSend, IconStop, IconSidebar, IconNewChat } from '../shell/icons';
+import { IconFolder, IconGear, IconHome, IconPlus, IconSend, IconStop, IconSidebar, IconNewChat } from '../shell/icons';
 import { PiQuestionCard } from './PiQuestionCard';
 import { PiTranscript } from './PiTranscript';
 import { PiQueuedMessage, type QueuedMessage } from './PiQueuedMessage';
@@ -21,6 +21,7 @@ import { AttachmentCards } from './PiAttachmentCards';
 import { PiEditMessage } from './PiEditMessage';
 import { PiComposerInput, type PiChatAction } from './PiComposerInput';
 import type { Skill } from '../api/skills';
+import { PiEngine } from './PiEngine';
 import { PiSettings } from './PiSettings';
 import { PiSidebar } from './PiSidebar';
 import { PiImageScope } from './PiImages';
@@ -61,7 +62,7 @@ function PiChat({ entry, active, chats, compact, onAttention, assistantRequest }
   const floatingId = `pi-chat-assistant-${entry.key}`;
   const { actions, state: shellState } = useShell();
   const win = useCurrentWindow();
-  const { catalog, refresh } = useAppCatalog();
+  const { catalog } = useAppCatalog();
   const installed = catalog?.apps.some((app) => app.id === 'pi' && app.installed);
   const [project, setProject] = useAppState<string>('pi', 'project', win.projectPath ?? '~');
   const [collapsed, setCollapsed] = useAppPreference<boolean>('pi', 'sidebar-collapsed', false);
@@ -782,7 +783,7 @@ function PiChat({ entry, active, chats, compact, onAttention, assistantRequest }
     permissionMode={run.permissionMode ?? confirmedPermissionMode ?? 'ask'} onPermission={changePermissionMode}
     questions={questions} onAnswer={answerQuestion}
     context={<>{queuedEdit && <p className="pi-reference-loading">Return to the Pi window to finish editing the queued message.</p>}{queued.length > 0 && <p className="pi-reference-loading" role="status">{queued.length} queued {queued.length === 1 ? 'message' : 'messages'}</p>}<AttachmentCards paths={attachments} references={references} order={attachmentOrder} disabled={working} onRemove={(path) => { setAttachmentOrder((items) => items.filter((key) => key !== fileAttachmentKey(path))); setAttachments((items) => items.filter((item) => item !== path)); }} onRemoveReference={(path) => { const reference = references.find((item) => item.path === path); if (reference) setAttachmentOrder((items) => items.filter((key) => key !== conversationAttachmentKey(reference))); setReferences((items) => items.filter((item) => item.path !== path)); }}/></>}
-    hasDraft={hasDraft} location={conversationLocation} error={error} onReconnect={() => open(sessionID)} onSetup={() => actions.openApp(installed ? 'pi' : 'library')}/>{compact && picking && <FilePicker mode="folder" initialPath={workspace === '~' ? source.homePath() : ['', ...workspace.split('/').filter(Boolean)]} onCancel={() => setPicking(null)} onOpen={(path) => { setPicking(null); chats.navigate(source.absolutePath(path)); }}/>}{compact && closeConfirmation}</PiImageScope.Provider>;
+    hasDraft={hasDraft} location={conversationLocation} error={error} onReconnect={() => open(sessionID)} onSetup={() => actions.openApp('pi')}/>{compact && picking && <FilePicker mode="folder" initialPath={workspace === '~' ? source.homePath() : ['', ...workspace.split('/').filter(Boolean)]} onCancel={() => setPicking(null)} onOpen={(path) => { setPicking(null); chats.navigate(source.absolutePath(path)); }}/>}{compact && closeConfirmation}</PiImageScope.Provider>;
   function returnToWindow() { setSettings(false); setSetup(false); chats.update(entry.key, { floating: false }); chats.activate(entry.key); actions.focusApp(win.id); }
   const floatingView = floating && createPortal(<PiAssistantFrame open id={floatingId} testId="pi-chat-assistant" label={`${noticeName || 'Chat'} · Pi assistant`} closeLabel="Return to Pi window" onHide={returnToWindow}>{compactView}</PiAssistantFrame>, document.body);
   if (compact) return active ? compactView : null;
@@ -804,7 +805,7 @@ function PiChat({ entry, active, chats, compact, onAttention, assistantRequest }
       onConnect={() => { if (run) setRun({ ...run, session: sessionID }); setSetup(true); }} onDone={() => setSetup(false)}/></div>}
     {settings ? null : !installed ? <div className="pi-welcome">
       <div className="pi-welcome-mark" aria-hidden="true">π</div><h1>Pi</h1>
-      <div className="pi-install"><p>{catalog ? 'Install Pi to start working with your projects.' : 'Checking for Pi…'}</p><button className="btn btn-primary" onClick={() => actions.openApp('library')}>Open App Library</button><button className="btn btn-icon" aria-label="Check installation" onClick={() => void refresh().catch((err) => setError(err instanceof Error ? err.message : 'Something went wrong.'))}><IconRefresh size={16}/></button></div>
+      <PiEngine/>
     </div> : <>
       <main className={`pi-main${empty && !loading ? ' pi-new-conversation' : ''}`} aria-busy={loading || changingWorkspace}>
           {(floating ? <div className="pi-conversation-location" role="status"><h2>Open in the assistant window</h2><p>{noticeName || 'This chat'} is in assistant window mode.</p><button className="btn" onClick={returnToWindow}>Return to Pi window</button></div> : conversationLocation) ?? (loading ? <div className="pi-conversation-loading" role="status" aria-label="Loading conversation" data-testid="pi-conversation-loading"><span className="spinner" aria-hidden="true"/></div> : <>

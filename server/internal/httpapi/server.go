@@ -8,14 +8,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"lumo/server/internal/containers"
+	"lumo/server/internal/appplugins"
 	"lumo/server/internal/hostsettings"
 	"lumo/server/internal/journal"
 	"lumo/server/internal/network"
 	"lumo/server/internal/services"
 	"lumo/server/internal/system"
 	"lumo/server/internal/updates"
-	"lumo/server/internal/websites"
 )
 
 const (
@@ -25,17 +24,15 @@ const (
 )
 
 type Deps struct {
-	Version    string
-	Sampler    *system.Sampler
-	Services   services.API
-	Journal    journal.Backend
-	Network    network.Snapshotter
-	Settings   hostsettings.Reader
-	Containers containers.Reader
-	Websites   websites.Reader
-	WS         http.Handler
-	Static     http.Handler
-	Packages   interface {
+	Version  string
+	Sampler  *system.Sampler
+	Services services.API
+	Journal  journal.Backend
+	Network  network.Snapshotter
+	Settings hostsettings.Reader
+	WS       http.Handler
+	Static   http.Handler
+	Packages interface {
 		Catalog(context.Context) (updates.Catalog, error)
 	}
 	BrokerSocket string
@@ -43,7 +40,7 @@ type Deps struct {
 
 type Server struct {
 	desktopApps desktopAppRuntime
-	gitMu       sync.Mutex
+	pluginLocks sync.Map
 	folderMoves atomic.Int64
 	deps        Deps
 	processes   system.ProcessSampler
@@ -69,15 +66,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/desktop-apps/call", s.handleDesktopCall)
 	mux.HandleFunc("POST /api/v1/desktop-apps/report", s.handleDesktopCall)
 	mux.HandleFunc("POST /api/v1/desktop-apps/close", s.handleDesktopCall)
-	mux.HandleFunc("GET /api/v1/calendar", s.handleCalendar)
-	mux.HandleFunc("POST /api/v1/calendar", s.handleCalendar)
-	mux.HandleFunc("POST /api/v1/calendar/notices", s.handleCalendarNotices)
-	mux.HandleFunc("GET /api/v1/calendar/google", s.handleCalendarGoogle)
-	mux.HandleFunc("POST /api/v1/calendar/google", s.handleCalendarGoogle)
-	mux.HandleFunc("GET /api/v1/calendar/google/callback", s.handleCalendarGoogleCallback)
-	mux.HandleFunc("GET /api/v1/git/repository", s.handleGit)
-	mux.HandleFunc("GET /api/v1/git/diff", s.handleGit)
-	mux.HandleFunc("POST /api/v1/git/action", s.handleGit)
 	mux.HandleFunc("GET /api/v1/pi/providers", s.handlePiProviders)
 	mux.HandleFunc("GET /api/v1/pi/connections", s.handlePiConnections)
 	mux.HandleFunc("POST /api/v1/pi/auth/start", s.handlePiAuthStart)
@@ -109,23 +97,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/pi/desktop/result", s.handlePiDesktop)
 	mux.HandleFunc("POST /api/v1/pi/stop", s.handlePiStop)
 	mux.HandleFunc("GET /api/v1/meta/version", s.handleVersion)
-	mux.HandleFunc("GET /api/v1/skills", s.handleSkills)
-	mux.HandleFunc("GET /api/v1/skills/detail", s.handleSkills)
 	mux.HandleFunc("GET /api/v1/apps", s.handleApps)
 	mux.HandleFunc("POST /api/v1/apps/plan", s.handleAppPlan)
 	mux.HandleFunc("POST /api/v1/apps/pi/uninstall", s.handlePiUninstall)
 	mux.HandleFunc("POST /api/v1/apps/pi/plan", s.handlePiPlan)
 	mux.HandleFunc("POST /api/v1/apps/pi/apply", s.handlePiApply)
 	mux.HandleFunc("GET /api/v1/apps/pi/progress", s.handlePiProgress)
-	mux.HandleFunc("GET /api/v1/docker/resources", s.handleDockerResources)
-	mux.HandleFunc("POST /api/v1/docker/resource", s.handleDockerResourceAction)
-	mux.HandleFunc("GET /api/v1/containers", s.handleContainers)
-	mux.HandleFunc("GET /api/v1/containers/detail", s.handleContainers)
-	mux.HandleFunc("GET /api/v1/containers/logs", s.handleContainers)
-	mux.HandleFunc("POST /api/v1/containers/action", s.handleContainerAction)
-	mux.HandleFunc("GET /api/v1/websites", s.handleWebsites)
-	mux.HandleFunc("GET /api/v1/websites/logs", s.handleWebsites)
-	mux.HandleFunc("POST /api/v1/websites/save", s.handleWebsiteSave)
 	mux.HandleFunc("GET /api/v1/system/identity", s.handleIdentity)
 	mux.HandleFunc("GET /api/v1/system/overview", s.handleOverview)
 	mux.HandleFunc("GET /api/v1/system/metrics", s.handleMetrics)
@@ -190,6 +167,10 @@ func (s *Server) wrap(next http.Handler) http.Handler {
 			limit = maxPrivilegedWriteBodyBytes
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
+		if name := appplugins.Owner(r.URL.Path); name != "" {
+			s.handlePlugin(w, r, name)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }

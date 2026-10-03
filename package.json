@@ -22,7 +22,8 @@
     "build:plugins": "node scripts/build-plugins.mjs",
     "predev": "npm run build:plugins",
     "predev:live": "npm run build:plugins",
-    "deploy:plugin": "node scripts/deploy-plugin.mjs"
+    "deploy:plugin": "node scripts/deploy-plugin.mjs",
+    "build:packages": "bash scripts/build-plugin-packages.sh"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.1.0",

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"lumo/server/internal/gitrepo"
+	"lumo/apps/git/backend/gitrepo"
 )
 
 func TestGitRoutesAndIdempotentCommit(t *testing.T) {
@@ -75,9 +75,10 @@ func TestGitRoutesAndIdempotentCommit(t *testing.T) {
 	if r.Code != 409 || !strings.Contains(r.Body.String(), "stale_revision") {
 		t.Fatal(r.Body.String())
 	}
-	server.gitMu.Lock()
+	lock, _ := server.pluginLocks.LoadOrStore("git", make(chan struct{}, 1))
+	lock.(chan struct{}) <- struct{}{}
 	r = get("/api/v1/git/repository?path=" + url.QueryEscape(path))
-	server.gitMu.Unlock()
+	<-lock.(chan struct{})
 	if r.Code != 409 || !strings.Contains(r.Body.String(), "busy") {
 		t.Fatal("busy repository not rejected")
 	}

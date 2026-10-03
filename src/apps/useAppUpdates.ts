@@ -15,8 +15,8 @@ class AppUpdates {
   private connected = false;
   private snapshot: Snapshot = { items: [], phase: 'idle', requestId: null };
 
-  constructor(private user: string) {
-    this.key = `lumo-app-updates:${this.source.kind}:${user}`;
+  constructor(private user: string, scope: string) {
+    this.key = `lumo-app-updates:${this.source.kind}:${user}${scope}`;
     try {
       const saved = JSON.parse(localStorage.getItem(this.key) || 'null') as Snapshot | null;
       if (saved && Array.isArray(saved.items) && saved.items.length <= 4 && saved.items.every((item) => (item.app === 'git' || item.app === 'docker' || item.app === 'nginx' || item.app === 'pi') && Array.isArray(item.plan?.packages))) {
@@ -104,7 +104,7 @@ class AppUpdates {
     this.change(item.app, { status: 'updating', error: undefined });
     try {
       await this.checkAccount();
-      const plan = await this.source.planAppInstall(item.app, 'update');
+      const plan = await this.source.planAppInstall(item.app, item.plan.operation === 'install' ? 'install' : 'update');
       this.change(item.app, { plan });
       if (!plan.packages.length) { this.change(item.app, { status: 'done' }); void this.next(); return; }
       await this.checkAccount();
@@ -135,10 +135,10 @@ class AppUpdates {
   }
 }
 
-export function useAppUpdates(user: string) {
-  const key = `${getDataSource().kind}:${user}`;
+export function useAppUpdates(user: string, scope = '') {
+  const key = `${getDataSource().kind}:${user}${scope}`;
   let queue = queues.get(key);
-  if (!queue) { queue = new AppUpdates(user); queues.set(key, queue); }
+  if (!queue) { queue = new AppUpdates(user, scope); queues.set(key, queue); }
   const snapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
   useEffect(queue.connect, [queue]);
   return { queue, ...snapshot };

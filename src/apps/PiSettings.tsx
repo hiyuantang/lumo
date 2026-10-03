@@ -10,6 +10,7 @@ import { PiSettingToggle } from './PiSettingToggle';
 import { PiExtensions } from './PiExtensions';
 import { PiTemplateSettings } from './PiTemplateSettings';
 import { PiArchivedChats } from './PiArchivedChats';
+import { PiEngine } from './PiEngine';
 import { PiPetSettings } from './PiPetSettings';
 
 interface Props {
@@ -38,7 +39,7 @@ interface Props {
   onRestore: (project: string, session: string) => Promise<void>;
 }
 export function PiSettings({ requestedTab, onNotify, autoRetry, onAutoRetry, onTemplatesSaved, onExtensionsSaved, extensionsApplying, extensionsRunning, onCompactionSaved, compactionRevision, compactionPending, installed, visible, model, models, setup, disabled, onBusy, revision, onConnect, onDone, onDirty, onRestore }: Props) {
-  const [tab, setTab] = useState<'providers' | 'instructions' | 'context' | 'archived' | 'templates' | 'extensions' | 'pet'>('providers');
+  const [tab, setTab] = useState<'providers' | 'instructions' | 'context' | 'archived' | 'templates' | 'extensions' | 'pet' | 'engine'>('providers');
   const [extensionsVisited, setExtensionsVisited] = useState(false);
   const [extensionsBusy, setExtensionsBusy] = useState(false);
   const [contextVisited, setContextVisited] = useState(false);
@@ -61,7 +62,7 @@ export function PiSettings({ requestedTab, onNotify, autoRetry, onAutoRetry, onT
     requestedNonce.current = requestedTab.nonce;
     setTab(requestedTab.tab);
   }, [requestedTab, templateDirty, saving, archiveBusy, contextBusy, setup]);
-  const tabs = [{ id: 'providers' as const, label: 'Providers', icon: IconUser }, { id: 'instructions' as const, label: 'Instructions', icon: IconFile }, { id: 'templates' as const, label: 'Prompt templates', icon: IconFile }, { id: 'context' as const, label: 'Context & compaction', icon: IconGear }, { id: 'extensions' as const, label: 'Extensions', icon: IconGear }, { id: 'pet' as const, label: 'Pet', icon: IconPet }, { id: 'archived' as const, label: 'Archived chats', icon: IconArchive }];
+  const tabs = [{ id: 'engine' as const, label: 'Engine', icon: IconGear }, { id: 'providers' as const, label: 'Providers', icon: IconUser }, { id: 'instructions' as const, label: 'Instructions', icon: IconFile }, { id: 'templates' as const, label: 'Prompt templates', icon: IconFile }, { id: 'context' as const, label: 'Context & compaction', icon: IconGear }, { id: 'extensions' as const, label: 'Extensions', icon: IconGear }, { id: 'pet' as const, label: 'Pet', icon: IconPet }, { id: 'archived' as const, label: 'Archived chats', icon: IconArchive }];
   return <main className="pi-main pi-settings" data-testid="pi-settings">
     <aside className="pi-settings-card">
       <h1>Settings</h1>
@@ -76,6 +77,7 @@ export function PiSettings({ requestedTab, onNotify, autoRetry, onAutoRetry, onT
       }}>{tabs.map(({ id, label, icon: Icon }) => <button type="button" key={id} role="tab" id={`pi-settings-tab-${id}`} aria-controls={`pi-settings-panel-${id}`} aria-label={label} title={label} aria-selected={tab === id} tabIndex={tab === id ? 0 : -1} disabled={archiveBusy || saving || contextBusy || setup || (templateDirty && id !== tab)} onClick={() => { if (templateDirty && id !== 'templates') return; setTab(id); if (id === 'context') setContextVisited(true); if (id === 'extensions') setExtensionsVisited(true); }}><Icon size={18}/><span>{label}</span></button>)}</div>
     </aside>
     <div className="pi-settings-content">
+      {tab === 'engine' && <div className="pi-settings-pane" id="pi-settings-panel-engine" role="tabpanel" aria-labelledby="pi-settings-tab-engine"><PiEngine disabled={extensionsRunning}/></div>}
       <div className="pi-settings-pane" id="pi-settings-panel-providers" role="tabpanel" aria-labelledby="pi-settings-tab-providers" hidden={tab !== 'providers'}>
         {setup ? <><div className="pi-provider-done"><button className="btn" onClick={onDone}>Done</button></div><PiProviders onDirty={setProviderDirty} onNotify={onNotify}/></> : <PiProviders overview visible={visible && tab === 'providers'} disabled={!installed || disabled || saving} onConnect={onConnect} onDirty={setProviderDirty} onNotify={onNotify}><section data-testid="pi-retry-settings"><PiSettingToggle label="Automatic retry" description="Retry temporary provider errors in this chat." ariaLabel="Automatically retry temporary errors" testId="pi-auto-retry" checked={autoRetry} disabled={!installed || disabled} onChange={onAutoRetry}/></section></PiProviders>}
       </div>

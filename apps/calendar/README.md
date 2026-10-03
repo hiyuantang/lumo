@@ -1,16 +1,14 @@
-# Calendar
+# Calendar app plugin
 
-This is Lumo's shipped Calendar app plugin. Its source and app-specific styles
-live in `src/`. It uses the shared host API through `@lumo/sdk/*` and keeps
-existing server data and authorization unchanged.
+This directory owns the app's frontend and any app-specific backend or Pi
+extension. `lumo.plugin.json` describes the complete versioned package.
 
-Build only this app from the repository root:
+Build from the repository root:
 
 ```sh
 npm run build:plugins -- calendar
+npm run build:packages -- -app calendar
 ```
 
-The output is `public/plugins/calendar/`. Increase the manifest version for a
-release. Reopen the app after deployment to use its new bundle.
-See [Shipped app plugins](../../docs/SHIPPED_APP_PLUGINS.md) for the SDK contract,
-independent deployment, rollback and verification commands.
+See [App plugins](../../docs/SHIPPED_APP_PLUGINS.md) for ownership, the host
+contract, deployment, rollback and verification. Licensed AGPL-3.0-only.

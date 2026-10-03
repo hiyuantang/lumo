@@ -68,7 +68,7 @@ export function PiCompactChat({ installed, loading, working, busy, connection, m
       <div className="pi-assistant-drag-handle" data-testid="pi-assistant-drag-handle" title="Drag to move Pi assistant"><div className="pi-compact-activity" role="status" data-testid="pi-compact-action">{questions.length ? 'Waiting for you' : loading ? 'Connecting…' : busy ? latestAction(current?.messages ?? []) : ''}</div></div>
       {error && <div className="pi-compact-error" role="alert">{error}{!connection && !working && <button type="button" className="btn" onClick={onReconnect}>Reconnect</button>}</div>}
       {context}
-      {!installed ? <div className="pi-compact-setup"><p>Install Pi to start using the assistant.</p><button className="btn" onClick={onSetup}>Open App Library</button></div> : <>
+      {!installed ? <div className="pi-compact-setup"><p>Set up Pi to start using the assistant.</p><button className="btn" onClick={onSetup}>Open Pi</button></div> : <>
         {questions.length > 0 ? <div className="pi-compact-requests">{questions.map((question) => <PiQuestionCard key={question.id} question={question} onAnswer={onAnswer} compact/>)}</div> : <form onSubmit={(event) => { event.preventDefault(); if (!busy) onSend(); }}>
           <textarea ref={input} className="input" data-testid="pi-compact-prompt" aria-label="Message Pi" placeholder="Ask Pi to help…" rows={2} value={draft} disabled={!connection || working} onChange={(event) => onDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!busy) onSend(); } }}/>
         </form>}

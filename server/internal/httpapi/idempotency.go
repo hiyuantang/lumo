@@ -11,6 +11,7 @@ import (
 const idemTTL = 24 * time.Hour
 
 type idemEntry struct {
+	digest string
 	status int
 	body   []byte
 	at     time.Time

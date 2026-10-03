@@ -65,7 +65,7 @@ provide a graphical interface for every installed program.
 | Logs | journald with live filters and saved searches | Phase 5 complete |
 | Updates | Installed APT inventory, grouped available updates, installation and reboot status | Phase 5 complete |
 | Storage | Disks, partitions, mounts, filesystems and SMART status | planned |
-| App Library | Discover, install and manage supported apps | Docker, Nginx and Pi; direct installation with compact header progress, then Uninstall |
+| App Library | Discover, install and manage supported apps | Git, Docker and Nginx; direct installation with compact header progress, then Uninstall |
 | Docker | Containers, logs, images, volumes, networks and storage usage | Initial implementation; resource creation/removal guards; deployment, Compose editing and Podman remain planned |
 | Nginx | Nginx static sites, local HTTP proxies, configuration and logs | Initial implementation; validation, backups and reload; certificate issuance remains planned |
 | Settings | Server identity, network, time, appearance and system controls; users, SSH keys, security, TLS, locale, listeners and firewall remain planned | Phase 6 in progress: read-only server identity, reauthenticated time edits, read-only network details, local appearance and power controls |
@@ -248,19 +248,18 @@ The menu-bar clock and Settings clock use the server's reported time and time
 zone. Saving the time zone changes the Ubuntu setting and updates both clocks.
 UTC is displayed as “UTC” while the server identifier remains `Etc/UTC`.
 
-App Library installs Pi and a private Node.js runtime for the signed-in Linux
-account with one Install button. No existing Node.js or npm installation is
-required. Versioned updates participate in Updates and Update all,
-with progress and account-specific installed update history. Running operations
-continue when App Library closes and prevent the user agent's idle shutdown.
+Pi is Lumo's core assistant engine. Pi provides direct engine setup and
+Settings → Engine provides updates for the signed-in Linux account, including
+a private Node.js runtime. No existing Node.js or npm installation is required.
+Operations continue when the Pi window closes and prevent the user agent's
+idle shutdown. Pi stays in the dock and is excluded from App Library.
 
 
 ## App uninstall choices
 
 Uninstall opens one compact dialog with two choices. **Uninstall** is selected
 by default and keeps settings and stored data. **Clean uninstall** also moves
-settings, caches and stored app data to Trash, including Pi conversations
-and standard Docker containers, images and local volumes. Each choice has one short description. Website content and project folders stay
+settings, caches and stored app data to Trash, including standard Docker containers, images and local volumes. Each choice has one short description. Website content and project folders stay
 in place. Trash can restore removed data without overwriting newer files;
 protected server data retains its ownership and permissions. Custom or shared
 Docker storage that cannot be safely isolated requires normal uninstall.

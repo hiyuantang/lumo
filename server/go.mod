@@ -23,3 +23,11 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+require (
+ lumo/apps v0.0.0
+ lumo/plugin v0.0.0
+)
+
+replace lumo/apps => ../apps
+replace lumo/plugin => ../plugin-sdk

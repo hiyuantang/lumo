@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/user"
+
 	"time"
 
-	"lumo/server/internal/calendar"
+	"lumo/apps/calendar/backend/calendar"
 )
 
 func runCalendar(args []string) {
@@ -18,11 +18,11 @@ func runCalendar(args []string) {
 	if len(args) != 1 || (args[0] != "list" && args[0] != "change") {
 		fail(calendar.ErrInvalid)
 	}
-	account, err := user.Current()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		fail(err)
 	}
-	store, err := calendar.Open(account.HomeDir)
+	store, err := calendar.Open(home)
 	if err != nil {
 		fail(err)
 	}

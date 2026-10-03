@@ -4,7 +4,8 @@ package httpapi
 import (
 	"bytes"
 	"encoding/json"
-	"lumo/server/internal/calendar"
+	"lumo/apps/calendar/backend/calendar"
+	"lumo/server/internal/appplugins"
 	"net/http/httptest"
 	"os"
 	"testing"
@@ -74,7 +75,11 @@ func TestPiCalendarToggleAndPrivateExecutable(t *testing.T) {
 	if err != nil || after.Calendar || !after.LumoUse || !after.Questions {
 		t.Fatal("toggle changed other extensions", err)
 	}
-	path, err := writePiCalendarExtension(t.TempDir(), "read-only")
+	app, err := appplugins.Load("calendar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := writePiPluginExtension(app, t.TempDir(), "read-only")
 	if err != nil {
 		t.Fatal(err)
 	}

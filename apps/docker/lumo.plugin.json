@@ -12,5 +12,18 @@
     "minWidth": 390,
     "minHeight": 380
   },
-  "requiredPackage": "docker"
+  "requiredPackage": "docker",
+  "backend": {
+    "protocolVersion": 1,
+    "routes": [
+      "GET /api/v1/containers",
+      "GET /api/v1/containers/detail",
+      "GET /api/v1/containers/logs",
+      "POST /api/v1/containers/action",
+      "GET /api/v1/docker/resources",
+      "POST /api/v1/docker/resource"
+    ],
+    "serial": false,
+    "privileged": true
+  }
 }

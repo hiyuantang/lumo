@@ -49,6 +49,10 @@ It builds the live frontend and a Linux binary with PAM authentication.
 This needs internet access for Ubuntu packages, npm dependencies, Go and
 Go modules, and enough memory and disk space to compile them. A prepared
 binary built with `pam,webdist` can be supplied with `--binary /path/to/lumod`.
+Place its complete, matching-platform `plugins/` directory beside the binary.
+The installer validates and installs those packages with the host, and restores
+the previous files if activation fails. See [App plugins](SHIPPED_APP_PLUGINS.md)
+for building the complete distribution.
 
 For automatic HTTPS, allow inbound **TCP 80** through both the host and
 VPS provider firewalls. The installer asks you to accept the Let's Encrypt

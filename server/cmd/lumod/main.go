@@ -19,8 +19,11 @@ func main() {
 		case "desktop-app":
 			runDesktopApps(os.Args[2:])
 			return
+		case "plugin":
+			runPlugin(os.Args[2:])
+			return
 		case "calendar":
-			runCalendar(os.Args[2:])
+			runPlugin(append([]string{"calendar"}, os.Args[2:]...))
 			return
 		case "pi-history":
 			runPiHistory(os.Args[2:])
@@ -45,6 +48,6 @@ func main() {
 			return
 		}
 	}
-	fmt.Fprintln(os.Stderr, "Usage: lumod {gateway|sessiond|agent|broker|pi-history|calendar|desktop-app|version}")
+	fmt.Fprintln(os.Stderr, "Usage: lumod {gateway|sessiond|agent|broker|pi-history|plugin|calendar|desktop-app|version}")
 	os.Exit(2)
 }

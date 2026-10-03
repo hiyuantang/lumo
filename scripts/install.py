@@ -171,7 +171,7 @@ def build_binary(directory):
     install_packages(['nodejs', 'npm', 'gcc', 'libc6-dev', 'libpam0g-dev'])
     source = directory / 'source'
     source.mkdir()
-    for name in ('src', 'tests', 'server'):
+    for name in ('src', 'tests', 'server', 'apps', 'plugin-sdk', 'scripts'):
         shutil.copytree(ROOT / name, source / name, ignore=shutil.ignore_patterns('node_modules', 'dist', 'bin', '.tools', '__pycache__'))
     for name in ('package.json', 'package-lock.json', 'index.html', 'tsconfig.json', 'vite.config.ts', 'playwright.config.ts', 'playwright.docker.config.ts'):
         shutil.copy2(ROOT / name, source / name)
@@ -195,7 +195,42 @@ def build_binary(directory):
     shutil.copytree(source / 'dist', source / 'server/internal/static/dist')
     binary = directory / 'lumod'
     run([directory / 'go/bin/go', 'build', '-trimpath', '-tags', 'pam,webdist', '-o', binary, './cmd/lumod'], cwd=source / 'server', env=env)
+    run([directory / 'go/bin/go', 'run', './cmd/package-plugins', '-output', directory / 'plugins'], cwd=source / 'server', env=env)
     return binary
+
+
+def plugin_files(directory):
+    result = {}
+    ids = {'calendar': 'calendar', 'skills': 'skills', 'git': 'git', 'docker': 'containers', 'nginx': 'websites', 'monitor': 'home'}
+    arch = 'amd64' if platform.machine() == 'x86_64' else 'arm64'
+    for name, app_id in ids.items():
+        package = directory / name
+        raw = (package / 'manifest.json').read_bytes()
+        manifest = json.loads(raw)
+        if manifest.get('schemaVersion') != 1 or manifest.get('hostApiVersion') != 1 or manifest.get('id') != app_id or manifest.get('license') != 'AGPL-3.0-only':
+            raise ValueError('Incompatible app package: ' + name)
+        assets = {key: manifest.get(key) for key in ('entry', 'styles', 'background')}
+        backend = manifest.get('backend')
+        if name != 'monitor' and not backend:
+            raise ValueError('Missing app backend: ' + name)
+        if backend:
+            if backend.get('protocolVersion') != 1 or backend.get('platform') != 'linux/' + arch:
+                raise ValueError('Incompatible app backend: ' + name)
+            assets['backend'] = backend.get('entry')
+        if manifest.get('pi'):
+            assets['pi'] = manifest['pi'].get('entry')
+        for field, filename in assets.items():
+            if filename is None and field in ('styles', 'background'):
+                continue
+            suffix = {'styles': 'css', 'backend': 'bin', 'pi': 'mjs'}.get(field, 'js')
+            if not isinstance(filename, str) or not re.fullmatch(r'[a-f0-9]{64}\.' + suffix, filename):
+                raise ValueError('Invalid app asset: ' + name)
+            data = (package / filename).read_bytes()
+            if hashlib.sha256(data).hexdigest() != filename[:64]:
+                raise ValueError('Corrupt app asset: ' + name)
+            result[LIB / 'plugins' / name / filename] = (data, 0o755 if field == 'backend' else 0o644)
+        result[LIB / 'plugins' / name / 'manifest.json'] = (raw, 0o644)
+    return result
 
 
 def validate_binary(binary):
@@ -478,6 +513,7 @@ def install(args):
         directory = Path(temporary)
         binary = Path(args.binary).resolve() if args.binary else build_binary(directory)
         validate_binary(binary)
+        packages = plugin_files(binary.parent / 'plugins')
         cert, key, acme = certificate_sources(config, args)
         validate_certificate(cert, key, config['host'])
         config.update(cert_source=cert, key_source=key, acme=acme)
@@ -498,6 +534,7 @@ def install(args):
             POLICY: (policy, 0o644),
             RULES: (rules, 0o644),
         }
+        files.update(packages)
         for name, content in units(config).items():
             files[UNIT_DIR / name] = (content, 0o644)
         activate(config, password, files, previous)
@@ -527,6 +564,7 @@ def uninstall_paths(config, purge):
         trees.append(CERTBOT.parent.parent)
     if purge:
         trees.append(STATE)
+    trees.append(LIB / 'plugins')
     files += [LIB / 'lumod', LEGACY_CONTROL, CONTROL, LIB / 'installer.py', CONFIG]
     return files, trees
 

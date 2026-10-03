@@ -109,7 +109,6 @@ test('App Library entries show descriptions and management actions without launc
   for (const [id, appId, description] of [
     ['docker', 'containers', 'Run apps in isolated containers'],
     ['nginx', 'websites', 'Serve websites'],
-    ['pi', 'pi', 'coding agent'],
   ]) {
     await page.getByTestId(`library-${id}`).click();
     await expect(page.locator('.library-discovery-grid')).toHaveCount(0);
